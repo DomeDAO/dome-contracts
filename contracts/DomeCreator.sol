@@ -3,10 +3,11 @@
 pragma solidity ^0.8.13;
 
 import "./IDomeCore.sol";
+import "./DomeCore.sol";
 
 contract DomeCreator {
     
-    struct BenInfo {
+    struct BeneficiariesInfo {
         string name;
         string url;
         string logo;
@@ -15,18 +16,25 @@ contract DomeCreator {
         uint256 percentage;
     }
 
-    mapping(address => BenInfo) public benefituries;
+    mapping(address => IDomeCore) public domes;
+
+    mapping(address => BeneficiariesInfo) public beneficiaries;
 
     function CreateDome(
+        address stakingCoinAddress,
         string memory name,
         string memory description,
         string memory lpTokenName,
-        BenInfo[] memory beninfo
+        BeneficiariesInfo[] memory beneficiariesInfo
     ) public {
-        
+        domes[msg.sender] = new DomeCore(stakingCoinAddress, msg.sender, name, description, lpTokenName, beneficiariesInfo);
     }
 
-    function setBenInfo(
+    function getDome(address domeOwner) public view returns (IDomeCore){
+        return  domes[domeOwner];
+    }
+
+    function setBeneficiariesInfo(
         string memory name,
         string memory url,
         string memory logo,
@@ -34,12 +42,12 @@ contract DomeCreator {
         string memory description,
         uint256 percentage
     ) public {
-        BenInfo storage beninfo = benefituries[msg.sender];
-        beninfo.name = name;
-        beninfo.url = url;
-        beninfo.logo = logo;
-        beninfo.wallet = wallet;
-        beninfo.description = description;
-        beninfo.percentage = percentage;
+        BeneficiariesInfo storage beneficiariesInfo = beneficiaries[msg.sender];
+        beneficiariesInfo.name = name;
+        beneficiariesInfo.url = url;
+        beneficiariesInfo.logo = logo;
+        beneficiariesInfo.wallet = wallet;
+        beneficiariesInfo.description = description;
+        beneficiariesInfo.percentage = percentage;
     }
 }
