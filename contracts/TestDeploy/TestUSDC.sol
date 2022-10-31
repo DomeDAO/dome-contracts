@@ -10,15 +10,15 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
  * @title Implementation of the PVTToken.
  *
  */
-contract LiquidityToken is ERC20, Ownable{
+contract TestUSDC is ERC20, Ownable{
 
 
-    constructor(string memory name, string memory symbol)
-        ERC20(name, symbol) {
+    constructor()
+        ERC20("Test USD coin", "USDC") {
     }
 
 
-    function mint(address to_, uint256 amount_) public onlyOwner {
+    function mint(address to_, uint256 amount_) public onlyOwner virtual {
         require(amount_!=0,"Cant mint 0 tokens");
         _mint(to_, amount_);
     }

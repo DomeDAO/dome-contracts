@@ -1,74 +1,104 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.17;
 
 /// Openzeppelin imports
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
+import "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 /// Local imports
-import "./IDomeCore.sol";
-import "./LiquidityToken.sol";
-import "./IStrategy.sol";
+import "./Deploy/TestSaveMStable.sol";
 import "hardhat/console.sol";
 
-contract DomeCore is IDomeCore, Ownable {
+contract DomeCore is ERC4626, Ownable { 
     
-    struct Staking {
-        uint104 amount;
-    }
-
-    struct BeneficiariesInfo {
+    struct BeneficiaryInfo {
         string name;
         string url;
         string logo;
         address wallet;
         string description;
-        uint32 percentage;
+        uint256 percentage;
     }
+
+    uint256 public totalStaked;
+    uint256 public bufferestedInterests;
 
     using SafeERC20 for IERC20;
-    using SafeERC20 for LiquidityToken; //The users receive Liqudity Tokens to keep track of their stake in the USDC pool
 
-    string public name;
-    string public description;
-    string public lpTokenName;
+    string public _name;
+    string public _description;
+    string public _shareTokenName;
+    address public _owner;
+    address public _systemOwner;
+    uint256 public _systemOwnerPercentage;
 
-    mapping(address => Staking) private userStaking;
-    mapping(address => uint256) private interests;
-    //mapping(address => BenInfo[]) public beneficiaries;
-    BeneficiariesInfo[] public beneficiaries;
+    //mapping(address => Staking) private userStaking;
+    BeneficiaryInfo[] public beneficiaries;
 
     /// contracts
-    LiquidityToken public liquidityToken;
-    IStrategy public strategy;
     IERC20 public stakingcoin;
+    TestSaveMStable public testMStable; //todo(changed)
 
-
-    /// Constructor
+    /// Constructor   
     constructor(
-        address stakingcoinAddress,
+        string memory name,
+        string memory description,
+        string memory shareTokenName,
+        string memory shareTokenSymbol,
+        address stakingCoinAddress,
+        address testMstableAddress,
         address owner,
-        string memory _name,
-        string memory _description,
-        string memory _lpTokenName,
-        BeneficiariesInfo[] memory beneficiariesInfo
-    ) {
-        liquidityToken = new LiquidityToken();
-        stakingcoin = IERC20(stakingcoinAddress);
-        name = _name;
-        description = _description;
-        lpTokenName = _lpTokenName;
-        beneficiaries = beneficiariesInfo;
+        address systemOwner,
+        uint256 systemOwnerPercentage,
+        BeneficiaryInfo[] memory beneficiariesInfo
+    ) 
+    ERC20(shareTokenName, shareTokenSymbol)
+    ERC4626(IERC20Metadata(stakingCoinAddress))
+    {
+        stakingcoin = IERC20(stakingCoinAddress);
+        _name = name;
+        _description = description;
+        _shareTokenName = shareTokenName;
+        for(uint256 i; i < beneficiariesInfo.length; i++){
+            beneficiaries.push(beneficiariesInfo[i]);
+        }
         transferOwnership(owner);
+        testMStable = TestSaveMStable(testMstableAddress);
+        stakingcoin.approve(address(testMStable), 2**256 - 1);
+        _owner = owner;
+        _systemOwner = systemOwner;
+        _systemOwnerPercentage = systemOwnerPercentage;
     }
 
-    // function stake(uint104 amount) external {
+    function getBuffer() public view returns(uint256){
+        return bufferestedInterests;
+    }
 
-    // }
+    function getTotalStaked() public view returns(uint256){
+        return totalStaked;
+    }
 
-    function stake(uint104 amount) external {
+    function totalBalance() public view returns (uint256){
+        return testMStable.balanceOfUnderlying(address(this));
+    }
+
+    function setApproveForDome(uint256 amount) public onlyOwner{
+        stakingcoin.approve(address(testMStable), amount);
+    }
+
+    function setMstable(address addr) external onlyOwner {
+        testMStable = TestSaveMStable(addr);
+    }
+
+    function changeSystemOwnerAddress(address addr) public onlyOwner {
+        _systemOwner = addr;
+    }
+
+    function deposit(uint256 amount, address receiver) public override returns(uint256) {  //todo msg sender & receiver
         require(amount > 0, "The amount must be greater than 0.");
         uint256 allowance = stakingcoin.allowance(msg.sender, address(this));
         require(
@@ -81,116 +111,67 @@ contract DomeCore is IDomeCore, Ownable {
             "There is no as much balance for staking coin."
         );
 
-
-        uint256 totalRewardBeforeStake = strategy.estimateReward(address(this)); 
-
         stakingcoin.safeTransferFrom(msg.sender, address(this), amount);
 
-        ////Stakes into Yearn
-        (bool success, bytes memory result) = address(strategy).delegatecall(
-            abi.encodeWithSignature(
-                "farm(address,uint256)",
-                stakingcoin,
-                amount
-            )
-        );
-        require(success, "Staking to yearn failed");
-        uint256 stakingCoinAmount = abi.decode(result, (uint256));
+        testMStable.deposit(amount, address(this));
+
+        totalStaked += amount;
 
         uint256 liquidityAmount;
-        uint256 totalReward = strategy.estimateReward(address(this));
-        uint256 rewarDdifference = totalReward - totalRewardBeforeStake;        
-        if (
-            totalReward == 0 ||
-            totalReward <= stakingCoinAmount ||                             
-            liquidityToken.totalSupply() == 0
-        ) {
-            liquidityAmount = rewarDdifference;                             
-        } else {
-            liquidityAmount =
-                (rewarDdifference * liquidityToken.totalSupply()) /      
-                (totalReward - rewarDdifference);                           
-        }
-
-        liquidityToken.mint(msg.sender, liquidityAmount);
-        Staking storage staking = userStaking[msg.sender];
-        staking.amount += amount;
-    }
-
-    function unstake(uint104 amount) external {
-        require(0 < amount, "The amount must be greater than 0.");
-        uint256 totalReward = strategy.estimateReward(address(this));
-        (uint256 gross, uint256 net, uint256 fee, ) = estimateRewardDetails(msg.sender);
         
-
-        // net =! 0;
-        Staking storage staking = userStaking[msg.sender];
-        uint256 wantedGross = (amount * gross) / staking.amount;
-
-        uint256 liquidityAmount = liquidityToken.balanceOf(msg.sender);
-
-        uint256 lToBurn = (wantedGross * liquidityToken.totalSupply()) /
-            totalReward;
-        if (liquidityAmount < lToBurn) {
-            lToBurn = liquidityAmount;
+        if(totalSupply() == 0){
+            liquidityAmount = amount;
         }
+        else{
+            liquidityAmount = amount * totalSupply() / (estimateReward() - amount);
+        }
+        _mint(receiver, liquidityAmount);
 
-        takeReward(wantedGross); // yearn => DomeCore
-        uint256 amountForSave = (wantedGross - amount) * 90 / 100;
-        uint256 savedInterests = saveInterests((amountForSave));
-        stakingcoin.safeTransfer(msg.sender, amount + (amountForSave - savedInterests)); // DomeCore => user
-        liquidityToken.burn(msg.sender, lToBurn);
+        return liquidityAmount;
     }
 
-    function withdraw(address tokenAddress)
-        external
-        onlyOwner
-    {
-        IERC20 token = IERC20(tokenAddress);
-        uint256 amountToTransfer = token.balanceOf(address(this));
-        token.transfer(msg.sender, amountToTransfer);
+    function withdraw(uint256 assets, address receiver, address owner) public override returns(uint256) {
+        require(owner == msg.sender, "Caller is not owner");
+        require(0 < assets, "The amount must be greater than 0.");
+        claimInterests();
+
+        uint256 liquidityAmount = balanceOf(owner);
+
+        uint256 totalReward = testMStable.balanceOfUnderlying(address(this));
+
+        uint256 lToBurn = assets * totalSupply() / totalReward;
+        require(lToBurn <= liquidityAmount, "You dont have enough balance");
+        testMStable.withdraw(assets, receiver, address(this));
+
+        totalStaked -= lToBurn * totalStaked / totalSupply();
+
+        bufferestedInterests -= lToBurn * bufferestedInterests / totalSupply();
+
+        _burn(msg.sender, lToBurn);
+        return lToBurn;
     }
 
-    function claimInterests() external{
-        require(interests[msg.sender] > 0, "You don't have interst");
-        stakingcoin.safeTransfer(msg.sender, interests[msg.sender]);
-        interests[msg.sender] = 0;
-    }
-
-    function saveInterests(uint256 total) internal returns (uint256){
-        uint256 totalSaved;
+    function claimInterests() public {
+        uint256 reward = testMStable.balanceOfUnderlying(address(this)) - totalStaked - bufferestedInterests;
+        uint256 systemFee = reward * _systemOwnerPercentage / 100;
+        uint256 beneficiariesReward = (reward - systemFee) * beneficiariesPercentage() / 100;
+        testMStable.withdraw(beneficiariesReward + systemFee, address(this), address(this));
+        stakingcoin.safeTransfer(_systemOwner, systemFee);
+        uint256 totalTransfered = systemFee;
+        uint256 toTransfer;
         for(uint256 i; i < beneficiaries.length; i++) {
-            interests[beneficiaries[i].wallet] += total * beneficiaries[i].percentage / 100;
-            totalSaved += total * beneficiaries[i].percentage / 100;
+            if(i == beneficiaries.length - 1){
+                toTransfer = beneficiariesReward + systemFee - totalTransfered;
+                stakingcoin.safeTransfer(beneficiaries[i].wallet, toTransfer);
+                totalTransfered += toTransfer;
+            }
+            else{
+                toTransfer = (reward - systemFee) * beneficiaries[i].percentage / 100;
+                stakingcoin.safeTransfer(beneficiaries[i].wallet, toTransfer);
+                totalTransfered += toTransfer;
+            }
         }
-        return totalSaved;
-    }
-
-
-
-    function stakingAmount(address lpProvider) external view returns (uint104) {
-        Staking storage staking = userStaking[lpProvider];
-        return staking.amount;
-    }
-
-
-    function estimateNetReward(address lpProvider)
-        external
-        view
-        returns (uint256)
-    {
-        uint256 grossReward = estimateGrossReward(lpProvider);
-        Staking storage staking = userStaking[lpProvider];
-        if(grossReward <= staking.amount) {
-            return grossReward;
-        }
-        else {
-            uint256 profit = grossReward - staking.amount;
-            uint256 fee = profit * 10 / 100;
-            //uint256 fee = (beneficiariesPercentage() * (profit - ownerPercentage)) / 100;
-            uint256 netReward = grossReward - fee;
-            return netReward;
-        }
+        bufferestedInterests += (reward - totalTransfered);
     }
 
     function beneficiariesPercentage() public view returns (uint256 totalPercentage){
@@ -199,64 +180,23 @@ contract DomeCore is IDomeCore, Ownable {
         }
     }
 
-    function estimateRewardDetails(address lpProvider)
-        public
-        view
-        returns (
-            uint256 gross,
-            uint256 net,
-            uint256 profit,
-            uint256 fee
-        )
-    {
-        gross = estimateGrossReward(lpProvider);
-        Staking storage staking = userStaking[lpProvider];
-        uint256 userStakingAmount = staking.amount;
-        if(gross <= userStakingAmount) {
-            profit = 0;
-            fee = 0;
-            net = gross;
-        }
-        else {
-            profit = gross - userStakingAmount;
-            uint256 fee = profit * 10 / 100;
-            //uint256 fee = (beneficiariesPercentage() * (profit - ownerPercentage)) / 100;
-            net = gross - fee;
-        }
+    function balanceOfUnderlying (address user) public view returns(uint256) {
+        return balanceOf(user) * estimateReward() / totalSupply();
     }
 
-    // function ownerCurrentPercentage(uint256 index) public view returns (uint32) {
-    //     return beneficiaries[index].percentage;
-    // }
-
-    /// public functions
-    function estimateGrossReward(address lpProvider)
-        public
-        view
-        returns (uint256)
-    {
-        if (liquidityToken.totalSupply() == 0) {
-            return 0;
+    function estimateReward() public view returns(uint256){
+        uint256 totalReward = testMStable.balanceOfUnderlying(address(this));
+        uint256 reward;
+        if(totalReward > totalStaked + bufferestedInterests){
+            uint256 newReward = totalReward - totalStaked - bufferestedInterests;
+            uint256 systemFee = newReward * _systemOwnerPercentage / 100;
+            uint256 beneficiariesInterest = (newReward - systemFee) * beneficiariesPercentage() / 100;
+            reward = totalReward - systemFee - beneficiariesInterest;
         }
-        uint256 totalReward = strategy.estimateReward(address(this));
-        uint256 userReward = uint256(
-            (totalReward * liquidityToken.balanceOf(lpProvider)) /
-                liquidityToken.totalSupply()
-        );
-        return userReward;
+        else{
+            reward = totalReward;
+        }
+        return reward;
     }
 
-    /// private functions
-    function takeReward(uint256 amount) private {
-        if (0 != amount) {
-            (bool success, ) = address(strategy).delegatecall(
-                abi.encodeWithSignature(
-                    "takeReward(address,uint256)",
-                    address(this),
-                    amount
-                )
-            );
-            require(success, "Failed to take the stakes from YEARN");
-        }
-    }
 }
