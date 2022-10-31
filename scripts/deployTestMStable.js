@@ -14,18 +14,14 @@ async function main() {
   // await hre.run('compile');
 
   const usdc = "0x53CEafDCC6aB218899B689979451490469ef83b7";
-  const myWallet = "0x9C5304Cf9066a860672BA5cf7f1C4592DCf20f56";
-  const owner = "0xAE492E3873945F9af9B6caD802e030e2935073cE";
-
-
 
   // We get the contract to deploy
-  const DomeCore = await hre.ethers.getContractFactory("DomeCore");
-  const domeCore = await DomeCore.deploy(usdc, owner, "Dome1", "dome", "TokenXXX", [["School","url","logo","0x9C5304Cf9066a860672BA5cf7f1C4592DCf20f56","For repair",10]]);
+  const TestSaveMStable = await hre.ethers.getContractFactory("TestSaveMStable");
+  const testSaveMStable = await TestSaveMStable.deploy(usdc);
 
-  await domeCore.deployed();
+  await testSaveMStable.deployed();
 
-  console.log("DomeCore3 deployed to:", domeCore.address);
+  console.log("TestSaveMStable deployed to:", testSaveMStable.address);
 }
 
 // We recommend this pattern to be able to use async/await everywhere

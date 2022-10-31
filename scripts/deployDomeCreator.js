@@ -5,6 +5,27 @@
 // Runtime Environment's members available in the global scope.
 const hre = require("hardhat");
 
+const verifyContract = async (
+  contractAddress,
+  args,
+) => {
+  try {
+    const tx = await hre.run("verify:verify", {
+      address: contractAddress,
+      constructorArguments: args
+    });
+    console.log(tx);
+
+    await sleep(16000);
+  } catch (error) {
+    console.log("error is ->");
+    console.log(error);
+    console.log("cannot verify contract", contractAddress);
+    await sleep(16000);
+  }
+  console.log("contract", contractAddress, "verified successfully");
+};
+
 async function main() {
   // Hardhat always runs the compile task when running scripts with its command
   // line interface.
@@ -13,19 +34,15 @@ async function main() {
   // manually to make sure everything is compiled
   // await hre.run('compile');
 
-  const usdc = "0x53CEafDCC6aB218899B689979451490469ef83b7";
-  const myWallet = "0x9C5304Cf9066a860672BA5cf7f1C4592DCf20f56";
-  const owner = "0xAE492E3873945F9af9B6caD802e030e2935073cE";
-
-
-
   // We get the contract to deploy
-  const DomeCore = await hre.ethers.getContractFactory("DomeCore");
-  const domeCore = await DomeCore.deploy(usdc, owner, "Dome1", "dome", "TokenXXX", [["School","url","logo","0x9C5304Cf9066a860672BA5cf7f1C4592DCf20f56","For repair",10]]);
+  const DomeCreator = await hre.ethers.getContractFactory("DomeCreator");
+  const domeCreator = await DomeCreator.deploy();
 
-  await domeCore.deployed();
+  await domeCreator.deployed();
 
-  console.log("DomeCore3 deployed to:", domeCore.address);
+  console.log("DomeCreator deployed to:", domeCreator.address);
+  
+  //await verifyContract(domeCreator, []);
 }
 
 // We recommend this pattern to be able to use async/await everywhere

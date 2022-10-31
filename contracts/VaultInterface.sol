@@ -2,8 +2,7 @@
 
 pragma solidity ^0.8.17;
 
-
-interface IDomeCore {
+interface VaultInterface {
 
     function deposit(uint256 assets, address receiver) external returns (uint256 shares);
 
