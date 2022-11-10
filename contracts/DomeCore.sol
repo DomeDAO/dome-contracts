@@ -24,8 +24,9 @@ contract DomeCore is ERC4626, Ownable {
         uint256 percentage;
     }
 
-    uint256 public totalStaked;
-    uint256 public bufferestedInterests;
+
+    //Amount Of Underlying assets owned by depositor, interested + principal
+    uint256 public underlyingAssetsOwnedByDepositor;
 
     using SafeERC20 for IERC20;
 
@@ -74,12 +75,8 @@ contract DomeCore is ERC4626, Ownable {
         _systemOwnerPercentage = systemOwnerPercentage;
     }
 
-    function getBuffer() public view returns(uint256){
-        return bufferestedInterests;
-    }
-
-    function getTotalStaked() public view returns(uint256){
-        return totalStaked;
+    function getUnderlyingAssetsOwnedByDepositor() public view returns(uint256){
+        return underlyingAssetsOwnedByDepositor;
     }
 
     function totalBalance() public view returns (uint256){
@@ -115,7 +112,7 @@ contract DomeCore is ERC4626, Ownable {
 
         testMStable.deposit(amount, address(this));
 
-        totalStaked += amount;
+        underlyingAssetsOwnedByDepositor += amount;
 
         uint256 liquidityAmount;
         
@@ -143,16 +140,15 @@ contract DomeCore is ERC4626, Ownable {
         require(lToBurn <= liquidityAmount, "You dont have enough balance");
         testMStable.withdraw(assets, receiver, address(this));
 
-        totalStaked -= lToBurn * totalStaked / totalSupply();
-
-        bufferestedInterests -= lToBurn * bufferestedInterests / totalSupply();
+        // Remove part retributed 
+        underlyingAssetsOwnedByDepositor -= lToBurn * underlyingAssetsOwnedByDepositor / totalSupply();
 
         _burn(msg.sender, lToBurn);
         return lToBurn;
     }
 
     function claimInterests() public {
-        uint256 reward = testMStable.balanceOfUnderlying(address(this)) - totalStaked - bufferestedInterests;
+        uint256 reward = testMStable.balanceOfUnderlying(address(this)) - underlyingAssetsOwnedByDepositor;
         uint256 systemFee = reward * _systemOwnerPercentage / 100;
         uint256 beneficiariesReward = (reward - systemFee) * beneficiariesPercentage() / 100;
         testMStable.withdraw(beneficiariesReward + systemFee, address(this), address(this));
@@ -171,7 +167,7 @@ contract DomeCore is ERC4626, Ownable {
                 totalTransfered += toTransfer;
             }
         }
-        bufferestedInterests += (reward - totalTransfered);
+        underlyingAssetsOwnedByDepositor += (reward - totalTransfered);
     }
 
     function beneficiariesPercentage() public view returns (uint256 totalPercentage){
@@ -187,8 +183,8 @@ contract DomeCore is ERC4626, Ownable {
     function estimateReward() public view returns(uint256){
         uint256 totalReward = testMStable.balanceOfUnderlying(address(this));
         uint256 reward;
-        if(totalReward > totalStaked + bufferestedInterests){
-            uint256 newReward = totalReward - totalStaked - bufferestedInterests;
+        if(totalReward > underlyingAssetsOwnedByDepositor){
+            uint256 newReward = totalReward - underlyingAssetsOwnedByDepositor;
             uint256 systemFee = newReward * _systemOwnerPercentage / 100;
             uint256 beneficiariesInterest = (newReward - systemFee) * beneficiariesPercentage() / 100;
             reward = totalReward - systemFee - beneficiariesInterest;
