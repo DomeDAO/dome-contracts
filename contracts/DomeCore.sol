@@ -25,8 +25,8 @@ contract DomeCore is ERC4626, Ownable {
     }
 
 
-    //Amount Of UNderlying owned by depositor, interested + principal
-    uint256 public underlyingOwnedByDepositor;
+    //Amount Of Underlying assets owned by depositor, interested + principal
+    uint256 public underlyingAssetsOwnedByDepositor;
 
     using SafeERC20 for IERC20;
 
@@ -75,8 +75,8 @@ contract DomeCore is ERC4626, Ownable {
         _systemOwnerPercentage = systemOwnerPercentage;
     }
 
-    function getunderlyingOwnedByDepositor() public view returns(uint256){
-        return underlyingOwnedByDepositor;
+    function getUnderlyingAssetsOwnedByDepositor() public view returns(uint256){
+        return underlyingAssetsOwnedByDepositor;
     }
 
     function totalBalance() public view returns (uint256){
@@ -112,7 +112,7 @@ contract DomeCore is ERC4626, Ownable {
 
         testMStable.deposit(amount, address(this));
 
-        underlyingOwnedByDepositor += amount;
+        underlyingAssetsOwnedByDepositor += amount;
 
         uint256 liquidityAmount;
         
@@ -141,14 +141,14 @@ contract DomeCore is ERC4626, Ownable {
         testMStable.withdraw(assets, receiver, address(this));
 
         // Remove part retributed 
-        underlyingOwnedByDepositor -= lToBurn * underlyingOwnedByDepositor / totalSupply();
+        underlyingAssetsOwnedByDepositor -= lToBurn * underlyingAssetsOwnedByDepositor / totalSupply();
 
         _burn(msg.sender, lToBurn);
         return lToBurn;
     }
 
     function claimInterests() public {
-        uint256 reward = testMStable.balanceOfUnderlying(address(this)) - underlyingOwnedByDepositor;
+        uint256 reward = testMStable.balanceOfUnderlying(address(this)) - underlyingAssetsOwnedByDepositor;
         uint256 systemFee = reward * _systemOwnerPercentage / 100;
         uint256 beneficiariesReward = (reward - systemFee) * beneficiariesPercentage() / 100;
         testMStable.withdraw(beneficiariesReward + systemFee, address(this), address(this));
@@ -167,7 +167,7 @@ contract DomeCore is ERC4626, Ownable {
                 totalTransfered += toTransfer;
             }
         }
-        underlyingOwnedByDepositor += (reward - totalTransfered);
+        underlyingAssetsOwnedByDepositor += (reward - totalTransfered);
     }
 
     function beneficiariesPercentage() public view returns (uint256 totalPercentage){
@@ -183,8 +183,8 @@ contract DomeCore is ERC4626, Ownable {
     function estimateReward() public view returns(uint256){
         uint256 totalReward = testMStable.balanceOfUnderlying(address(this));
         uint256 reward;
-        if(totalReward > underlyingOwnedByDepositor){
-            uint256 newReward = totalReward - underlyingOwnedByDepositor;
+        if(totalReward > underlyingAssetsOwnedByDepositor){
+            uint256 newReward = totalReward - underlyingAssetsOwnedByDepositor;
             uint256 systemFee = newReward * _systemOwnerPercentage / 100;
             uint256 beneficiariesInterest = (newReward - systemFee) * beneficiariesPercentage() / 100;
             reward = totalReward - systemFee - beneficiariesInterest;
