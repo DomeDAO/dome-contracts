@@ -1022,7 +1022,7 @@ describe("DomeCore", function () {
 
   beforeEach(async () => {
     //testMStable = await deployContract("TestMStable", testUSDC.address);
-    await domeCreator.CreateDome(
+    await domeCreator.connect(addr4).CreateDome(
       "dome",
       "dome",
       "lpToken",
@@ -1033,7 +1033,10 @@ describe("DomeCore", function () {
       [
         ["School","url","logo",addr7.address,"For repair",10],
         ["University","url","logo",addr8.address,"For repair",20]
-      ]);
+      ],
+      {
+        value: ethers.utils.parseEther("0.05")
+      });
   });
 
   describe('Staking', () => {
@@ -1117,7 +1120,9 @@ describe("DomeCore", function () {
     })
 
     it('test 3', async () => {
-      domeCore2 = await domeCreator.domesOf2(owner.address);
+      console.log(await ethers.provider.getBalance(domeCreator.address));
+
+      domeCore2 = await domeCreator.domesOf2(addr4.address);
       domeCore = await hre.ethers.getContractAt("DomeCore", domeCore2);
       
       await testUSDC.mint(testSaveMStable.address, BigNumber.from('10000000000000000000000000'));
@@ -1132,7 +1137,6 @@ describe("DomeCore", function () {
 
       await deposit(addr1, "addr1", 10000);
       await deposit(addr2, "addr2", 10000);
-      await deposit(addr3, "addr3", 10000);
       
       await mineBlocks(10);
       await domeCore.claimInterests();
@@ -1140,22 +1144,42 @@ describe("DomeCore", function () {
       await balanceERC20(testUSDC, "TestUSDC", addr7, "Addr7");
       await balanceERC20(testUSDC, "TestUSDC", addr8, "Addr8");
 
-      console.log(`bufer = `,await domeCore.getBuffer()/ 10**18 );
-      console.log(`totalStaked = `,await domeCore.getTotalStaked()/ 10**18 );
+      // console.log(`bufer = `,await domeCore.getBuffer()/ 10**18 );
+      // console.log(`totalStaked = `,await domeCore.getTotalStaked()/ 10**18 );
 
       await balanceERC20(domeCore, "domecore", addr1, "addr1");
       await balanceERC20(domeCore, "domecore", addr2, "addr2");
-      await balanceERC20(domeCore, "domecore", addr3, "addr3");
 
       console.log(`addr1 balance = `, await domeCore.balanceOfUnderlying(addr1.address) / 10**18);
       console.log(`addr2 balance = `, await domeCore.balanceOfUnderlying(addr2.address) / 10**18);
       console.log(`addr3 balance = `, await domeCore.balanceOfUnderlying(addr3.address) / 10**18);
       console.log(await domeCore.totalBalance() / 10**18);
+      await mineBlocks(10);
+      console.log(await domeCore.totalBalance() / 10**18);
+      
 
       await withdraw(addr1, "addr1", 10000);
+      console.log(await ethers.provider.getBalance(owner.address));
+      console.log(await ethers.provider.getBalance(addr4.address));
+      console.log(await ethers.provider.getBalance(domeCreator.address));
+      console.log(await ethers.provider.getBalance(domeCore.address));
 
-      console.log(`bufer = `,await domeCore.getBuffer()/ 10**18 );
-      console.log(`totalStaked = `,await domeCore.getTotalStaked()/ 10**18 );
+      await domeCreator.withdrawEth(BigNumber.from('30000000000000000'));
+      console.log(await ethers.provider.getBalance(owner.address));
+      console.log(await ethers.provider.getBalance(domeCreator.address));
+      
+      console.log(await domeCore.convertToShares(BigNumber.from('10000000000000000000000')));
+      console.log(await domeCore.convertToAssets(BigNumber.from('10000000000000000000000')));
+      await deposit(addr3, "addr3", 10000);
+      await balanceERC20(domeCore, "domecore", addr3, "addr3");
+
+
+      
+
+
+
+
+      //console.log(`totalStaked = `,await domeCore.getTotalStaked()/ 10**18 );
 
 
     })

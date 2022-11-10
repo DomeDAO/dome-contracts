@@ -13,8 +13,9 @@ import "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import "./Deploy/TestSaveMStable.sol";
 import "hardhat/console.sol";
 
-contract DomeCore is ERC4626, Ownable { 
-    
+// 35 /// 10 // 11-18 //
+
+contract DomeCore is ERC4626, Ownable {
     struct BeneficiaryInfo {
         string name;
         string url;
@@ -24,8 +25,6 @@ contract DomeCore is ERC4626, Ownable {
         uint256 percentage;
     }
 
-
-    //Amount Of Underlying assets owned by depositor, interested + principal
     uint256 public underlyingAssetsOwnedByDepositor;
 
     using SafeERC20 for IERC20;
@@ -37,14 +36,16 @@ contract DomeCore is ERC4626, Ownable {
     address public _systemOwner;
     uint256 public _systemOwnerPercentage;
 
-    //mapping(address => Staking) private userStaking;
     BeneficiaryInfo[] public beneficiaries;
 
     /// contracts
     IERC20 public stakingcoin;
     TestSaveMStable public testMStable; //todo(changed)
 
-    /// Constructor   
+    event Staked(address indexed staker, uint256 amount);
+    event Unstaked(uint256 amount);
+
+    /// Constructor
     constructor(
         string memory name,
         string memory description,
@@ -56,15 +57,15 @@ contract DomeCore is ERC4626, Ownable {
         address systemOwner,
         uint256 systemOwnerPercentage,
         BeneficiaryInfo[] memory beneficiariesInfo
-    ) 
-    ERC20(shareTokenName, shareTokenSymbol)
-    ERC4626(IERC20Metadata(stakingCoinAddress))
+    )
+        ERC20(shareTokenName, shareTokenSymbol)
+        ERC4626(IERC20Metadata(stakingCoinAddress))
     {
         stakingcoin = IERC20(stakingCoinAddress);
         _name = name;
         _description = description;
         _shareTokenName = shareTokenName;
-        for(uint256 i; i < beneficiariesInfo.length; i++){
+        for (uint256 i; i < beneficiariesInfo.length; i++) {
             beneficiaries.push(beneficiariesInfo[i]);
         }
         transferOwnership(owner);
@@ -75,15 +76,23 @@ contract DomeCore is ERC4626, Ownable {
         _systemOwnerPercentage = systemOwnerPercentage;
     }
 
+    function getBeneficiariesInfo()
+        public
+        view
+        returns (BeneficiaryInfo[] memory)
+    {
+        return beneficiaries;
+    }
+
     function getUnderlyingAssetsOwnedByDepositor() public view returns(uint256){
         return underlyingAssetsOwnedByDepositor;
     }
 
-    function totalBalance() public view returns (uint256){
+    function totalBalance() public view returns (uint256) {
         return testMStable.balanceOfUnderlying(address(this));
     }
 
-    function setApproveForDome(uint256 amount) public onlyOwner{
+    function setApproveForDome(uint256 amount) public onlyOwner {
         stakingcoin.approve(address(testMStable), amount);
     }
 
@@ -95,104 +104,238 @@ contract DomeCore is ERC4626, Ownable {
         _systemOwner = addr;
     }
 
-    function deposit(uint256 amount, address receiver) public override returns(uint256) {  //todo msg sender & receiver
-        require(amount > 0, "The amount must be greater than 0.");
-        uint256 allowance = stakingcoin.allowance(msg.sender, address(this));
-        require(
-            amount <= allowance,
-            "There is no as much allowance for staking coin."
-        );
-        uint256 balance = stakingcoin.balanceOf(msg.sender);
-        require(
-            amount <= balance,
-            "There is no as much balance for staking coin."
-        );
-
-        stakingcoin.safeTransferFrom(msg.sender, address(this), amount);
-
-        testMStable.deposit(amount, address(this));
-
-        underlyingAssetsOwnedByDepositor += amount;
-
-        uint256 liquidityAmount;
-        
-        if(totalSupply() == 0){
-            liquidityAmount = amount;
-        }
-        else{
-            liquidityAmount = amount * totalSupply() / (estimateReward() - amount);
-        }
-        _mint(receiver, liquidityAmount);
-
-        return liquidityAmount;
+    function deposit(uint256 assets, address receiver)
+        public
+        override
+        returns (uint256)
+    {
+        uint256 shares = previewDeposit(assets);
+        _deposit(msg.sender, receiver, assets, shares);
+        return shares;
     }
 
-    function withdraw(uint256 assets, address receiver, address owner) public override returns(uint256) {
-        require(owner == msg.sender, "Caller is not owner");
-        require(0 < assets, "The amount must be greater than 0.");
-        claimInterests();
+    function mint(uint256 shares, address receiver)
+        public
+        virtual
+        override
+        returns (uint256)
+    {
+        uint256 assets = previewMint(shares);
+        _deposit(msg.sender, receiver, assets, shares);
+        return assets;
+    }
 
+    function withdraw(
+        uint256 assets,
+        address receiver,
+        address owner
+    ) public override returns (uint256) {
+        uint256 shares = previewWithdraw(assets);
+        _withdraw(msg.sender, receiver, owner, assets, shares);
+        return shares;
+    }
+
+    function redeem(
+        uint256 shares,
+        address receiver,
+        address owner
+    ) public virtual override returns (uint256) {
+        uint256 assets = previewRedeem(shares);
+        _withdraw(msg.sender, receiver, owner, assets, shares);
+        return assets;
+    }
+
+    function _deposit(
+        address caller,
+        address receiver,
+        uint256 assets,
+        uint256 shares
+    ) internal virtual override {
+        require(assets > 0, "The assets must be greater than 0");
+        require(
+            assets <= stakingcoin.allowance(caller, address(this)),
+            "There is no as much allowance for staking coin"
+        );
+        require(
+            assets <= stakingcoin.balanceOf(caller),
+            "There is no as much balance for staking coin"
+        );
+
+        stakingcoin.safeTransferFrom(caller, address(this), assets);
+
+        testMStable.deposit(assets, address(this));
+
+        underlyingAssetsOwnedByDepositor += assets;
+
+        _mint(receiver, shares);
+
+        emit Staked(receiver, assets);
+    }
+
+    function _withdraw(
+        address caller,
+        address receiver,
+        address owner,
+        uint256 assets,
+        uint256 shares
+    ) internal virtual override {
+        require(owner == caller, "Caller is not owner");
+        require(0 < assets, "The amount must be greater than 0");
         uint256 liquidityAmount = balanceOf(owner);
+        require(shares <= liquidityAmount, "You dont have enough balance");
 
-        uint256 totalReward = testMStable.balanceOfUnderlying(address(this));
+        uint256 claimed = claimInterests();
 
-        uint256 lToBurn = assets * totalSupply() / totalReward;
-        require(lToBurn <= liquidityAmount, "You dont have enough balance");
         testMStable.withdraw(assets, receiver, address(this));
 
-        // Remove part retributed 
-        underlyingAssetsOwnedByDepositor -= lToBurn * underlyingAssetsOwnedByDepositor / totalSupply();
+        underlyingAssetsOwnedByDepositor -= shares * underlyingAssetsOwnedByDepositor / totalSupply();
 
-        _burn(msg.sender, lToBurn);
-        return lToBurn;
+        _burn(msg.sender, shares);
+
+        emit Unstaked(assets + claimed);
     }
 
-    function claimInterests() public {
-        uint256 reward = testMStable.balanceOfUnderlying(address(this)) - underlyingAssetsOwnedByDepositor;
-        uint256 systemFee = reward * _systemOwnerPercentage / 100;
-        uint256 beneficiariesReward = (reward - systemFee) * beneficiariesPercentage() / 100;
-        testMStable.withdraw(beneficiariesReward + systemFee, address(this), address(this));
+    function claimInterests() public returns (uint256) {
+        uint256 reward = testMStable.balanceOfUnderlying(address(this)) -
+            underlyingAssetsOwnedByDepositor;
+        uint256 systemFee = (reward * _systemOwnerPercentage) / 100;
+        uint256 beneficiariesReward = ((reward - systemFee) *
+            beneficiariesPercentage()) / 100;
+        testMStable.withdraw(
+            beneficiariesReward + systemFee,
+            address(this),
+            address(this)
+        );
         stakingcoin.safeTransfer(_systemOwner, systemFee);
         uint256 totalTransfered = systemFee;
         uint256 toTransfer;
-        for(uint256 i; i < beneficiaries.length; i++) {
-            if(i == beneficiaries.length - 1){
+        for (uint256 i; i < beneficiaries.length; i++) {
+            if (i == beneficiaries.length - 1) {
                 toTransfer = beneficiariesReward + systemFee - totalTransfered;
                 stakingcoin.safeTransfer(beneficiaries[i].wallet, toTransfer);
                 totalTransfered += toTransfer;
-            }
-            else{
-                toTransfer = (reward - systemFee) * beneficiaries[i].percentage / 100;
+            } else {
+                toTransfer =
+                    ((reward - systemFee) * beneficiaries[i].percentage) /
+                    100;
                 stakingcoin.safeTransfer(beneficiaries[i].wallet, toTransfer);
                 totalTransfered += toTransfer;
             }
         }
         underlyingAssetsOwnedByDepositor += (reward - totalTransfered);
+        return totalTransfered;
     }
 
-    function beneficiariesPercentage() public view returns (uint256 totalPercentage){
-        for(uint256 i; i < beneficiaries.length; i++){
+    function beneficiariesPercentage()
+        public
+        view
+        returns (uint256 totalPercentage)
+    {
+        for (uint256 i; i < beneficiaries.length; i++) {
             totalPercentage += beneficiaries[i].percentage;
         }
     }
 
-    function balanceOfUnderlying (address user) public view returns(uint256) {
-        return balanceOf(user) * estimateReward() / totalSupply();
-    }
-
-    function estimateReward() public view returns(uint256){
-        uint256 totalReward = testMStable.balanceOfUnderlying(address(this));
-        uint256 reward;
-        if(totalReward > underlyingAssetsOwnedByDepositor){
-            uint256 newReward = totalReward - underlyingAssetsOwnedByDepositor;
-            uint256 systemFee = newReward * _systemOwnerPercentage / 100;
-            uint256 beneficiariesInterest = (newReward - systemFee) * beneficiariesPercentage() / 100;
-            reward = totalReward - systemFee - beneficiariesInterest;
+    function balanceOfUnderlying(address user) public view returns (uint256) {
+        if(balanceOf(user) == 0){
+            return 0;
         }
         else{
+            return (balanceOf(user) * estimateReward()) / totalSupply();
+        }
+    }
+
+    function estimateReward() public view returns (uint256) {
+        uint256 totalReward = testMStable.balanceOfUnderlying(address(this));
+        uint256 reward;
+        if (totalReward > underlyingAssetsOwnedByDepositor) {
+            uint256 newReward = totalReward -
+                underlyingAssetsOwnedByDepositor;
+            uint256 systemFee = (newReward * _systemOwnerPercentage) / 100;
+            uint256 beneficiariesInterest = ((newReward - systemFee) *
+                beneficiariesPercentage()) / 100;
+            reward = totalReward - systemFee - beneficiariesInterest;
+        } else {
             reward = totalReward;
         }
         return reward;
     }
 
+    function convertToAssets(uint256 shares)
+        public
+        view
+        virtual
+        override
+        returns (uint256 assets)
+    {
+        if (totalSupply() == 0) {
+            return shares;
+        } else {
+            return (shares * estimateReward()) / totalSupply();
+        }
+    }
+
+    function convertToShares(uint256 assets)
+        public
+        view
+        virtual
+        override
+        returns (uint256 shares)
+    {
+        if (totalSupply() == 0) {
+            return assets;
+        } else {
+            return (assets * totalSupply()) / estimateReward();
+        }
+    }
+
+    function maxWithdraw(address owner)
+        public
+        view
+        virtual
+        override
+        returns (uint256)
+    {
+        return balanceOfUnderlying(owner);
+    }
+
+    function previewDeposit(uint256 assets)
+        public
+        view
+        virtual
+        override
+        returns (uint256)
+    {
+        return convertToShares(assets);
+    }
+
+    function previewMint(uint256 shares)
+        public
+        view
+        virtual
+        override
+        returns (uint256)
+    {
+        return convertToAssets(shares);
+    }
+
+    function previewWithdraw(uint256 assets)
+        public
+        view
+        virtual
+        override
+        returns (uint256)
+    {
+        return convertToShares(assets);
+    }
+
+    function previewRedeem(uint256 shares)
+        public
+        view
+        virtual
+        override
+        returns (uint256)
+    {
+        return convertToAssets(shares);
+    }
 }
