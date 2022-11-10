@@ -38,32 +38,33 @@ async function main() {
   const myWallet1 = "0x9C5304Cf9066a860672BA5cf7f1C4592DCf20f56";
   const myWallet2 = "0xC95cE5A64b5f2d3772Ee6B9adF9AA27d7fF2b68D";
   const owner = "0xAE492E3873945F9af9B6caD802e030e2935073cE";
-  const domeCore = "0x9745e90a0490Fc19a9960cA23Ef618cFa623c561";
+  const domeCore = "0xd40Cef8669F167E0EbCC286F88Bc6C12D0854DA6";
   const testSaveMStable = "0xc270D310bc7650492B528C3b6c5fd04eFF33A5ce";
 
 
   await hre.run("verify:verify", {
     address: domeCore,
     constructorArguments: [
-      "Dome2",
-      "Second dome",
-      "DomeToken",
-      "DT",
-      usdc,
-      testSaveMStable,
-      owner,
-      owner,
-      10,
+    "Dome4",
+    "Fourth dome",
+    "DomeToken4",
+    "DT4",
+    usdc,
+    testSaveMStable,
+    owner,
+    owner,
+    10,
+    [
       [
-        [
-          "School","url","logo","0xC9d60D366E5A1b0789453A9f831338dd53Afd632","For repair",20
-        ],
-        [
-          "University","url","logo","0x9C5304Cf9066a860672BA5cf7f1C4592DCf20f56","For repair",10
-        ]
+        "School","url","logo","0x9C5304Cf9066a860672BA5cf7f1C4592DCf20f56","For repair",20
+      ],
+      [
+        "University","url","logo","0x9C5304Cf9066a860672BA5cf7f1C4592DCf20f56","For repair",10
       ]
     ]
-  })
+    ],
+    contract: "contracts/DomeCore.sol:DomeCore"
+  });
 
   // await hre.run("verify:verify", {
   //   address: "0x91e985634F4690e8B79872F5C29Be357eDC0fF9c",
