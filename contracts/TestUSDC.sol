@@ -17,6 +17,10 @@ contract TestUSDC is ERC20, Ownable{
         ERC20("Test USD coin", "USDC") {
     }
 
+    function decimals() public pure override returns (uint8) {
+        return 6;
+    }
+
 
     function mint(address to_, uint256 amount_) public onlyOwner virtual {
         require(amount_!=0,"Cant mint 0 tokens");
