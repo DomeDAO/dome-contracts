@@ -12,7 +12,7 @@ import "@openzeppelin/contracts/interfaces/IERC4626.sol";
 /// Local imports
 //import "../IDomeCore.sol";
 import "../LiquidityToken.sol";
-import "./TestSaveMStable.sol";
+import "../TestSaveMStable.sol";
 import "hardhat/console.sol";
 import "../DomeCore.sol";
 
@@ -20,8 +20,7 @@ contract TestDomeCore is DomeCore {
     
     /// Constructor   
     constructor(
-        string memory name,
-        string memory description,
+        string memory domeCID,
         string memory shareTokenName,
         string memory shareTokenSymbol,
         address stakingCoinAddress,
@@ -32,8 +31,7 @@ contract TestDomeCore is DomeCore {
         BeneficiaryInfo[] memory beneficiariesInfo
     ) 
     DomeCore(
-        name,
-        description,
+        domeCID,
         shareTokenName,
         shareTokenSymbol,
         stakingCoinAddress,

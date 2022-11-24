@@ -13,7 +13,7 @@ async function main() {
   // manually to make sure everything is compiled
   // await hre.run('compile');
 
-  const usdc = "0x53CEafDCC6aB218899B689979451490469ef83b7";
+  const usdc = "0xD29CCeA8e85ccF5f2c50dca8C9ADE682f54573Eb";
   const myWallet = "0x9C5304Cf9066a860672BA5cf7f1C4592DCf20f56";
   const owner = "0xAE492E3873945F9af9B6caD802e030e2935073cE";
   const testSaveMStable = "0xc270D310bc7650492B528C3b6c5fd04eFF33A5ce";
@@ -23,10 +23,10 @@ async function main() {
   // We get the contract to deploy
   const DomeCore = await hre.ethers.getContractFactory("DomeCore");
   const domeCore = await DomeCore.deploy(
-      "Dome4",
-      "Fourth dome",
-      "DomeToken4",
-      "DT4",
+      "Dome6",
+      "Dome",
+      "DomeToken6",
+      "DT6",
       usdc,
       testSaveMStable,
       owner,
@@ -44,7 +44,7 @@ async function main() {
 
   await domeCore.deployed();
 
-  console.log("DomeCore3 deployed to:", domeCore.address);
+  console.log("DomeCore6 deployed to:", domeCore.address);
 }
 
 // We recommend this pattern to be able to use async/await everywhere

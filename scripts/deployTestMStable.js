@@ -13,7 +13,7 @@ async function main() {
   // manually to make sure everything is compiled
   // await hre.run('compile');
 
-  const usdc = "0x53CEafDCC6aB218899B689979451490469ef83b7";
+  const usdc = "0xD29CCeA8e85ccF5f2c50dca8C9ADE682f54573Eb";
 
   // We get the contract to deploy
   const TestSaveMStable = await hre.ethers.getContractFactory("TestSaveMStable");

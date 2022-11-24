@@ -10,31 +10,34 @@ import "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 /// Local imports
-import "./Deploy/TestSaveMStable.sol";
+import "./TestSaveMStable.sol";
 import "hardhat/console.sol";
 
-// 35 /// 10 // 11-18 //
-
 contract DomeCore is ERC4626, Ownable {
-    struct BeneficiaryInfo {
-        string name;
-        string url;
-        string logo;
-        address wallet;
-        string description;
-        uint256 percentage;
-    }
-
-    uint256 public underlyingAssetsOwnedByDepositor;
 
     using SafeERC20 for IERC20;
 
-    string public _name;
-    string public _description;
-    string public _shareTokenName;
-    address public _owner;
+    struct BeneficiaryInfo {
+        //string name;
+        //string url;
+        //string logo;
+        //string description;
+        string beneficiaryCID;
+        address wallet;
+        uint256 percentage;
+    }
+
+    //string public _name;
+    //string public _description;
+    //string public _shareTokenName;
+    //address public _owner;
+    string public _domeCID;
     address public _systemOwner;
+
     uint256 public _systemOwnerPercentage;
+
+    //Amount Of Underlying assets owned by depositor, interested + principal
+    uint256 public underlyingAssetsOwnedByDepositor;
 
     BeneficiaryInfo[] public beneficiaries;
 
@@ -42,13 +45,19 @@ contract DomeCore is ERC4626, Ownable {
     IERC20 public stakingcoin;
     TestSaveMStable public testMStable; //todo(changed)
 
-    event Staked(address indexed staker, uint256 amount);
-    event Unstaked(uint256 amount);
+    event Staked(address indexed staker, uint256 amount, uint256 timestamp);
+    event Unstaked(
+        address indexed unstaker,
+        uint256 totalAmount,
+        uint256 unstakedAmount,
+        uint256 timestamp
+    );
 
     /// Constructor
     constructor(
-        string memory name,
-        string memory description,
+        //string memory name,
+        //string memory description,
+        string memory domeCID,
         string memory shareTokenName,
         string memory shareTokenSymbol,
         address stakingCoinAddress,
@@ -62,18 +71,28 @@ contract DomeCore is ERC4626, Ownable {
         ERC4626(IERC20Metadata(stakingCoinAddress))
     {
         stakingcoin = IERC20(stakingCoinAddress);
-        _name = name;
-        _description = description;
-        _shareTokenName = shareTokenName;
+        _domeCID = domeCID;
+        //_name = name;
+        //_description = description;
+        //_shareTokenName = shareTokenName;
         for (uint256 i; i < beneficiariesInfo.length; i++) {
             beneficiaries.push(beneficiariesInfo[i]);
         }
         transferOwnership(owner);
         testMStable = TestSaveMStable(testMstableAddress);
         stakingcoin.approve(address(testMStable), 2**256 - 1);
-        _owner = owner;
+        //_owner = owner;
         _systemOwner = systemOwner;
         _systemOwnerPercentage = systemOwnerPercentage;
+    }
+
+    function decimals()
+        public
+        pure
+        override(ERC20, IERC20Metadata)
+        returns (uint8)
+    {
+        return 6;
     }
 
     function getBeneficiariesInfo()
@@ -84,7 +103,11 @@ contract DomeCore is ERC4626, Ownable {
         return beneficiaries;
     }
 
-    function getUnderlyingAssetsOwnedByDepositor() public view returns(uint256){
+    function getUnderlyingAssetsOwnedByDepositor()
+        public
+        view
+        returns (uint256)
+    {
         return underlyingAssetsOwnedByDepositor;
     }
 
@@ -96,12 +119,8 @@ contract DomeCore is ERC4626, Ownable {
         stakingcoin.approve(address(testMStable), amount);
     }
 
-    function setMstable(address addr) external onlyOwner {
+    function setMstable(address addr) external onlyOwner {  //todo  =>remove
         testMStable = TestSaveMStable(addr);
-    }
-
-    function changeSystemOwnerAddress(address addr) public onlyOwner {
-        _systemOwner = addr;
     }
 
     function deposit(uint256 assets, address receiver)
@@ -143,56 +162,6 @@ contract DomeCore is ERC4626, Ownable {
         uint256 assets = previewRedeem(shares);
         _withdraw(msg.sender, receiver, owner, assets, shares);
         return assets;
-    }
-
-    function _deposit(
-        address caller,
-        address receiver,
-        uint256 assets,
-        uint256 shares
-    ) internal virtual override {
-        require(assets > 0, "The assets must be greater than 0");
-        require(
-            assets <= stakingcoin.allowance(caller, address(this)),
-            "There is no as much allowance for staking coin"
-        );
-        require(
-            assets <= stakingcoin.balanceOf(caller),
-            "There is no as much balance for staking coin"
-        );
-
-        stakingcoin.safeTransferFrom(caller, address(this), assets);
-
-        testMStable.deposit(assets, address(this));
-
-        underlyingAssetsOwnedByDepositor += assets;
-
-        _mint(receiver, shares);
-
-        emit Staked(receiver, assets);
-    }
-
-    function _withdraw(
-        address caller,
-        address receiver,
-        address owner,
-        uint256 assets,
-        uint256 shares
-    ) internal virtual override {
-        require(owner == caller, "Caller is not owner");
-        require(0 < assets, "The amount must be greater than 0");
-        uint256 liquidityAmount = balanceOf(owner);
-        require(shares <= liquidityAmount, "You dont have enough balance");
-
-        uint256 claimed = claimInterests();
-
-        testMStable.withdraw(assets, receiver, address(this));
-
-        underlyingAssetsOwnedByDepositor -= shares * underlyingAssetsOwnedByDepositor / totalSupply();
-
-        _burn(msg.sender, shares);
-
-        emit Unstaked(assets + claimed);
     }
 
     function claimInterests() public returns (uint256) {
@@ -237,28 +206,11 @@ contract DomeCore is ERC4626, Ownable {
     }
 
     function balanceOfUnderlying(address user) public view returns (uint256) {
-        if(balanceOf(user) == 0){
+        if (balanceOf(user) == 0) {
             return 0;
-        }
-        else{
+        } else {
             return (balanceOf(user) * estimateReward()) / totalSupply();
         }
-    }
-
-    function estimateReward() public view returns (uint256) {
-        uint256 totalReward = testMStable.balanceOfUnderlying(address(this));
-        uint256 reward;
-        if (totalReward > underlyingAssetsOwnedByDepositor) {
-            uint256 newReward = totalReward -
-                underlyingAssetsOwnedByDepositor;
-            uint256 systemFee = (newReward * _systemOwnerPercentage) / 100;
-            uint256 beneficiariesInterest = ((newReward - systemFee) *
-                beneficiariesPercentage()) / 100;
-            reward = totalReward - systemFee - beneficiariesInterest;
-        } else {
-            reward = totalReward;
-        }
-        return reward;
     }
 
     function convertToAssets(uint256 shares)
@@ -337,5 +289,79 @@ contract DomeCore is ERC4626, Ownable {
         returns (uint256)
     {
         return convertToAssets(shares);
+    }
+
+    function estimateReward() internal view returns (uint256) {
+        uint256 totalReward = testMStable.balanceOfUnderlying(address(this));
+        uint256 reward;
+        if (totalReward > underlyingAssetsOwnedByDepositor) {
+            uint256 newReward = totalReward - underlyingAssetsOwnedByDepositor;
+            uint256 systemFee = (newReward * _systemOwnerPercentage) / 100;
+            uint256 beneficiariesInterest = ((newReward - systemFee) *
+                beneficiariesPercentage()) / 100;
+            reward = totalReward - systemFee - beneficiariesInterest;
+        } else {
+            reward = totalReward;
+        }
+        return reward;
+    }
+
+    function _deposit(
+        address caller,
+        address receiver,
+        uint256 assets,
+        uint256 shares
+    ) internal virtual override {
+        require(assets > 0, "The assets must be greater than 0");
+        require(
+            assets <= stakingcoin.allowance(caller, address(this)),
+            "There is no as much allowance for staking coin"
+        );
+        require(
+            assets <= stakingcoin.balanceOf(caller),
+            "There is no as much balance for staking coin"
+        );
+
+        stakingcoin.safeTransferFrom(caller, address(this), assets);
+
+        testMStable.deposit(assets, address(this));
+
+        underlyingAssetsOwnedByDepositor += assets;
+
+        _mint(receiver, shares);
+
+        emit Staked(receiver, assets, block.timestamp);
+    }
+
+    function _withdraw(
+        address caller,
+        address receiver,
+        address owner,
+        uint256 assets,
+        uint256 shares
+    ) internal virtual override {
+        require(owner == caller, "Caller is not owner");
+        require(0 < assets, "The amount must be greater than 0");
+        uint256 liquidityAmount = balanceOf(owner);
+        require(shares <= liquidityAmount, "You dont have enough balance");
+
+        uint256 claimed = claimInterests();
+
+        // uint256 sharesInMStable = testMStable.convertToShares(assets);
+        // testMStable.redeem(sharesInMStable, receiver, address(this));
+
+        testMStable.withdraw(assets, receiver, address(this));
+
+        //console.log(underlyingAssetsOwnedByDepositor);
+
+        underlyingAssetsOwnedByDepositor -=
+            (shares * underlyingAssetsOwnedByDepositor) /
+            totalSupply(); //todo ==>> assets
+
+        //console.log(underlyingAssetsOwnedByDepositor);
+
+        _burn(msg.sender, shares);
+
+        emit Unstaked(caller, assets + claimed, assets, block.timestamp);
     }
 }
