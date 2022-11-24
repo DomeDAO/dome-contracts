@@ -1,53 +1,83 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.17;
 
-import "./IDomeCore.sol";
+/// Openzeppelin imports
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+/// Local imports
 import "./DomeCore.sol";
 
-contract DomeCreator {
-    
-    struct BeneficiariesInfo {
-        string name;
-        string url;
-        string logo;
-        address wallet;
-        string description;
-        uint256 percentage;
+contract DomeCreator is Ownable {
+    uint256 public systemOwnerPercentage;
+    uint256 public paymentForCreateDome;
+    mapping(address => DomeCore[]) public creatorDomes;
+    mapping(address => address) public domeCreators;
+
+    event domeCreated(address creator, string cid);
+
+    constructor(){
+        systemOwnerPercentage = 10;
+        paymentForCreateDome = 50000000000000000;
     }
 
-    mapping(address => IDomeCore) public domes;
-
-    mapping(address => BeneficiariesInfo) public beneficiaries;
+    modifier payedEnough(){
+        require(msg.value >= paymentForCreateDome, "You must pay 0.5eth for create dome");
+        _;
+    }
 
     function CreateDome(
+        //string memory name,
+        //string memory description,
+        string memory domeCID,
+        string memory shareName,
+        string memory shareSymbol,
         address stakingCoinAddress,
-        string memory name,
-        string memory description,
-        string memory lpTokenName,
-        BeneficiariesInfo[] memory beneficiariesInfo
-    ) public {
-        domes[msg.sender] = new DomeCore(stakingCoinAddress, msg.sender, name, description, lpTokenName, beneficiariesInfo);
+        address testMstableAddress,
+        DomeCore.BeneficiaryInfo[] memory beneficiariesInfo
+    ) public payable payedEnough{
+        DomeCore dome = new DomeCore(
+            //name,
+            //description,
+            domeCID,
+            shareName,
+            shareSymbol,
+            stakingCoinAddress,
+            testMstableAddress,
+            msg.sender,
+            owner(),
+            systemOwnerPercentage,
+            beneficiariesInfo
+        );
+        creatorDomes[msg.sender].push(dome);
+        domeCreators[address(dome)] = msg.sender;
+        emit domeCreated(msg.sender, domeCID);
     }
 
-    function getDome(address domeOwner) public view returns (IDomeCore){
-        return  domes[domeOwner];
+    function CreateDometest() public payable payedEnough{
+        
     }
 
-    function setBeneficiariesInfo(
-        string memory name,
-        string memory url,
-        string memory logo,
-        address wallet,
-        string memory description,
-        uint256 percentage
-    ) public {
-        BeneficiariesInfo storage beneficiariesInfo = beneficiaries[msg.sender];
-        beneficiariesInfo.name = name;
-        beneficiariesInfo.url = url;
-        beneficiariesInfo.logo = logo;
-        beneficiariesInfo.wallet = wallet;
-        beneficiariesInfo.description = description;
-        beneficiariesInfo.percentage = percentage;
+
+    function domesOf(address creator) public view returns (DomeCore[] memory) {
+        return creatorDomes[creator];
     }
+
+    function creatorOf(address dome) public view returns (address) {
+        return domeCreators[dome];
+    }
+
+    function ChangeSystemOwnerPercentage(uint256 percentage) external onlyOwner {
+        systemOwnerPercentage = percentage;
+    }
+
+    function withdrawEth(uint256 amount) external onlyOwner {
+        address payable to = payable(msg.sender);
+        to.transfer(amount);
+    }
+
+    function changePaymentForCreate(uint256 value) external onlyOwner {
+        paymentForCreateDome = value;
+    }
+
 }
