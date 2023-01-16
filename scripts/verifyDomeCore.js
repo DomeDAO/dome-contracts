@@ -38,31 +38,31 @@ async function main() {
   const myWallet1 = "0x9C5304Cf9066a860672BA5cf7f1C4592DCf20f56";
   const myWallet2 = "0xC95cE5A64b5f2d3772Ee6B9adF9AA27d7fF2b68D";
   const owner = "0xAE492E3873945F9af9B6caD802e030e2935073cE";
-  const domeCore = "0x78aAcE881cf2aFA7F869Ad593630A35eFaF2B444";
+  const domeCore = "0x945967B3ab1bfeA6050FfA0f08a8C5afC8047831";
   const testSaveMStable = "0x17400Efb007633B04a9866E312961b8252d9E959";
 
 
   await hre.run("verify:verify", {
     address: domeCore,
     constructorArguments: [
-    "domeCid",
-    "domeTokenRemix",
-    "DTR",
+    "QmUQDrjJn7Jh3Ut6M8BmyfxXwhL34JN4nRCfruhCbLNiEU",
+    "aaa",
+    "aaa.com",
     usdc,
     testSaveMStable,
-    owner,
-    owner,
+    "0x1d97ddf866c890dd263d9ff394d66cdbf4e95b6c",
+    "0xAE492E3873945F9af9B6caD802e030e2935073cE",
     10,
     [
       [
-        "Cid1","0x9C5304Cf9066a860672BA5cf7f1C4592DCf20f56",20
-      ],
-      [
-        "Cid2","0x9C5304Cf9066a860672BA5cf7f1C4592DCf20f56",10
+        "Qman1nnUCUmgpM4dr1RuAfSrPbkJ6r2ZrXHC91vN54W19m","0x1D97dDf866C890Dd263D9Ff394D66CdBF4e95b6c",50
       ]
+      // [
+      //   "Cid2","0x9C5304Cf9066a860672BA5cf7f1C4592DCf20f56",10
+      // ]
     ]
     ],
-    contract: "contracts/DomeCore.sol:DomeCore"
+    contract: "contracts/Dome2.sol:DomeCore"
   });
 
   // await hre.run("verify:verify", {

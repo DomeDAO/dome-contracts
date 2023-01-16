@@ -8,14 +8,13 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// Local imports
-import "./VaultInterface.sol";
 import "hardhat/console.sol";
-import "./LiquidityToken.sol";
+import "./TestLiquidityToken.sol";
 
-contract TestSaveMStable is VaultInterface {
+contract TestSaveMStable {
 
     using SafeERC20 for ERC20;
-    LiquidityToken public liquidityToken;
+    TestLiquidityToken public liquidityToken;
 
 
     struct Stake {
@@ -31,7 +30,7 @@ contract TestSaveMStable is VaultInterface {
     /// Constructor
     constructor(address tokenAddress_) {
         token = ERC20(tokenAddress_);
-        liquidityToken = new LiquidityToken("Test imUSD share", "TimUSD");
+        liquidityToken = new TestLiquidityToken("Test imUSD share", "TimUSD");
         _initialBlock = block.number;
         rewardGrowthSpeed = 1;
     }
@@ -87,11 +86,19 @@ contract TestSaveMStable is VaultInterface {
         if(s.amount == 0){
             return 0;
         }
-        uint256 balance = s.amount + s.amount * (block.number - s.lastBlockNumber) * rewardGrowthSpeed / 10000 ; /// TODO for each block
+        uint256 balance = s.amount + s.amount * (block.number - s.lastBlockNumber) * rewardGrowthSpeed / 10000 ; 
         return balance;
     }
 
     function balanceOfUnderlying (address user_) public view returns(uint256) {
         return balanceOf(user_);
+    }
+
+    function convertToShares(uint256 assets) public view returns(uint256) {
+        return assets;
+    }
+
+    function convertToAssets(uint256 shares) public view returns(uint256) {
+        return shares;
     }
 }

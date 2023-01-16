@@ -11,14 +11,26 @@ import "./DomeCore.sol";
 contract DomeCreator is Ownable {
     uint256 public systemOwnerPercentage;
     uint256 public paymentForCreateDome;
+
     mapping(address => DomeCore[]) public creatorDomes;
     mapping(address => address) public domeCreators;
+
+    address stakingCoinAddress;
+    address mUSDSavingsContractAddress;
+    address mUSDTokenAddress;
+    address mAssetSaveWrapperAddress;
+    address mUSDSavingsVaultAddress;
 
     event domeCreated(address creator, string cid);
 
     constructor(){
+        stakingCoinAddress = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+        mUSDSavingsContractAddress = 0x30647a72Dc82d7Fbb1123EA74716aB8A317Eac19;
+        mUSDTokenAddress = 0xe2f2a5C287993345a840Db3B0845fbC70f5935a5;
+        mAssetSaveWrapperAddress = 0x0CA7A25181FC991e3cC62BaC511E62973991f325;
+        mUSDSavingsVaultAddress = 0x78BefCa7de27d07DC6e71da295Cc2946681A6c7B;
         systemOwnerPercentage = 10;
-        paymentForCreateDome = 50000000000000000;
+        paymentForCreateDome = 500000000000000000;
     }
 
     modifier payedEnough(){
@@ -27,23 +39,20 @@ contract DomeCreator is Ownable {
     }
 
     function CreateDome(
-        //string memory name,
-        //string memory description,
         string memory domeCID,
         string memory shareName,
         string memory shareSymbol,
-        address stakingCoinAddress,
-        address testMstableAddress,
         DomeCore.BeneficiaryInfo[] memory beneficiariesInfo
     ) public payable payedEnough{
         DomeCore dome = new DomeCore(
-            //name,
-            //description,
             domeCID,
             shareName,
             shareSymbol,
             stakingCoinAddress,
-            testMstableAddress,
+            mUSDSavingsContractAddress,
+            mUSDTokenAddress,
+            mAssetSaveWrapperAddress,
+            mUSDSavingsVaultAddress,
             msg.sender,
             owner(),
             systemOwnerPercentage,
@@ -53,11 +62,6 @@ contract DomeCreator is Ownable {
         domeCreators[address(dome)] = msg.sender;
         emit domeCreated(msg.sender, domeCID);
     }
-
-    function CreateDometest() public payable payedEnough{
-        
-    }
-
 
     function domesOf(address creator) public view returns (DomeCore[] memory) {
         return creatorDomes[creator];
@@ -80,4 +84,23 @@ contract DomeCreator is Ownable {
         paymentForCreateDome = value;
     }
 
+    function changeStakingCoinAddress(address _stakingCoinAddress) external onlyOwner {
+        stakingCoinAddress = _stakingCoinAddress;
+    }
+
+    function changeMUSDSavingsContractAddress(address _mUSDSavingsContractAddress) external onlyOwner {
+        mUSDSavingsContractAddress = _mUSDSavingsContractAddress;
+    }
+    
+    function changeMUSDTokenAddress(address _mUSDTokenAddress) external onlyOwner {
+        mUSDTokenAddress = _mUSDTokenAddress;
+    }
+    
+    function changeMAssetSaveWrapperAddress(address _mAssetSaveWrapperAddress) external onlyOwner {
+        mAssetSaveWrapperAddress = _mAssetSaveWrapperAddress;
+    }
+    
+    function changemUSDSavingsVaultAddress(address _mUSDSavingsVaultAddress) external onlyOwner {
+        mUSDSavingsVaultAddress = _mUSDSavingsVaultAddress;
+    }
 }

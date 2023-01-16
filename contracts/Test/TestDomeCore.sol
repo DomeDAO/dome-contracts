@@ -1,4 +1,4 @@
-//SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.17;
 
@@ -10,12 +10,11 @@ import "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 /// Local imports
+import "./TestSaveMStable.sol";
 import "hardhat/console.sol";
-import "./Interfaces/ImAssetSaveWrapper.sol";
-import "./Interfaces/ImUSDToken.sol";
-import "./Interfaces/ImUSDSavingsContract.sol";
 
-contract DomeCore is ERC4626, Ownable {
+contract TestDomeCore is ERC4626, Ownable {
+
     using SafeERC20 for IERC20;
 
     struct BeneficiaryInfo {
@@ -24,13 +23,7 @@ contract DomeCore is ERC4626, Ownable {
         uint256 percentage;
     }
 
-    /// contracts
-    IERC20 public stakingCoin;
-    ImUSDSavingsContract public mUSDSavingsContract;
-    ImUSDToken public mUSDToken;
-    ImAssetSaveWrapper public mAssetSaveWrapper;
-    address public mUSDSavingsVault;
-
+    
     string public _domeCID;
     address public _systemOwner;
 
@@ -40,6 +33,10 @@ contract DomeCore is ERC4626, Ownable {
     uint256 public underlyingAssetsOwnedByDepositor;
 
     BeneficiaryInfo[] public beneficiaries;
+
+    /// contracts
+    IERC20 public stakingcoin;
+    TestSaveMStable public testMStable; 
 
     event Staked(address indexed staker, uint256 amount, uint256 timestamp);
     event Unstaked(
@@ -55,10 +52,7 @@ contract DomeCore is ERC4626, Ownable {
         string memory shareTokenName,
         string memory shareTokenSymbol,
         address stakingCoinAddress,
-        address mUSDSavingsContractAddress,
-        address mUSDTokenAddress,
-        address mAssetSaveWrapperAddress,
-        address mUSDSavingsVaultAddress,
+        address testMstableAddress,
         address owner,
         address systemOwner,
         uint256 systemOwnerPercentage,
@@ -67,17 +61,14 @@ contract DomeCore is ERC4626, Ownable {
         ERC20(shareTokenName, shareTokenSymbol)
         ERC4626(IERC20Metadata(stakingCoinAddress))
     {
-        stakingCoin = IERC20(stakingCoinAddress);
-        mUSDSavingsContract = ImUSDSavingsContract(mUSDSavingsContractAddress);
-        mUSDToken = ImUSDToken(mUSDTokenAddress);
-        mAssetSaveWrapper = ImAssetSaveWrapper(mAssetSaveWrapperAddress);
-        mUSDSavingsVault = mUSDSavingsVaultAddress;
+        stakingcoin = IERC20(stakingCoinAddress);
         _domeCID = domeCID;
         for (uint256 i; i < beneficiariesInfo.length; i++) {
             beneficiaries.push(beneficiariesInfo[i]);
         }
         transferOwnership(owner);
-        stakingCoin.approve(mAssetSaveWrapperAddress, 2**256 - 1);
+        testMStable = TestSaveMStable(testMstableAddress);
+        stakingcoin.approve(address(testMStable), 2**256 - 1);
         _systemOwner = systemOwner;
         _systemOwnerPercentage = systemOwnerPercentage;
     }
@@ -108,13 +99,15 @@ contract DomeCore is ERC4626, Ownable {
     }
 
     function totalBalance() public view returns (uint256) {
-        uint256 mUSD = mUSDSavingsContract.balanceOfUnderlying(address(this));
-        uint256 asset = mUSDToken.getRedeemOutput(address(stakingCoin), mUSD);
-        return asset;
+        return testMStable.balanceOfUnderlying(address(this));
     }
 
     function setApproveForDome(uint256 amount) public onlyOwner {
-        stakingCoin.approve(address(mAssetSaveWrapper), amount);
+        stakingcoin.approve(address(testMStable), amount);
+    }
+
+    function setMstable(address addr) external onlyOwner {
+        testMStable = TestSaveMStable(addr);
     }
 
     function deposit(uint256 assets, address receiver)
@@ -159,48 +152,29 @@ contract DomeCore is ERC4626, Ownable {
     }
 
     function claimInterests() public returns (uint256) {
-        uint256 reward;
-        uint256 balanceINmStable = totalBalance();
-        if (balanceINmStable >= underlyingAssetsOwnedByDepositor) {
-            reward = balanceINmStable - underlyingAssetsOwnedByDepositor;
-        } else {
-            return 0;
-        }
-
+        uint256 reward = testMStable.balanceOfUnderlying(address(this)) -
+            underlyingAssetsOwnedByDepositor;
         uint256 systemFee = (reward * _systemOwnerPercentage) / 100;
         uint256 beneficiariesReward = ((reward - systemFee) *
             beneficiariesPercentage()) / 100;
-        uint256 shares;
-        uint256 mAssets;
-        (shares, mAssets) = estimateSharesForWithdraw(
-            beneficiariesReward + systemFee
-        );
-        uint256 minAmountOut = mUSDToken.getRedeemOutput(
-            address(stakingCoin),
-            mAssets
-        );
-        mUSDSavingsContract.redeemAndUnwrap(
-            shares,
-            true,
-            minAmountOut,
-            address(stakingCoin),
+        testMStable.withdraw(
+            beneficiariesReward + systemFee,
             address(this),
-            address(mUSDToken),
-            true
+            address(this)
         );
-        stakingCoin.safeTransfer(_systemOwner, systemFee);
+        stakingcoin.safeTransfer(_systemOwner, systemFee);
         uint256 totalTransfered = systemFee;
         uint256 toTransfer;
         for (uint256 i; i < beneficiaries.length; i++) {
             if (i == beneficiaries.length - 1) {
                 toTransfer = beneficiariesReward + systemFee - totalTransfered;
-                stakingCoin.safeTransfer(beneficiaries[i].wallet, toTransfer);
+                stakingcoin.safeTransfer(beneficiaries[i].wallet, toTransfer);
                 totalTransfered += toTransfer;
             } else {
                 toTransfer =
                     ((reward - systemFee) * beneficiaries[i].percentage) /
                     100;
-                stakingCoin.safeTransfer(beneficiaries[i].wallet, toTransfer);
+                stakingcoin.safeTransfer(beneficiaries[i].wallet, toTransfer);
                 totalTransfered += toTransfer;
             }
         }
@@ -305,7 +279,7 @@ contract DomeCore is ERC4626, Ownable {
     }
 
     function estimateReward() internal view returns (uint256) {
-        uint256 totalReward = totalBalance();
+        uint256 totalReward = testMStable.balanceOfUnderlying(address(this));
         uint256 reward;
         if (totalReward > underlyingAssetsOwnedByDepositor) {
             uint256 newReward = totalReward - underlyingAssetsOwnedByDepositor;
@@ -327,27 +301,17 @@ contract DomeCore is ERC4626, Ownable {
     ) internal virtual override {
         require(assets > 0, "The assets must be greater than 0");
         require(
-            assets <= stakingCoin.allowance(caller, address(this)),
+            assets <= stakingcoin.allowance(caller, address(this)),
             "There is no as much allowance for staking coin"
         );
         require(
-            assets <= stakingCoin.balanceOf(caller),
+            assets <= stakingcoin.balanceOf(caller),
             "There is no as much balance for staking coin"
         );
 
-        stakingCoin.safeTransferFrom(caller, address(this), assets);
+        stakingcoin.safeTransferFrom(caller, address(this), assets);
 
-        uint256 minOut = mUSDToken.getMintOutput(address(stakingCoin), assets);
-
-        mAssetSaveWrapper.saveViaMint(
-            address(mUSDToken),
-            address(mUSDSavingsContract),
-            mUSDSavingsVault,
-            address(stakingCoin),
-            assets,
-            minOut,
-            false
-        );
+        testMStable.deposit(assets, address(this));
 
         underlyingAssetsOwnedByDepositor += assets;
 
@@ -370,40 +334,13 @@ contract DomeCore is ERC4626, Ownable {
 
         uint256 claimed = claimInterests();
 
-        uint256 sharesInMstable;
-        uint256 mAssets;
-        (sharesInMstable, mAssets) = estimateSharesForWithdraw(assets);
-        uint256 minAmountOut = mUSDToken.getRedeemOutput(
-            address(stakingCoin),
-            mAssets
-        );
-        mUSDSavingsContract.redeemAndUnwrap(
-            sharesInMstable,
-            true,
-            minAmountOut,
-            address(stakingCoin),
-            receiver,
-            address(mUSDToken),
-            true
-        );
+        testMStable.withdraw(assets, receiver, address(this));
+
 
         underlyingAssetsOwnedByDepositor -= assets;
 
-        _burn(owner, shares);
+        _burn(msg.sender, shares);
 
-        emit Unstaked(owner, assets + claimed, assets, block.timestamp);
-    }
-
-    function estimateSharesForWithdraw(uint256 asset)
-        public
-        view
-        returns (uint256 shares, uint256 mAsset)
-    {
-        uint256 coefficient = mUSDToken.getRedeemOutput(
-            address(stakingCoin),
-            10**18
-        );
-        mAsset = (asset * 10**18) / (coefficient + 1);
-        shares = mUSDSavingsContract.convertToShares(mAsset);
+        emit Unstaked(caller, assets + claimed, assets, block.timestamp);
     }
 }

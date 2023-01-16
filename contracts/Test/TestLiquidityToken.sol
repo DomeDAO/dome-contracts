@@ -6,11 +6,7 @@ pragma solidity ^0.8.17;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-/**
- * @title Implementation of the PVTToken.
- *
- */
-contract LiquidityToken is ERC20, Ownable{
+contract TestLiquidityToken is ERC20, Ownable{
 
 
     constructor(string memory name, string memory symbol)
