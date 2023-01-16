@@ -1224,8 +1224,18 @@ describe("DomeCore", function () {
       
       
 
-      await redeem(addr1, "addr1", 10000000000);
+      await redeem(addr1, "addr1", 9999990000);
       await redeem(addr2, "addr2", 9993703966);
+      await balanceOfUnderlying(addr1, "addr1");
+      await balanceOfUnderlying(addr2, "addr2");
+      await domeCore.connect(addr1).withdraw(1, addr1.address, addr1.address);
+      await domeCore.connect(addr1).withdraw(6000, addr1.address, addr1.address);
+      await domeCore.connect(addr1).withdraw(4035, addr1.address, addr1.address);
+
+      await balanceOfUnderlying(addr1, "addr1");
+
+      // await redeem(addr1, "addr1", 1);
+      // await redeem(addr2, "addr2", 1);
       // await withdraw(addr1, "addr1", 2000);
       // await withdraw(addr1, "addr1", 3000);
       // await withdraw(addr1, "addr1", 5000);
