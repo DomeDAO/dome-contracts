@@ -8,17 +8,22 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 /// Local imports
 import "./TestDomeCore.sol";
 
-contract DomeCreator is Ownable {
+contract TestDomeCreator is Ownable {
     uint256 public systemOwnerPercentage;
     uint256 public paymentForCreateDome;
-    mapping(address => TestDomeCore[]) public creatorDomes;
+
+    mapping(address => address[]) public creatorDomes;
     mapping(address => address) public domeCreators;
 
+    address stakingCoinAddress;
+    address testMstableAddress;
     event domeCreated(address creator, string cid);
 
     constructor(){
         systemOwnerPercentage = 10;
-        paymentForCreateDome = 500000000000000000;
+        paymentForCreateDome = 50000000000000000;
+        stakingCoinAddress = 0xD29CCeA8e85ccF5f2c50dca8C9ADE682f54573Eb;
+        testMstableAddress = 0x17400Efb007633B04a9866E312961b8252d9E959;
     }
 
     modifier payedEnough(){
@@ -27,17 +32,11 @@ contract DomeCreator is Ownable {
     }
 
     function CreateDome(
-        string memory domeCID,
-        string memory shareName,
-        string memory shareSymbol,
-        address stakingCoinAddress,
-        address testMstableAddress,
+        string[] memory domeInfo,
         TestDomeCore.BeneficiaryInfo[] memory beneficiariesInfo
     ) public payable payedEnough{
         TestDomeCore dome = new TestDomeCore(
-            domeCID,
-            shareName,
-            shareSymbol,
+            domeInfo,
             stakingCoinAddress,
             testMstableAddress,
             msg.sender,
@@ -45,22 +44,13 @@ contract DomeCreator is Ownable {
             systemOwnerPercentage,
             beneficiariesInfo
         );
-        creatorDomes[msg.sender].push(dome);
+        creatorDomes[msg.sender].push(address(dome));
         domeCreators[address(dome)] = msg.sender;
-        emit domeCreated(msg.sender, domeCID);
+        emit domeCreated(msg.sender, domeInfo[0]);
     }
 
-    function CreateDometest() public payable payedEnough{
-        
-    }
-
-
-    function domesOf(address creator) public view returns (TestDomeCore[] memory) {
+    function domesOf(address creator) public view returns (address[] memory) {
         return creatorDomes[creator];
-    }
-
-    function creatorOf(address dome) public view returns (address) {
-        return domeCreators[dome];
     }
 
     function ChangeSystemOwnerPercentage(uint256 percentage) external onlyOwner {
@@ -74,6 +64,14 @@ contract DomeCreator is Ownable {
 
     function changePaymentForCreate(uint256 value) external onlyOwner {
         paymentForCreateDome = value;
+    }
+ 
+    function changeStakingCoinAddress(address _stakingCoinAddress) external onlyOwner {
+        stakingCoinAddress = _stakingCoinAddress;
+    }
+
+    function changeTestMstableAddress(address _testMstableAddress) external onlyOwner {
+        testMstableAddress = _testMstableAddress;
     }
 
 }

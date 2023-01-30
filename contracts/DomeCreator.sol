@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.17;
+ pragma solidity ^0.8.17;
 
 /// Openzeppelin imports
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -10,9 +10,9 @@ import "./DomeCore.sol";
 
 contract DomeCreator is Ownable {
     uint256 public systemOwnerPercentage;
-    uint256 public paymentForCreateDome;
+    uint256 public domeCreationFee;
 
-    mapping(address => DomeCore[]) public creatorDomes;
+    mapping(address => address[]) public creatorDomes;
     mapping(address => address) public domeCreators;
 
     address stakingCoinAddress;
@@ -30,24 +30,20 @@ contract DomeCreator is Ownable {
         mAssetSaveWrapperAddress = 0x0CA7A25181FC991e3cC62BaC511E62973991f325;
         mUSDSavingsVaultAddress = 0x78BefCa7de27d07DC6e71da295Cc2946681A6c7B;
         systemOwnerPercentage = 10;
-        paymentForCreateDome = 500000000000000000;
+        domeCreationFee = 500000000000000000;
     }
 
     modifier payedEnough(){
-        require(msg.value >= paymentForCreateDome, "You must pay 0.5eth for create dome");
+        require(msg.value >= domeCreationFee, "You must pay <domeCreationFee>");
         _;
     }
 
     function CreateDome(
-        string memory domeCID,
-        string memory shareName,
-        string memory shareSymbol,
+        string[] memory domeInfo,
         DomeCore.BeneficiaryInfo[] memory beneficiariesInfo
     ) public payable payedEnough{
         DomeCore dome = new DomeCore(
-            domeCID,
-            shareName,
-            shareSymbol,
+            domeInfo,
             stakingCoinAddress,
             mUSDSavingsContractAddress,
             mUSDTokenAddress,
@@ -58,17 +54,13 @@ contract DomeCreator is Ownable {
             systemOwnerPercentage,
             beneficiariesInfo
         );
-        creatorDomes[msg.sender].push(dome);
+        creatorDomes[msg.sender].push(address(dome));
         domeCreators[address(dome)] = msg.sender;
-        emit domeCreated(msg.sender, domeCID);
+        emit domeCreated(msg.sender, domeInfo[0]);
     }
 
-    function domesOf(address creator) public view returns (DomeCore[] memory) {
+    function domesOf(address creator) public view returns (address[] memory) {
         return creatorDomes[creator];
-    }
-
-    function creatorOf(address dome) public view returns (address) {
-        return domeCreators[dome];
     }
 
     function ChangeSystemOwnerPercentage(uint256 percentage) external onlyOwner {
@@ -80,8 +72,8 @@ contract DomeCreator is Ownable {
         to.transfer(amount);
     }
 
-    function changePaymentForCreate(uint256 value) external onlyOwner {
-        paymentForCreateDome = value;
+    function changeDomeCreationFee(uint256 value) external onlyOwner {
+        domeCreationFee = value;
     }
 
     function changeStakingCoinAddress(address _stakingCoinAddress) external onlyOwner {
