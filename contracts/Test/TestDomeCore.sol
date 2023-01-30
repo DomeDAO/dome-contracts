@@ -23,7 +23,6 @@ contract TestDomeCore is ERC4626, Ownable {
         uint256 percentage;
     }
 
-    
     string public _domeCID;
     address public _systemOwner;
 
@@ -37,20 +36,18 @@ contract TestDomeCore is ERC4626, Ownable {
     /// contracts
     IERC20 public stakingcoin;
     TestSaveMStable public testMStable; 
-
+    
     event Staked(address indexed staker, uint256 amount, uint256 timestamp);
     event Unstaked(
         address indexed unstaker,
-        uint256 totalAmount,
         uint256 unstakedAmount,
         uint256 timestamp
     );
+    event Claimed(address indexed claimer, uint256 amount, uint256 timestamp);
 
     /// Constructor
     constructor(
-        string memory domeCID,
-        string memory shareTokenName,
-        string memory shareTokenSymbol,
+        string[] memory domeInfo,
         address stakingCoinAddress,
         address testMstableAddress,
         address owner,
@@ -58,11 +55,11 @@ contract TestDomeCore is ERC4626, Ownable {
         uint256 systemOwnerPercentage,
         BeneficiaryInfo[] memory beneficiariesInfo
     )
-        ERC20(shareTokenName, shareTokenSymbol)
+        ERC20(domeInfo[1], domeInfo[2])
         ERC4626(IERC20Metadata(stakingCoinAddress))
     {
         stakingcoin = IERC20(stakingCoinAddress);
-        _domeCID = domeCID;
+        _domeCID = domeInfo[0];
         for (uint256 i; i < beneficiariesInfo.length; i++) {
             beneficiaries.push(beneficiariesInfo[i]);
         }
@@ -151,7 +148,7 @@ contract TestDomeCore is ERC4626, Ownable {
         return assets;
     }
 
-    function claimInterests() public returns (uint256) {
+    function claimInterests() public {
         uint256 reward = testMStable.balanceOfUnderlying(address(this)) -
             underlyingAssetsOwnedByDepositor;
         uint256 systemFee = (reward * _systemOwnerPercentage) / 100;
@@ -179,7 +176,7 @@ contract TestDomeCore is ERC4626, Ownable {
             }
         }
         underlyingAssetsOwnedByDepositor += (reward - totalTransfered);
-        return totalTransfered;
+        emit Claimed(msg.sender, totalTransfered, block.timestamp);
     }
 
     function beneficiariesPercentage()
@@ -332,7 +329,7 @@ contract TestDomeCore is ERC4626, Ownable {
         uint256 liquidityAmount = balanceOf(owner);
         require(shares <= liquidityAmount, "You dont have enough balance");
 
-        uint256 claimed = claimInterests();
+        claimInterests();
 
         testMStable.withdraw(assets, receiver, address(this));
 
@@ -341,6 +338,6 @@ contract TestDomeCore is ERC4626, Ownable {
 
         _burn(msg.sender, shares);
 
-        emit Unstaked(caller, assets + claimed, assets, block.timestamp);
+        emit Unstaked(caller, assets, block.timestamp);
     }
 }

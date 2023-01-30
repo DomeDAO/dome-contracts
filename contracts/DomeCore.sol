@@ -1,6 +1,6 @@
-//SPDX-License-Identifier: MIT
+ //SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.17;
+ pragma solidity ^0.8.17;
 
 /// Openzeppelin imports
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -42,18 +42,12 @@ contract DomeCore is ERC4626, Ownable {
     BeneficiaryInfo[] public beneficiaries;
 
     event Staked(address indexed staker, uint256 amount, uint256 timestamp);
-    event Unstaked(
-        address indexed unstaker,
-        uint256 totalAmount,
-        uint256 unstakedAmount,
-        uint256 timestamp
-    );
+    event Unstaked(address indexed unstaker, uint256 unstakedAmount, uint256 timestamp);
+    event Claimed(address indexed claimer, uint256 amount, uint256 timestamp); //todo
 
     /// Constructor
     constructor(
-        string memory domeCID,
-        string memory shareTokenName,
-        string memory shareTokenSymbol,
+        string[] memory domeInfo,
         address stakingCoinAddress,
         address mUSDSavingsContractAddress,
         address mUSDTokenAddress,
@@ -64,7 +58,7 @@ contract DomeCore is ERC4626, Ownable {
         uint256 systemOwnerPercentage,
         BeneficiaryInfo[] memory beneficiariesInfo
     )
-        ERC20(shareTokenName, shareTokenSymbol)
+        ERC20(domeInfo[1], domeInfo[2])
         ERC4626(IERC20Metadata(stakingCoinAddress))
     {
         stakingCoin = IERC20(stakingCoinAddress);
@@ -72,7 +66,7 @@ contract DomeCore is ERC4626, Ownable {
         mUSDToken = ImUSDToken(mUSDTokenAddress);
         mAssetSaveWrapper = ImAssetSaveWrapper(mAssetSaveWrapperAddress);
         mUSDSavingsVault = mUSDSavingsVaultAddress;
-        _domeCID = domeCID;
+        _domeCID = domeInfo[0];
         for (uint256 i; i < beneficiariesInfo.length; i++) {
             beneficiaries.push(beneficiariesInfo[i]);
         }
@@ -81,6 +75,7 @@ contract DomeCore is ERC4626, Ownable {
         _systemOwner = systemOwner;
         _systemOwnerPercentage = systemOwnerPercentage;
     }
+
 
     function decimals()
         public
@@ -97,14 +92,6 @@ contract DomeCore is ERC4626, Ownable {
         returns (BeneficiaryInfo[] memory)
     {
         return beneficiaries;
-    }
-
-    function getUnderlyingAssetsOwnedByDepositor()
-        public
-        view
-        returns (uint256)
-    {
-        return underlyingAssetsOwnedByDepositor;
     }
 
     function totalBalance() public view returns (uint256) {
@@ -158,13 +145,13 @@ contract DomeCore is ERC4626, Ownable {
         return assets;
     }
 
-    function claimInterests() public returns (uint256) {
+    function claimInterests() public {
         uint256 reward;
         uint256 balanceINmStable = totalBalance();
         if (balanceINmStable >= underlyingAssetsOwnedByDepositor) {
             reward = balanceINmStable - underlyingAssetsOwnedByDepositor;
         } else {
-            return 0;
+            return;
         }
 
         uint256 systemFee = (reward * _systemOwnerPercentage) / 100;
@@ -205,7 +192,7 @@ contract DomeCore is ERC4626, Ownable {
             }
         }
         underlyingAssetsOwnedByDepositor += (reward - totalTransfered);
-        return totalTransfered;
+        emit Claimed(msg.sender, totalTransfered, block.timestamp);
     }
 
     function beneficiariesPercentage()
@@ -363,12 +350,12 @@ contract DomeCore is ERC4626, Ownable {
         uint256 assets,
         uint256 shares
     ) internal virtual override {
-        require(owner == caller, "Caller is not owner");
+        require(owner == caller, "Caller is not an owner");
         require(0 < assets, "The amount must be greater than 0");
         uint256 liquidityAmount = balanceOf(owner);
-        require(shares <= liquidityAmount, "You dont have enough balance");
+        require(shares <= liquidityAmount, "You don't have enough balance");
 
-        uint256 claimed = claimInterests();
+        claimInterests();
 
         uint256 sharesInMstable;
         uint256 mAssets;
@@ -391,7 +378,7 @@ contract DomeCore is ERC4626, Ownable {
 
         _burn(owner, shares);
 
-        emit Unstaked(owner, assets + claimed, assets, block.timestamp);
+        emit Unstaked(owner, assets, block.timestamp);
     }
 
     function estimateSharesForWithdraw(uint256 asset)

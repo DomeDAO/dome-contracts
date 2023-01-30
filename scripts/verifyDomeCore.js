@@ -34,36 +34,59 @@ async function main() {
   // manually to make sure everything is compiled
   // await hre.run('compile');
 
-  const usdc = "0xD29CCeA8e85ccF5f2c50dca8C9ADE682f54573Eb";
-  const myWallet1 = "0x9C5304Cf9066a860672BA5cf7f1C4592DCf20f56";
-  const myWallet2 = "0xC95cE5A64b5f2d3772Ee6B9adF9AA27d7fF2b68D";
-  const owner = "0xAE492E3873945F9af9B6caD802e030e2935073cE";
-  const domeCore = "0x945967B3ab1bfeA6050FfA0f08a8C5afC8047831";
-  const testSaveMStable = "0x17400Efb007633B04a9866E312961b8252d9E959";
+  const domeCore = "";
+  const _domeCID = "";
+  const shareTokenName = "";
+  const shareTokenSymbol = "";
+  const messageSender = "";
+  const systemOwner = "";
+  const stakingCoinAddress = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+  const mUSDSavingsContractAddress = "0x30647a72Dc82d7Fbb1123EA74716aB8A317Eac19";
+  const mUSDTokenAddress = "0xe2f2a5C287993345a840Db3B0845fbC70f5935a5";
+  const mAssetSaveWrapperAddress = "0x0CA7A25181FC991e3cC62BaC511E62973991f325";
+  const mUSDSavingsVaultAddress = "0x78BefCa7de27d07DC6e71da295Cc2946681A6c7B";
+  const systemOwnerPercentage = 10;
 
-
+  
+  
   await hre.run("verify:verify", {
     address: domeCore,
     constructorArguments: [
-    "QmUQDrjJn7Jh3Ut6M8BmyfxXwhL34JN4nRCfruhCbLNiEU",
-    "aaa",
-    "aaa.com",
-    usdc,
-    testSaveMStable,
-    "0x1d97ddf866c890dd263d9ff394d66cdbf4e95b6c",
-    "0xAE492E3873945F9af9B6caD802e030e2935073cE",
-    10,
-    [
       [
-        "Qman1nnUCUmgpM4dr1RuAfSrPbkJ6r2ZrXHC91vN54W19m","0x1D97dDf866C890Dd263D9Ff394D66CdBF4e95b6c",50
+        _domeCID, shareTokenName, shareTokenSymbol
+      ],
+      stakingCoinAddress,
+      mUSDSavingsContractAddress,
+      mUSDTokenAddress,
+      mAssetSaveWrapperAddress,
+      mUSDSavingsVaultAddress,
+      messageSender,
+      systemOwner,
+      systemOwnerPercentage,
+      [
+        [
+          "","",50
+        ]
       ]
-      // [
-      //   "Cid2","0x9C5304Cf9066a860672BA5cf7f1C4592DCf20f56",10
-      // ]
-    ]
     ],
-    contract: "contracts/Dome2.sol:DomeCore"
+    contract: "contracts/Test/TestDomeCore.sol:TestDomeCore"
   });
+  
+  // await verifyContract(domeCore, [
+  //   "QmQaXQ8mSXeRkEnLGN3beuVH6HmxjPCwozcE6fDt2WwR2T",
+  //   "TestDome",
+  //   "TD",
+  //   "0xD29CCeA8e85ccF5f2c50dca8C9ADE682f54573Eb",
+  //   "0x17400Efb007633B04a9866E312961b8252d9E959",
+  //   "0x51dee7730fec3f50e8cd1922dc4aafc65fcc833a",
+  //   "0xAE492E3873945F9af9B6caD802e030e2935073cE",
+  //   10,
+  //   [
+  //     [
+  //       'QmQ3dsj2h3cy2pn3t18s378LEDUMUesQGxxFfvbBacgJWq',"0x51dee7730fEC3F50E8cd1922DC4AaFC65fCC833a",50
+  //     ]
+  //   ]
+  // ]);
 
   // await hre.run("verify:verify", {
   //   address: "0x91e985634F4690e8B79872F5C29Be357eDC0fF9c",
@@ -73,8 +96,6 @@ async function main() {
   //   ]
   // })
   // We get the contract to deploy
-
-  
 
 }
 
