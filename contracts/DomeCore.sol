@@ -10,7 +10,6 @@ import "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 /// Local imports
-import "hardhat/console.sol";
 import "./Interfaces/ImAssetSaveWrapper.sol";
 import "./Interfaces/ImUSDToken.sol";
 import "./Interfaces/ImUSDSavingsContract.sol";
@@ -31,19 +30,19 @@ contract DomeCore is ERC4626, Ownable {
     ImAssetSaveWrapper public mAssetSaveWrapper;
     address public mUSDSavingsVault;
 
-    string public _domeCID;
     address public _systemOwner;
-
     uint256 public _systemOwnerPercentage;
 
     //Amount Of Underlying assets owned by depositor, interested + principal
     uint256 public underlyingAssetsOwnedByDepositor;
 
+    string public _domeCID;
+
     BeneficiaryInfo[] public beneficiaries;
 
     event Staked(address indexed staker, uint256 amount, uint256 timestamp);
     event Unstaked(address indexed unstaker, uint256 unstakedAmount, uint256 timestamp);
-    event Claimed(address indexed claimer, uint256 amount, uint256 timestamp); //todo
+    event Claimed(address indexed claimer, uint256 amount, uint256 timestamp);
 
     /// Constructor
     constructor(
@@ -75,7 +74,6 @@ contract DomeCore is ERC4626, Ownable {
         _systemOwner = systemOwner;
         _systemOwnerPercentage = systemOwnerPercentage;
     }
-
 
     function decimals()
         public
@@ -180,7 +178,7 @@ contract DomeCore is ERC4626, Ownable {
         uint256 toTransfer;
         for (uint256 i; i < beneficiaries.length; i++) {
             if (i == beneficiaries.length - 1) {
-                toTransfer = beneficiariesReward + systemFee - totalTransfered;
+                toTransfer = minAmountOut - totalTransfered; 
                 stakingCoin.safeTransfer(beneficiaries[i].wallet, toTransfer);
                 totalTransfered += toTransfer;
             } else {
@@ -390,6 +388,7 @@ contract DomeCore is ERC4626, Ownable {
             address(stakingCoin),
             10**18
         );
+        
         mAsset = (asset * 10**18) / (coefficient + 1);
         shares = mUSDSavingsContract.convertToShares(mAsset);
     }

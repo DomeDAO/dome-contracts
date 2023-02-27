@@ -13,38 +13,48 @@ async function main() {
   // manually to make sure everything is compiled
   // await hre.run('compile');
 
-  const usdc = "0xD29CCeA8e85ccF5f2c50dca8C9ADE682f54573Eb";
-  const myWallet = "0x9C5304Cf9066a860672BA5cf7f1C4592DCf20f56";
-  const owner = "0xAE492E3873945F9af9B6caD802e030e2935073cE";
-  const testSaveMStable = "0xc270D310bc7650492B528C3b6c5fd04eFF33A5ce";
+  
+  const _domeCID = "QmT4krSfMzijHHLveRtnXSXpaWVRNMqNNXsYRruAVqegsN";
+  const shareTokenName = "FirstDome";
+  const shareTokenSymbol = "FDT";
+  const messageSender = "0xC95cE5A64b5f2d3772Ee6B9adF9AA27d7fF2b68D";
+  const systemOwner = "0xC95cE5A64b5f2d3772Ee6B9adF9AA27d7fF2b68D";
+  const stakingCoinAddress = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+  const mUSDSavingsContractAddress = "0x30647a72Dc82d7Fbb1123EA74716aB8A317Eac19";
+  const mUSDTokenAddress = "0xe2f2a5C287993345a840Db3B0845fbC70f5935a5";
+  const mAssetSaveWrapperAddress = "0x0CA7A25181FC991e3cC62BaC511E62973991f325";
+  const mUSDSavingsVaultAddress = "0x78BefCa7de27d07DC6e71da295Cc2946681A6c7B";
+  const systemOwnerPercentage = 10;
 
 
 
   // We get the contract to deploy
   const DomeCore = await hre.ethers.getContractFactory("DomeCore");
   const domeCore = await DomeCore.deploy(
-      "Dome6",
-      "Dome",
-      "DomeToken6",
-      "DT6",
-      usdc,
-      testSaveMStable,
-      owner,
-      owner,
-      10,
+    [
+      _domeCID, shareTokenName,shareTokenSymbol
+    ],
+    stakingCoinAddress,
+    mUSDSavingsContractAddress,
+    mUSDTokenAddress,
+    mAssetSaveWrapperAddress,
+    mUSDSavingsVaultAddress,
+    systemOwner,
+    systemOwner,
+    systemOwnerPercentage,
       [
         [
-          "School","url","logo","0x9C5304Cf9066a860672BA5cf7f1C4592DCf20f56","For repair",20
+          "QmVUDruZbG6Yc3Xu9o9guDW6DRznz3fRPE1UbkW2WV4PEc","0xf38CFd68632849a9499857411D883B86a4b73bb2",40
         ],
         [
-          "University","url","logo","0x9C5304Cf9066a860672BA5cf7f1C4592DCf20f56","For repair",10
+          "QmckMC3ZvjWtHwsDk7UM819fAYJJA4DBSnqpqQNcRHGCw8","0xAE492E3873945F9af9B6caD802e030e2935073cE",10
         ]
       ]
     );
 
   await domeCore.deployed();
 
-  console.log("DomeCore6 deployed to:", domeCore.address);
+  console.log("DomeCore deployed to:", domeCore.address);
 }
 
 // We recommend this pattern to be able to use async/await everywhere
