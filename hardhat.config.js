@@ -1,29 +1,27 @@
 require("dotenv").config();
+require("@nomicfoundation/hardhat-toolbox");
 
-require("@nomiclabs/hardhat-etherscan");
-require("@nomiclabs/hardhat-waffle");
-require("hardhat-gas-reporter");
-require("solidity-coverage");
-require('@openzeppelin/hardhat-upgrades');
+const {
+  HARDHAT_DEV_MNEMONIC,
+  POLYGON_RPC_URL,
+  POLYGON_API_KEY,
+  DEV_PRIV_KEY,
+  COINMARKETCAP_API,
+  MAINNET_RPC_URL,
+  MAINNET_API_KEY,
+  DEPLOY_PRIV_KEY,
+  GOERLI_RPC_URL,
+  MUMBAI_RPC_URL,
+} = process.env;
 
-// This is a sample Hardhat task. To learn how to create your own go to
-// https://hardhat.org/guides/create-task.html
-task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
-  const accounts = await hre.ethers.getSigners();
-
-  for (const account of accounts) {
-    console.log(account.address);
-  }
-});
-
-// You need to export an object to set up your config
-// Go to https://hardhat.org/config/ to learn more
-
-/**
- * @type import('hardhat/config').HardhatUserConfig
- */
- module.exports = {
-  //solidity: "0.8.1",
+module.exports = {
+  defaultNetwork: "hardhat",
+  paths: {
+    cache: "./hh-cache",
+    artifacts: "./artifacts",
+    sources: "./contracts",
+    tests: "./test",
+  },
   solidity: {
     version: "0.8.17",
     settings: {
@@ -34,42 +32,56 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
     },
   },
   networks: {
-    rinkeby: {
-      url: process.env.RINKEBY_URL || "",
-      accounts:
-        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+    hardhat: {
+      accounts: {
+        mnemonic: HARDHAT_DEV_MNEMONIC,
+        count: 10,
+        accountsBalance: "1000000000000000000000000",
+      },
+      forking: {
+        url: POLYGON_RPC_URL || "",
+      },
+      chainId: 137,
     },
-    kovan: {
-      url: process.env.KOVAN_URL || "",
-      accounts:
-        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
-    },
-    ropsten: {
-      url: process.env.ROPSTEN_URL || "",
-      accounts:
-        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
-    },
-    goerli: {
-      url: process.env.GOERLI_URL || "",
-      accounts:
-        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
-    },
-    konsta: {
-      url: process.env.KONSTA_URL || "",
-      accounts:
-        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+    polygon: {
+      chainId: 137,
+      url: POLYGON_RPC_URL || "",
+      accounts: DEPLOY_PRIV_KEY ? [DEPLOY_PRIV_KEY] : [],
     },
     mainnet: {
-      url: process.env.MAINNET_URL || "",
-      accounts:
-        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+      url: MAINNET_RPC_URL || "",
+      accounts: DEPLOY_PRIV_KEY ? [DEPLOY_PRIV_KEY] : [],
+    },
+    goerli: {
+      url: GOERLI_RPC_URL || "",
+      accounts: DEV_PRIV_KEY ? [DEV_PRIV_KEY] : [],
+    },
+    mumbai: {
+      url: MUMBAI_RPC_URL || "",
+      accounts: DEV_PRIV_KEY ? [DEV_PRIV_KEY] : [],
+    },
+    node_network: {
+      url: "http://127.0.0.1:8545/",
     },
   },
   gasReporter: {
-    enabled: process.env.REPORT_GAS !== undefined,
-    currency: "USD",
+    enabled: COINMARKETCAP_API === undefined ? false : true,
+    currency: "ETH",
+    token: "ETH",
+    coinmarketcap: COINMARKETCAP_API,
+    gasPrice: 20,
   },
   etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY,
+    apiKey: {
+      polygon: POLYGON_API_KEY || "",
+      mainnet: MAINNET_API_KEY || "",
+    },
+  },
+  typechain: {
+    outDir: "typechain",
+    target: "ethers-v5",
+  },
+  mocha: {
+    timeout: 10000000,
   },
 };
