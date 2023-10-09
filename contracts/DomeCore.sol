@@ -22,7 +22,9 @@ contract Dome is ERC20, IERC4626, DomeBase {
     using SafeERC20 for IERC20;
 
     IERC4626 public immutable yieldProtocol;
+
     uint256 public totalAssets;
+    mapping(address => uint256) private _assets;
 
     address public _systemOwner;
     uint8 public _systemOwnerPercentage;
@@ -30,6 +32,8 @@ contract Dome is ERC20, IERC4626, DomeBase {
     string public _domeCID;
 
     BeneficiaryInfo[] public beneficiaries;
+
+    uint16 public immutable depositorYieldPercent;
 
     event YieldClaim(address _yieldProtocol, uint256 _amount);
     event Distribute(address indexed beneficiary, uint256 amount);
@@ -39,7 +43,8 @@ contract Dome is ERC20, IERC4626, DomeBase {
         BeneficiaryInfo[] memory beneficiariesInfo,
         address _yieldProtocol,
         address systemOwner,
-        uint16 systemOwnerPercent
+        uint16 systemOwnerPercent,
+        uint16 _depositorYieldPercent
     )
         ERC20(domeInfo.tokenName, domeInfo.tokenSymbol)
         DomeBase(systemOwner, systemOwnerPercent)
@@ -48,11 +53,14 @@ contract Dome is ERC20, IERC4626, DomeBase {
         yieldProtocol = IERC4626(_yieldProtocol);
 
         uint16 _totalPercent = 0;
-        for (uint8 i; i < beneficiariesInfo.length; i++) {
+        for (uint8 i = 0; i < beneficiariesInfo.length; i++) {
             beneficiaries.push(beneficiariesInfo[i]);
             _totalPercent += beneficiariesInfo[i].percent;
         }
+
         require(_totalPercent == 10000, "Beneficiaries percent check failed");
+
+        depositorYieldPercent = _depositorYieldPercent;
 
         // Initial max approve to yieldProtocol
         _approveToken(asset(), _yieldProtocol, type(uint256).max);
@@ -101,6 +109,7 @@ contract Dome is ERC20, IERC4626, DomeBase {
     ) external override returns (uint256) {
         uint256 assets = yieldProtocol.previewMint(shares);
         assets = _pullTokens(asset(), assets);
+        _assets[receiver] += assets;
 
         _deposit(_msgSender(), receiver, assets, shares);
 
@@ -126,7 +135,7 @@ contract Dome is ERC20, IERC4626, DomeBase {
         );
 
         // We mint our wrapped share only after share validation
-        _mint(receiver, assets);
+        _mint(receiver, yieldSharesReceived);
         totalAssets += assets;
 
         emit Deposit(caller, receiver, assets, yieldSharesReceived);
@@ -149,6 +158,7 @@ contract Dome is ERC20, IERC4626, DomeBase {
         address owner
     ) public virtual override returns (uint256) {
         uint256 assets = yieldProtocol.previewRedeem(shares);
+
         _withdraw(_msgSender(), receiver, owner, assets, shares);
 
         return assets;
@@ -165,7 +175,10 @@ contract Dome is ERC20, IERC4626, DomeBase {
             _decreaseAllowance(owner, caller, shares);
         }
 
-        _burn(owner, assets);
+        _burn(owner, shares);
+
+        assets = _assetsWithdrawForOwner(owner, assets);
+        _assets[owner] -= assets;
         totalAssets -= assets;
 
         yieldProtocol.withdraw(assets, receiver, address(this));
@@ -226,8 +239,6 @@ contract Dome is ERC20, IERC4626, DomeBase {
         emit YieldClaim(address(yieldProtocol), withdrawAssetAmount);
     }
 
-    /// TODO: Need to be discussed...
-
     function convertToShares(
         uint256 assets
     ) external view returns (uint256 shares) {
@@ -267,24 +278,53 @@ contract Dome is ERC20, IERC4626, DomeBase {
     function maxWithdraw(
         address owner
     ) external view returns (uint256 maxAssets) {
-        return yieldProtocol.maxWithdraw(owner);
+        uint256 shares = balanceOf(owner);
+        uint256 assets = yieldProtocol.previewRedeem(shares);
+
+        return _assetsWithdrawForOwner(owner, assets);
     }
 
     function previewWithdraw(
         uint256 assets
     ) external view returns (uint256 shares) {
+        if (_assets[msg.sender] < assets) {
+            // We calculate how much yield should be generated
+            // That suming up with users balance will return him assets amount
+            uint256 excessAssets = assets - _assets[msg.sender];
+            uint256 yieldPortion = (excessAssets * 10000) /
+                depositorYieldPercent;
+
+            assets = _assets[msg.sender] + yieldPortion;
+        }
+
         return yieldProtocol.previewWithdraw(assets);
     }
 
     function maxRedeem(
         address owner
     ) external view returns (uint256 maxShares) {
-        return yieldProtocol.maxRedeem(owner);
+        return balanceOf(owner);
     }
 
     function previewRedeem(
         uint256 shares
     ) external view returns (uint256 assets) {
-        return yieldProtocol.previewRedeem(shares);
+        assets = yieldProtocol.previewRedeem(shares);
+        return _assetsWithdrawForOwner(msg.sender, assets);
+    }
+
+    function _assetsWithdrawForOwner(
+        address owner,
+        uint256 assets
+    ) internal view returns (uint256) {
+        if (_assets[owner] < assets) {
+            uint256 generatedYield = assets - _assets[owner];
+            uint256 depositorYield = (generatedYield * depositorYieldPercent) /
+                10000;
+
+            assets = _assets[owner] + depositorYield;
+        }
+
+        return assets;
     }
 }
