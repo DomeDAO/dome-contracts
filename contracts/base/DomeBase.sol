@@ -10,12 +10,23 @@ abstract contract DomeBase {
         0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     address internal immutable feeReceiver;
-    uint16 internal immutable feePercent;
+    uint16 internal feePercent;
 
     mapping(address => bool) public shouldResetAllowance;
 
+    modifier onlyFeeReceiver() {
+        require(feeReceiver == msg.sender, "Caller is not the fee receiver");
+        _;
+    }
+
     constructor(address _feeReceiver, uint16 _feePercent) {
         feeReceiver = _feeReceiver;
+        feePercent = _feePercent;
+
+        require(_feePercent <= 1000, "Fee percent cannot be more than 20%");
+    }
+
+    function changeFeePercent(uint16 _feePercent) external onlyFeeReceiver {
         feePercent = _feePercent;
     }
 
