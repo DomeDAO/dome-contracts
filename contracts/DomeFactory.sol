@@ -33,6 +33,7 @@ contract DomeFactory is Ownable {
     function createDome(
         DomeInfo memory domeInfo,
         BeneficiaryInfo[] memory beneficiariesInfo,
+        uint16 _depositorYieldPercent,
         address _yieldProtocol
     ) external payable payedEnough {
         Dome dome = new Dome(
@@ -40,7 +41,8 @@ contract DomeFactory is Ownable {
             beneficiariesInfo,
             _yieldProtocol,
             owner(),
-            systemOwnerPercentage
+            systemOwnerPercentage,
+            _depositorYieldPercent
         );
 
         domeCreators[address(dome)] = msg.sender;
@@ -50,7 +52,7 @@ contract DomeFactory is Ownable {
             msg.sender,
             address(dome),
             _yieldProtocol,
-            domeInfo.tokenName
+            domeInfo.CID
         );
     }
 
