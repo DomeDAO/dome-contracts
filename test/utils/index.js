@@ -76,7 +76,7 @@ async function sushiSwap(
 ) {
 	const data = generateUniV2SwapData(fromToken, toToken, receiver);
 
-	const [result] = await Promise.all([
+	await Promise.all([
 		account.call({
 			to: ADDRESSES.SUSHI_ROUTER02,
 			data,
@@ -89,12 +89,9 @@ async function sushiSwap(
 		}),
 	]);
 
-	const decodedResult = uniV2Interface.decodeFunctionResult(
-		"swapExactETHForTokens",
-		result
-	);
+	const balance = await getBalanceOf(toToken, receiver);
 
-	return decodedResult.amounts[1];
+	return balance;
 }
 
 async function getAavev3SupplyData(
