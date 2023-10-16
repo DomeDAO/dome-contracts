@@ -1,22 +1,27 @@
 module.exports = {
-  env: {
-    browser: false,
-    es2021: true,
-    mocha: true,
-    node: true,
-  },
-  extends: [
-    "standard",
-    "plugin:prettier/recommended",
-    "plugin:node/recommended",
-  ],
-  parserOptions: {
-    ecmaVersion: 12,
-  },
-  overrides: [
-    {
-      files: ["hardhat.config.js"],
-      globals: { task: true },
-    },
-  ],
+	env: {
+		node: true,
+		jest: true,
+		es6: true,
+	},
+	extends: ["eslint:recommended", "plugin:prettier/recommended"],
+	plugins: ["prettier"],
+	parserOptions: {
+		ecmaVersion: 2018,
+	},
+	rules: {
+		"prettier/prettier": 1,
+		"no-console": "warn",
+		"func-names": "off",
+		"no-underscore-dangle": "off",
+		"consistent-return": "off",
+		"jest/expect-expect": "off",
+		"no-unused-vars": "warn",
+	},
+	overrides: [
+		{
+			files: ["hardhat.config.js"],
+			globals: { task: true },
+		},
+	],
 };

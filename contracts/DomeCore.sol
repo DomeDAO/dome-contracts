@@ -1,395 +1,395 @@
- //SPDX-License-Identifier: MIT
+//SPDX-License-Identifier: MIT
 
- pragma solidity ^0.8.17;
+pragma solidity ^0.8.17;
 
-/// Openzeppelin imports
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
-import "@openzeppelin/contracts/interfaces/IERC4626.sol";
+import {IERC4626, IERC20Metadata, ERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
+import {DomeBase, SafeERC20} from "./base/DomeBase.sol";
+import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
+import {ERC20Votes} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 
-/// Local imports
-import "./Interfaces/ImAssetSaveWrapper.sol";
-import "./Interfaces/ImUSDToken.sol";
-import "./Interfaces/ImUSDSavingsContract.sol";
+struct BeneficiaryInfo {
+	string beneficiaryCID;
+	address wallet;
+	uint16 percent; // Percentage has 2 deciaml points, 100% == 10.000
+}
 
-contract DomeCore is ERC4626, Ownable {
-    using SafeERC20 for IERC20;
+struct DomeInfo {
+	string CID;
+	string tokenName;
+	string tokenSymbol;
+}
 
-    struct BeneficiaryInfo {
-        string beneficiaryCID;
-        address wallet;
-        uint256 percentage;
-    }
+interface IBuffer {
+	function addReserve(uint256 amount) external;
+}
 
-    /// contracts
-    IERC20 public stakingCoin;
-    ImUSDSavingsContract public mUSDSavingsContract;
-    ImUSDToken public mUSDToken;
-    ImAssetSaveWrapper public mAssetSaveWrapper;
-    address public mUSDSavingsVault;
+contract Dome is ERC20, ERC20Permit, ERC20Votes, IERC4626, DomeBase {
+	using SafeERC20 for IERC20;
 
-    address public _systemOwner;
-    uint256 public _systemOwnerPercentage;
+	address public immutable BUFFER;
+	IERC4626 public immutable yieldProtocol;
 
-    //Amount Of Underlying assets owned by depositor, interested + principal
-    uint256 public underlyingAssetsOwnedByDepositor;
+	uint256 public totalAssets;
+	mapping(address => uint256) private _assets;
+	mapping(address => uint256) private _depositorYield;
 
-    string public _domeCID;
+	string public DOME_CID;
 
-    BeneficiaryInfo[] public beneficiaries;
+	BeneficiaryInfo[] public beneficiaries;
 
-    event Staked(address indexed staker, uint256 amount, uint256 timestamp);
-    event Unstaked(address indexed unstaker, uint256 unstakedAmount, uint256 timestamp);
-    event Claimed(address indexed claimer, uint256 amount, uint256 timestamp);
+	uint16 public immutable depositorYieldPercent;
+	uint256 public depositorsYield;
 
-    /// Constructor
-    constructor(
-        string[] memory domeInfo,
-        address stakingCoinAddress,
-        address mUSDSavingsContractAddress,
-        address mUSDTokenAddress,
-        address mAssetSaveWrapperAddress,
-        address mUSDSavingsVaultAddress,
-        address owner,
-        address systemOwner,
-        uint256 systemOwnerPercentage,
-        BeneficiaryInfo[] memory beneficiariesInfo
-    )
-        ERC20(domeInfo[1], domeInfo[2])
-        ERC4626(IERC20Metadata(stakingCoinAddress))
-    {
-        stakingCoin = IERC20(stakingCoinAddress);
-        mUSDSavingsContract = ImUSDSavingsContract(mUSDSavingsContractAddress);
-        mUSDToken = ImUSDToken(mUSDTokenAddress);
-        mAssetSaveWrapper = ImAssetSaveWrapper(mAssetSaveWrapperAddress);
-        mUSDSavingsVault = mUSDSavingsVaultAddress;
-        _domeCID = domeInfo[0];
-        for (uint256 i; i < beneficiariesInfo.length; i++) {
-            beneficiaries.push(beneficiariesInfo[i]);
-        }
-        transferOwnership(owner);
-        stakingCoin.approve(mAssetSaveWrapperAddress, 2**256 - 1);
-        _systemOwner = systemOwner;
-        _systemOwnerPercentage = systemOwnerPercentage;
-    }
+	event YieldClaimed(address _yieldProtocol, uint256 _amount);
+	event Distribute(address indexed beneficiary, uint256 amount);
 
-    function decimals()
-        public
-        pure
-        override(ERC20, IERC20Metadata)
-        returns (uint8)
-    {
-        return 6;
-    }
+	constructor(
+		DomeInfo memory domeInfo,
+		BeneficiaryInfo[] memory beneficiariesInfo,
+		address _yieldProtocol,
+		address _systemOwner,
+		address bufferAddress,
+		uint16 systemOwnerPercent,
+		uint16 _depositorYieldPercent
+	)
+		ERC20(domeInfo.tokenName, domeInfo.tokenSymbol)
+		ERC20Permit(domeInfo.tokenName)
+		DomeBase(_systemOwner, systemOwnerPercent)
+	{
+		BUFFER = bufferAddress;
+		DOME_CID = domeInfo.CID;
+		yieldProtocol = IERC4626(_yieldProtocol);
 
-    function getBeneficiariesInfo()
-        public
-        view
-        returns (BeneficiaryInfo[] memory)
-    {
-        return beneficiaries;
-    }
+		uint16 _totalPercent = 0;
+		for (uint8 i = 0; i < beneficiariesInfo.length; i++) {
+			beneficiaries.push(beneficiariesInfo[i]);
+			_totalPercent += beneficiariesInfo[i].percent;
+		}
 
-    function totalBalance() public view returns (uint256) {
-        uint256 mUSD = mUSDSavingsContract.balanceOfUnderlying(address(this));
-        uint256 asset = mUSDToken.getRedeemOutput(address(stakingCoin), mUSD);
-        return asset;
-    }
+		require(_totalPercent == 10000, "Beneficiaries percent check failed");
 
-    function setApproveForDome(uint256 amount) public onlyOwner {
-        stakingCoin.approve(address(mAssetSaveWrapper), amount);
-    }
+		depositorYieldPercent = _depositorYieldPercent;
 
-    function deposit(uint256 assets, address receiver)
-        public
-        override
-        returns (uint256)
-    {
-        uint256 shares = previewDeposit(assets);
-        _deposit(msg.sender, receiver, assets, shares);
-        return shares;
-    }
+		// Initial max approve to yieldProtocol
+		_approveToken(yieldProtocol.asset(), _yieldProtocol, type(uint256).max);
+	}
 
-    function mint(uint256 shares, address receiver)
-        public
-        virtual
-        override
-        returns (uint256)
-    {
-        uint256 assets = previewMint(shares);
-        _deposit(msg.sender, receiver, assets, shares);
-        return assets;
-    }
+	function decimals()
+		public
+		view
+		override(ERC20, IERC20Metadata)
+		returns (uint8)
+	{
+		return IERC20Metadata(yieldProtocol.asset()).decimals();
+	}
 
-    function withdraw(
-        uint256 assets,
-        address receiver,
-        address owner
-    ) public override returns (uint256) {
-        uint256 shares = previewWithdraw(assets);
-        _withdraw(msg.sender, receiver, owner, assets, shares);
-        return shares;
-    }
+	function asset() external view returns (address) {
+		return yieldProtocol.asset();
+	}
 
-    function redeem(
-        uint256 shares,
-        address receiver,
-        address owner
-    ) public virtual override returns (uint256) {
-        uint256 assets = previewRedeem(shares);
-        _withdraw(msg.sender, receiver, owner, assets, shares);
-        return assets;
-    }
+	function totalShares() public view returns (uint256) {
+		return _getBalance(address(yieldProtocol));
+	}
 
-    function claimInterests() public {
-        uint256 reward;
-        uint256 balanceINmStable = totalBalance();
-        if (balanceINmStable >= underlyingAssetsOwnedByDepositor) {
-            reward = balanceINmStable - underlyingAssetsOwnedByDepositor;
-        } else {
-            return;
-        }
+	function deposit(
+		uint256 assets,
+		address receiver
+	) external override returns (uint256) {
+		assets = _pullTokens(yieldProtocol.asset(), assets);
+		uint256 shares = yieldProtocol.previewDeposit(assets);
 
-        uint256 systemFee = (reward * _systemOwnerPercentage) / 100;
-        uint256 beneficiariesReward = ((reward - systemFee) *
-            beneficiariesPercentage()) / 100;
-        uint256 shares;
-        uint256 mAssets;
-        (shares, mAssets) = estimateSharesForWithdraw(
-            beneficiariesReward + systemFee
-        );
-        uint256 minAmountOut = mUSDToken.getRedeemOutput(
-            address(stakingCoin),
-            mAssets
-        );
-        mUSDSavingsContract.redeemAndUnwrap(
-            shares,
-            true,
-            minAmountOut,
-            address(stakingCoin),
-            address(this),
-            address(mUSDToken),
-            true
-        );
-        stakingCoin.safeTransfer(_systemOwner, systemFee);
-        uint256 totalTransfered = systemFee;
-        uint256 toTransfer;
-        for (uint256 i; i < beneficiaries.length; i++) {
-            if (i == beneficiaries.length - 1) {
-                toTransfer = minAmountOut - totalTransfered; 
-                stakingCoin.safeTransfer(beneficiaries[i].wallet, toTransfer);
-                totalTransfered += toTransfer;
-            } else {
-                toTransfer =
-                    ((reward - systemFee) * beneficiaries[i].percentage) /
-                    100;
-                stakingCoin.safeTransfer(beneficiaries[i].wallet, toTransfer);
-                totalTransfered += toTransfer;
-            }
-        }
-        underlyingAssetsOwnedByDepositor += (reward - totalTransfered);
-        emit Claimed(msg.sender, totalTransfered, block.timestamp);
-    }
+		_deposit(msg.sender, receiver, assets, shares);
 
-    function beneficiariesPercentage()
-        public
-        view
-        returns (uint256 totalPercentage)
-    {
-        for (uint256 i; i < beneficiaries.length; i++) {
-            totalPercentage += beneficiaries[i].percentage;
-        }
-    }
+		return shares;
+	}
 
-    function balanceOfUnderlying(address user) public view returns (uint256) {
-        if (balanceOf(user) == 0) {
-            return 0;
-        } else {
-            return (balanceOf(user) * estimateReward()) / totalSupply();
-        }
-    }
+	function mint(
+		uint256 shares,
+		address receiver
+	) external override returns (uint256) {
+		uint256 assets = yieldProtocol.previewMint(shares);
+		assets = _pullTokens(yieldProtocol.asset(), assets);
+		_assets[receiver] += assets;
 
-    function convertToAssets(uint256 shares)
-        public
-        view
-        virtual
-        override
-        returns (uint256 assets)
-    {
-        if (totalSupply() == 0) {
-            return shares;
-        } else {
-            return (shares * estimateReward()) / totalSupply();
-        }
-    }
+		_deposit(msg.sender, receiver, assets, shares);
 
-    function convertToShares(uint256 assets)
-        public
-        view
-        virtual
-        override
-        returns (uint256 shares)
-    {
-        if (totalSupply() == 0) {
-            return assets;
-        } else {
-            return (assets * totalSupply()) / estimateReward();
-        }
-    }
+		return assets;
+	}
 
-    function maxWithdraw(address owner)
-        public
-        view
-        virtual
-        override
-        returns (uint256)
-    {
-        return balanceOfUnderlying(owner);
-    }
+	function _deposit(
+		address caller,
+		address receiver,
+		uint256 assets,
+		uint256 shares
+	) private {
+		uint256 yieldSharesBalanceBefore = _getBalance(address(yieldProtocol));
+		yieldProtocol.mint(shares, address(this));
+		uint256 yieldSharesReceived = _getBalance(address(yieldProtocol)) -
+			yieldSharesBalanceBefore;
 
-    function previewDeposit(uint256 assets)
-        public
-        view
-        virtual
-        override
-        returns (uint256)
-    {
-        return convertToShares(assets);
-    }
+		require(
+			yieldSharesReceived > 0,
+			"Doesn't get anything from yield protocol"
+		);
 
-    function previewMint(uint256 shares)
-        public
-        view
-        virtual
-        override
-        returns (uint256)
-    {
-        return convertToAssets(shares);
-    }
+		// We mint our wrapped share only after share validation
+		_mint(receiver, yieldSharesReceived);
+		totalAssets += assets;
+		_assets[receiver] += assets;
 
-    function previewWithdraw(uint256 assets)
-        public
-        view
-        virtual
-        override
-        returns (uint256)
-    {
-        return convertToShares(assets);
-    }
+		emit Deposit(caller, receiver, assets, yieldSharesReceived);
+	}
 
-    function previewRedeem(uint256 shares)
-        public
-        view
-        virtual
-        override
-        returns (uint256)
-    {
-        return convertToAssets(shares);
-    }
+	function withdraw(
+		uint256 assets,
+		address receiver,
+		address owner
+	) external override returns (uint256) {
+		uint256 shares = previewWithdraw(assets);
 
-    function estimateReward() internal view returns (uint256) {
-        uint256 totalReward = totalBalance();
-        uint256 reward;
-        if (totalReward > underlyingAssetsOwnedByDepositor) {
-            uint256 newReward = totalReward - underlyingAssetsOwnedByDepositor;
-            uint256 systemFee = (newReward * _systemOwnerPercentage) / 100;
-            uint256 beneficiariesInterest = ((newReward - systemFee) *
-                beneficiariesPercentage()) / 100;
-            reward = totalReward - systemFee - beneficiariesInterest;
-        } else {
-            reward = totalReward;
-        }
-        return reward;
-    }
+		_withdraw(msg.sender, receiver, owner, assets, shares);
 
-    function _deposit(
-        address caller,
-        address receiver,
-        uint256 assets,
-        uint256 shares
-    ) internal virtual override {
-        require(assets > 0, "The assets must be greater than 0");
-        require(
-            assets <= stakingCoin.allowance(caller, address(this)),
-            "There is no as much allowance for staking coin"
-        );
-        require(
-            assets <= stakingCoin.balanceOf(caller),
-            "There is no as much balance for staking coin"
-        );
+		return shares;
+	}
 
-        stakingCoin.safeTransferFrom(caller, address(this), assets);
+	function redeem(
+		uint256 shares,
+		address receiver,
+		address owner
+	) public virtual override returns (uint256) {
+		uint256 assets = previewRedeem(shares);
 
-        uint256 minOut = mUSDToken.getMintOutput(address(stakingCoin), assets);
+		_withdraw(msg.sender, receiver, owner, assets, shares);
 
-        mAssetSaveWrapper.saveViaMint(
-            address(mUSDToken),
-            address(mUSDSavingsContract),
-            mUSDSavingsVault,
-            address(stakingCoin),
-            assets,
-            minOut,
-            false
-        );
+		return assets;
+	}
 
-        underlyingAssetsOwnedByDepositor += assets;
+	function _withdraw(
+		address caller,
+		address receiver,
+		address owner,
+		uint256 assets,
+		uint256 shares
+	) internal {
+		if (caller != owner) {
+			_decreaseAllowance(owner, caller, shares);
+		}
 
-        _mint(receiver, shares);
+		(uint256 updatedAssetAmount, uint256 yield) = _assetsWithdrawForOwner(
+			owner,
+			assets
+		);
 
-        emit Staked(receiver, assets, block.timestamp);
-    }
+		_burn(owner, shares);
 
-    function _withdraw(
-        address caller,
-        address receiver,
-        address owner,
-        uint256 assets,
-        uint256 shares
-    ) internal virtual override {
-        require(owner == caller, "Caller is not an owner");
-        require(0 < assets, "The amount must be greater than 0");
-        uint256 liquidityAmount = balanceOf(owner);
-        require(shares <= liquidityAmount, "You don't have enough balance");
+		_assets[owner] -= updatedAssetAmount;
+		totalAssets -= updatedAssetAmount;
 
-        claimInterests();
+		yieldProtocol.withdraw(
+			updatedAssetAmount + yield,
+			receiver,
+			address(this)
+		);
 
-        uint256 sharesInMstable;
-        uint256 mAssets;
-        (sharesInMstable, mAssets) = estimateSharesForWithdraw(assets);
-        uint256 minAmountOut = mUSDToken.getRedeemOutput(
-            address(stakingCoin),
-            mAssets
-        );
-        mUSDSavingsContract.redeemAndUnwrap(
-            sharesInMstable,
-            true,
-            minAmountOut,
-            address(stakingCoin),
-            receiver,
-            address(mUSDToken),
-            true
-        );
+		emit Withdraw(
+			caller,
+			receiver,
+			owner,
+			updatedAssetAmount + yield,
+			shares
+		);
+	}
 
-        underlyingAssetsOwnedByDepositor -= assets;
+	function _decreaseAllowance(
+		address owner,
+		address spender,
+		uint256 amount
+	) internal {
+		uint256 currentAllowance = allowance(owner, spender);
+		if (currentAllowance != type(uint256).max) {
+			require(
+				currentAllowance >= amount,
+				"ERC20: insufficient allowance"
+			);
+			unchecked {
+				_approve(owner, spender, currentAllowance - amount);
+			}
+		}
+	}
 
-        _burn(owner, shares);
+	function availableYield()
+		public
+		view
+		returns (uint256 assets, uint256 shares)
+	{
+		uint256 domeTotalSharesBalance = _getBalance(address(yieldProtocol));
+		uint256 domeAssetBalance = yieldProtocol.previewRedeem(
+			domeTotalSharesBalance
+		);
 
-        emit Unstaked(owner, assets, block.timestamp);
-    }
+		uint256 depositorsTotalAssetsWithYield = yieldProtocol.previewRedeem(
+			totalSupply()
+		);
+		uint256 generatedYield = depositorsTotalAssetsWithYield - totalAssets;
+		uint256 depositorsYieldPortion = (generatedYield *
+			depositorYieldPercent) / 10000;
 
-    function estimateSharesForWithdraw(uint256 asset)
-        public
-        view
-        returns (uint256 shares, uint256 mAsset)
-    {
-        uint256 coefficient = mUSDToken.getRedeemOutput(
-            address(stakingCoin),
-            10**18
-        );
-        
-        mAsset = (asset * 10**18) / (coefficient + 1);
-        shares = mUSDSavingsContract.convertToShares(mAsset);
-    }
+		uint256 netYield = domeAssetBalance -
+			totalAssets -
+			depositorsYieldPortion;
+
+		// Getting differed values from shares to assets later
+		// Need to reconvert them to validate
+		shares = yieldProtocol.convertToShares(netYield);
+		netYield = yieldProtocol.convertToAssets(shares);
+		return (netYield, shares);
+	}
+
+	function _distribute(uint256 amount) internal {
+		for (uint256 i; i < beneficiaries.length; i++) {
+			uint256 distributeAmout = (amount * beneficiaries[i].percent) /
+				10000;
+
+			// If beneficiary is Buffer, we send assets to them
+			IERC20(yieldProtocol.asset()).safeTransfer(
+				beneficiaries[i].wallet,
+				distributeAmout
+			);
+
+			if (beneficiaries[i].wallet == BUFFER) {
+				IBuffer(BUFFER).addReserve(distributeAmout);
+			}
+
+			emit Distribute(beneficiaries[i].wallet, distributeAmout);
+		}
+	}
+
+	function claimYieldAndDistribute() external {
+		(uint256 assets, uint256 shares) = availableYield();
+
+		assets = yieldProtocol.redeem(shares, address(this), address(this));
+		assets = _subtractFees(yieldProtocol.asset(), assets);
+
+		_distribute(assets);
+		emit YieldClaimed(address(yieldProtocol), assets);
+	}
+
+	function convertToShares(
+		uint256 assets
+	) external view returns (uint256 shares) {
+		return yieldProtocol.convertToShares(assets);
+	}
+
+	function convertToAssets(
+		uint256 shares
+	) external view returns (uint256 assets) {
+		return yieldProtocol.convertToAssets(shares);
+	}
+
+	function maxDeposit(
+		address receiver
+	) external view returns (uint256 maxAssets) {
+		return yieldProtocol.maxDeposit(receiver);
+	}
+
+	function previewDeposit(
+		uint256 assets
+	) external view returns (uint256 shares) {
+		return yieldProtocol.previewDeposit(assets);
+	}
+
+	function maxMint(
+		address receiver
+	) external view returns (uint256 maxShares) {
+		return yieldProtocol.maxMint(receiver);
+	}
+
+	function previewMint(
+		uint256 shares
+	) external view returns (uint256 assets) {
+		return yieldProtocol.previewMint(shares);
+	}
+
+	function previewWithdraw(
+		uint256 assets
+	) public view returns (uint256 shares) {
+		if (assets > _assets[msg.sender]) {
+			return balanceOf(msg.sender);
+		}
+
+		return yieldProtocol.previewWithdraw(assets);
+	}
+
+	function maxRedeem(
+		address owner
+	) external view returns (uint256 maxShares) {
+		return balanceOf(owner);
+	}
+
+	function maxWithdraw(
+		address owner
+	) external view returns (uint256 maxAssets) {
+		uint256 shares = balanceOf(owner);
+		uint256 assets = yieldProtocol.previewRedeem(shares);
+
+		(uint256 updatedAssets, uint256 yield) = _assetsWithdrawForOwner(
+			owner,
+			assets
+		);
+
+		return updatedAssets + yield;
+	}
+
+	function previewRedeem(
+		uint256 shares
+	) public view returns (uint256 assets) {
+		assets = yieldProtocol.previewRedeem(shares);
+		(uint256 updatedAssets, uint256 yield) = _assetsWithdrawForOwner(
+			msg.sender,
+			assets
+		);
+
+		return updatedAssets + yield;
+	}
+
+	function _assetsWithdrawForOwner(
+		address owner,
+		uint256 assets
+	) private view returns (uint256, uint256 yield) {
+		uint256 totalAssetsFromShares = yieldProtocol.previewRedeem(
+			balanceOf(owner)
+		);
+
+		if (assets > _assets[owner]) {
+			uint256 generatedYield = totalAssetsFromShares - _assets[owner];
+			uint256 depositorsYieldPortion = (generatedYield *
+				depositorYieldPercent) / 10000;
+
+			return (_assets[owner], depositorsYieldPortion);
+		}
+
+		return (assets, 0);
+	}
+
+	function _afterTokenTransfer(
+		address from,
+		address to,
+		uint256 amount
+	) internal override(ERC20, ERC20Votes) {
+		super._afterTokenTransfer(from, to, amount);
+	}
+
+	function _mint(
+		address to,
+		uint256 amount
+	) internal override(ERC20, ERC20Votes) {
+		super._mint(to, amount);
+	}
+
+	function _burn(
+		address account,
+		uint256 amount
+	) internal override(ERC20, ERC20Votes) {
+		super._burn(account, amount);
+	}
 }
