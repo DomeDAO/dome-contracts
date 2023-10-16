@@ -18,7 +18,11 @@ contract Buffer is Ownable {
 	// Mapping from {domeAddress} to {underlyingAssetAmount}
 	mapping(address => uint256) public domeReserves;
 
+	event ReserveIn(address dome, uint256 amount);
+	event ReserveOut(address dome, uint256 amount);
+
 	error Unauthorized();
+	error TransferFailed();
 
 	constructor(address _domeDAO) {
 		DOME_DAO = _domeDAO;
@@ -48,19 +52,28 @@ contract Buffer is Ownable {
 
 	function addReserve(uint256 amount) external onlyDomes {
 		domeReserves[msg.sender] += amount;
+
+		emit ReserveIn(msg.sender, amount);
 	}
 
 	function submitTransfer(
 		address dome,
 		address token,
-		address wallet
+		address wallet,
+		uint256 amount
 	) external onlyGovernances returns (uint256) {
 		uint256 tokenBalance = domeReserves[dome];
 
-		domeReserves[dome] = 0;
-		IERC20(token).safeTransfer(wallet, tokenBalance);
+		if (tokenBalance < amount) {
+			revert TransferFailed();
+		}
 
-		return tokenBalance;
+		domeReserves[dome] -= amount;
+		IERC20(token).safeTransfer(wallet, amount);
+
+		emit ReserveOut(dome, amount);
+
+		return amount;
 	}
 
 	receive() external payable {}

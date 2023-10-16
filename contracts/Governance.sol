@@ -18,7 +18,8 @@ interface IBuffer {
 	function submitTransfer(
 		address dome,
 		address token,
-		address wallet
+		address wallet,
+		uint256 amount
 	) external returns (uint256);
 }
 
@@ -40,7 +41,7 @@ contract DomeGovernor is
 		GovernorVotesQuorumFraction(4)
 	{}
 
-	function reserveTransfer(address wallet) public onlyGovernance {
+	function reserveTransfer(address wallet, uint256 amount) public onlyGovernance {
 		address domeAddress = address(token);
 		address asset = IDome(domeAddress).asset();
 		address bufferAddress = IDome(domeAddress).BUFFER();
@@ -48,7 +49,8 @@ contract DomeGovernor is
 		uint256 reserveAmount = IBuffer(bufferAddress).submitTransfer(
 			domeAddress,
 			asset,
-			wallet
+			wallet,
+			amount
 		);
 
 		emit ReserveTransfered(reserveAmount);
