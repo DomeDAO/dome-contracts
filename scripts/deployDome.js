@@ -7,9 +7,12 @@ async function main() {
 
 	const domeDAOAddress = "0x24C17bf9Af7A0e372D8B3571dBa12C216Bc44E42";
 
-	const domeDAO = await ethers.getContractAt("DomeDAO", domeDAOAddress);
+	const domeProtocol = await ethers.getContractAt(
+		"DomeProtocol ",
+		domeDAOAddress
+	);
 
-	const domeCreationFee = await domeDAO.callStatic.domeCreationFee();
+	const domeCreationFee = await domeProtocol.callStatic.domeCreationFee();
 
 	const CID = "dome";
 	const tokenName = "domeToken";
@@ -50,7 +53,7 @@ async function main() {
 		})
 	);
 
-	const tx = await domeDAO
+	const tx = await domeProtocol
 		.connect(deployer)
 		.createDome(
 			domeInfo,

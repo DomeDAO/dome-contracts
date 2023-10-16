@@ -23,7 +23,7 @@ interface IDomeFactory {
 	) external returns (address);
 }
 
-contract DomeDAO is Ownable {
+contract DomeProtocol is Ownable {
 	uint16 public systemOwnerPercentage;
 	uint256 public domeCreationFee;
 

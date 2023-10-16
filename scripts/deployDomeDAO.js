@@ -7,7 +7,7 @@ async function main() {
 	const DomeFactory = await ethers.getContractFactory("DomeFactory");
 	const GovernanceFactory =
 		await ethers.getContractFactory("GovernanceFactory");
-	const DomeDAO = await ethers.getContractFactory("DomeDAO");
+	const DomeProtocol = await ethers.getContractFactory("DomeProtocol ");
 
 	const domeFactory = await DomeFactory.deploy();
 	const governanceFactory = await GovernanceFactory.deploy();
@@ -25,7 +25,7 @@ async function main() {
 	const systemOwnerPercentage = 1000;
 	const systemOwner = deployer.address;
 
-	console.log(`\nDeploying DomeDAO with the following parameters:`);
+	console.log(`\nDeploying DomeProtocol  with the following parameters:`);
 	console.log(
 		`Dome creation fee: ${ethers.utils.formatEther(domeCreationFee)} eth.`
 	);
@@ -46,7 +46,7 @@ async function main() {
 		})
 	);
 
-	const domeDAO = await DomeDAO.deploy(
+	const domeProtocol = await DomeProtocol.deploy(
 		systemOwner,
 		domeFactory.address,
 		governanceFactory.address,
@@ -54,11 +54,11 @@ async function main() {
 		domeCreationFee
 	);
 
-	await domeDAO.deployed();
-	const bufferAddress = await domeDAO.callStatic.BUFFER();
+	await domeProtocol.deployed();
+	const bufferAddress = await domeProtocol.callStatic.BUFFER();
 
 	console.log(
-		`DomeDAO was successfully deployed at ${domeDAO.address} with BUFFER at ${bufferAddress}`
+		`DomeProtocol  was successfully deployed at ${domeProtocol.address} with BUFFER at ${bufferAddress}`
 	);
 }
 
