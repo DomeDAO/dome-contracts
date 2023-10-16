@@ -1745,6 +1745,9 @@ describe("Dome-DAO", function () {
 							anotherAccount.address
 						);
 
+						console.log("First Deposit, claim and Withdraw done");
+
+
 						await expect(
 							domeInstance
 								.connect(anotherAccount)
@@ -1758,6 +1761,112 @@ describe("Dome-DAO", function () {
 							anotherAccount,
 							maxWithdraw2
 						);
+
+						for (let i = 0; i < 4; i++) {
+							const swapAmount1 = ethers.utils.parseEther("100");
+							const swapAmount2 = ethers.utils.parseEther("50");
+
+							await Promise.all([
+								sushiSwap(
+									otherAccount,
+									POLYGON.ADDRESSES.WMATIC,
+									assetContract.address,
+									swapAmount1,
+									otherAccount.address
+								),
+								sushiSwap(
+									anotherAccount,
+									POLYGON.ADDRESSES.WMATIC,
+									assetContract.address,
+									swapAmount2,
+									anotherAccount.address
+								),
+							]);
+
+							const [assetsReceived1, assetsReceived2] = await Promise.all([
+								getBalanceOf(assetContract.address, otherAccount.address),
+
+								getBalanceOf(assetContract.address, anotherAccount.address),
+							]);
+
+							await Promise.all([
+								approve(
+									otherAccount,
+									assetContract.address,
+									domeInstance.address,
+									assetsReceived1
+								),
+								approve(
+									anotherAccount,
+									assetContract.address,
+									domeInstance.address,
+									assetsReceived2
+								),
+							]);
+
+							await Promise.all([
+								domeInstance
+									.connect(otherAccount)
+									.deposit(assetsReceived1, otherAccount.address),
+
+								domeInstance
+									.connect(anotherAccount)
+									.deposit(assetsReceived2, anotherAccount.address),
+							]);
+						}
+
+						console.log("Second Deposit done");
+
+						await time.increase(ONE_DAY * 60);
+
+						await expect(
+							domeInstance.connect(anotherAccount).claimYieldAndDistribute()
+						).to.be.fulfilled;
+
+						console.log("First claim done");
+
+						await time.increase(ONE_DAY * 60);
+
+						await expect(
+							domeInstance.connect(anotherAccount).claimYieldAndDistribute()
+						).to.be.fulfilled;
+
+						console.log("Second claim done");
+
+						const maxWithdraw1 = await domeInstance.callStatic.maxWithdraw(
+							otherAccount.address
+						);
+
+						await expect(
+							domeInstance
+								.connect(otherAccount)
+								.withdraw(
+									maxWithdraw1,
+									otherAccount.address,
+									otherAccount.address
+								)
+						).to.changeTokenBalance(assetContract, otherAccount, maxWithdraw1);
+
+						const maxWithdraw2 = await domeInstance.maxWithdraw(
+							anotherAccount.address
+						);
+
+						await expect(
+							domeInstance
+								.connect(anotherAccount)
+								.withdraw(
+									maxWithdraw2,
+									anotherAccount.address,
+									anotherAccount.address
+								)
+						).to.changeTokenBalance(
+							assetContract,
+							anotherAccount,
+							maxWithdraw2
+						);
+
+						console.log("Second Deposit, claim and Withdraw done");
+
 					});
 
 					it("Should transfer system owners fees after claim and distribute", async function () {
