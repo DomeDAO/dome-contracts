@@ -5,17 +5,18 @@ const { POLYGON } = require("./constants");
 const {
 	loadFixture,
 	time,
+	mine,
 } = require("@nomicfoundation/hardhat-network-helpers");
 const { getBalanceOf, approve, sushiSwap } = require("./utils");
 
-describe("Dome-DAO", function () {
+describe("DomeProtocol", function () {
 	async function deployDomeFactory() {
 		const [owner, otherAccount] = await ethers.getSigners();
 
 		const DomeFactory = await ethers.getContractFactory("DomeFactory");
 		const GovernanceFactory =
 			await ethers.getContractFactory("GovernanceFactory");
-		const DomeProtocol = await ethers.getContractFactory("DomeProtocol ");
+		const DomeProtocol = await ethers.getContractFactory("DomeProtocol");
 
 		const domeFactory = await DomeFactory.deploy();
 		const governanceFactory = await GovernanceFactory.deploy();
@@ -41,12 +42,13 @@ describe("Dome-DAO", function () {
 	}
 
 	async function deployDome() {
-		const [owner, otherAccount, anotherAccount] = await ethers.getSigners();
+		const [owner, otherAccount, anotherAccount, randomAccount] =
+			await ethers.getSigners();
 
 		const DomeFactory = await ethers.getContractFactory("DomeFactory");
 		const GovernanceFactory =
 			await ethers.getContractFactory("GovernanceFactory");
-		const DomeProtocol = await ethers.getContractFactory("DomeProtocol ");
+		const DomeProtocol = await ethers.getContractFactory("DomeProtocol");
 
 		const domeFactory = await DomeFactory.deploy();
 		const governanceFactory = await GovernanceFactory.deploy();
@@ -62,22 +64,28 @@ describe("Dome-DAO", function () {
 			domeCreationFee
 		);
 
+		const bufferAddress = await domeProtocol.callStatic.BUFFER();
+		const bufferContract = await ethers.getContractAt("Buffer", bufferAddress);
+
 		const CID = "dome";
 		const tokenName = "domeToken";
 		const tokenSymbol = "domeToken";
 		const domeInfo = { CID, tokenName, tokenSymbol };
 
-		const beneficiaryCID = "beneficiary";
-		const beneficiaryAddress = otherAccount.address;
-		const beneficiaryPercent = 10000;
-
-		const beneficiary = {
-			beneficiaryCID,
-			wallet: beneficiaryAddress,
-			percent: beneficiaryPercent,
+		const randomBeneficiary = {
+			beneficiaryCID: "beneficiary",
+			wallet: otherAccount.address,
+			percent: 1000,
 		};
 
-		const beneficiariesInfo = [beneficiary];
+		const bufferBeneficiary = {
+			beneficiaryCID: "BUFFER",
+			wallet: bufferAddress,
+			percent: 9000,
+		};
+
+		const beneficiariesInfo = [randomBeneficiary, bufferBeneficiary];
+
 		const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 		const depositorYieldPercent = 1000;
 		const tx = await domeProtocol
@@ -91,6 +99,8 @@ describe("Dome-DAO", function () {
 			);
 		const response = await tx.wait();
 
+		const domeCreator = otherAccount;
+
 		const domeAddress = response.events.find(
 			(event) =>
 				event.topics[0] ===
@@ -102,7 +112,32 @@ describe("Dome-DAO", function () {
 		const assetAddress = await domeInstance.asset();
 		const assetContract = await ethers.getContractAt("IERC20", assetAddress);
 
+		const governanceAddress = await domeProtocol.callStatic.domeGovernance(
+			domeInstance.address
+		);
+
+		const governanceContract = await ethers.getContractAt(
+			"DomeGovernor",
+			governanceAddress
+		);
+
+		const PROPOSAL_STATE = {
+			PENDING: 0,
+			ACTIVE: 1,
+			CANCELED: 2,
+			DEFEATED: 3,
+			SUCCEEDED: 4,
+			EXPIRED: 5,
+			EXECUTED: 6,
+			PRESUCCEEDED: 7,
+		};
+
 		return {
+			randomAccount,
+			PROPOSAL_STATE,
+			domeCreator,
+			governanceContract,
+			bufferContract,
 			asset: assetAddress,
 			assetContract,
 			domeFactory,
@@ -125,7 +160,7 @@ describe("Dome-DAO", function () {
 		const DomeFactory = await ethers.getContractFactory("DomeFactory");
 		const GovernanceFactory =
 			await ethers.getContractFactory("GovernanceFactory");
-		const DomeProtocol = await ethers.getContractFactory("DomeProtocol ");
+		const DomeProtocol = await ethers.getContractFactory("DomeProtocol");
 
 		const domeFactory = await DomeFactory.deploy();
 		const governanceFactory = await GovernanceFactory.deploy();
@@ -141,22 +176,28 @@ describe("Dome-DAO", function () {
 			domeCreationFee
 		);
 
+		const bufferAddress = await domeProtocol.callStatic.BUFFER();
+		const bufferContract = await ethers.getContractAt("Buffer", bufferAddress);
+
 		const CID = "dome";
 		const tokenName = "domeToken";
 		const tokenSymbol = "domeToken";
 		const domeInfo = { CID, tokenName, tokenSymbol };
 
-		const beneficiaryCID = "beneficiary";
-		const beneficiaryAddress = otherAccount.address;
-		const beneficiaryPercent = 10000;
-
-		const beneficiary = {
-			beneficiaryCID,
-			wallet: beneficiaryAddress,
-			percent: beneficiaryPercent,
+		const randomBeneficiary = {
+			beneficiaryCID: "beneficiary",
+			wallet: otherAccount.address,
+			percent: 1000,
 		};
 
-		const beneficiariesInfo = [beneficiary];
+		const bufferBeneficiary = {
+			beneficiaryCID: "BUFFER",
+			wallet: bufferAddress,
+			percent: 9000,
+		};
+
+		const beneficiariesInfo = [randomBeneficiary, bufferBeneficiary];
+
 		const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 		const depositorYieldPercent = 1000;
 
@@ -185,7 +226,18 @@ describe("Dome-DAO", function () {
 		const assetAddress = await domeInstance.asset();
 		const assetContract = await ethers.getContractAt("IERC20", assetAddress);
 
+		const governanceAddress = await domeProtocol.callStatic.domeGovernance(
+			domeInstance.address
+		);
+
+		const governanceContract = await ethers.getContractAt(
+			"DomeGovernor",
+			governanceAddress
+		);
+
 		return {
+			governanceContract,
+			bufferContract,
 			domeProtocol,
 			domeCreationFee,
 			systemOwnerPercentage,
@@ -203,7 +255,7 @@ describe("Dome-DAO", function () {
 		};
 	}
 
-	describe("Dome-DAO", function () {
+	describe("DomeProtocol", function () {
 		describe("DomeFactory", function () {
 			describe("Deployment", function () {
 				it("Should set right owner", async function () {
@@ -221,7 +273,7 @@ describe("Dome-DAO", function () {
 					);
 				});
 
-				it("Should set system owenr fee", async function () {
+				it("Should set system owner fee", async function () {
 					const { domeProtocol, systemOwnerPercentage } =
 						await loadFixture(deployDomeFactory);
 
@@ -1662,7 +1714,7 @@ describe("Dome-DAO", function () {
 						).to.be.fulfilled;
 					});
 
-					it.skip("Should allow claiming and distributing available yield before multiple withdraw", async function () {
+					it("Should allow claiming and distributing available yield before multiple withdraw", async function () {
 						const {
 							domeInstance,
 							otherAccount,
@@ -1670,13 +1722,11 @@ describe("Dome-DAO", function () {
 							assetContract,
 						} = await loadFixture(deployDomeWithAAVE);
 
-						let firstInital;
-						let secondInital;
 						for (let i = 0; i < 1; i++) {
 							const swapAmount1 = ethers.utils.parseEther("100");
 							const swapAmount2 = ethers.utils.parseEther("50");
 
-							[firstInital, secondInital] = await Promise.all([
+							await Promise.all([
 								sushiSwap(
 									otherAccount,
 									POLYGON.ADDRESSES.WMATIC,
@@ -1750,8 +1800,6 @@ describe("Dome-DAO", function () {
 							anotherAccount.address
 						);
 
-						console.log("First Deposit, claim and Withdraw done");
-
 						await expect(
 							domeInstance
 								.connect(anotherAccount)
@@ -1819,67 +1867,13 @@ describe("Dome-DAO", function () {
 							]);
 						}
 
-						console.log("Second Deposit done");
-
 						await time.increase(ONE_DAY * 60);
 
 						await expect(
 							domeInstance.connect(otherAccount).claimYieldAndDistribute()
 						).to.be.fulfilled;
-
-						console.log("First claim done");
-						const maxWithdraw3Pre = await domeInstance.callStatic.maxWithdraw(
-							otherAccount.address
-						);
-
-						const maxWithdraw4Pre = await domeInstance.maxWithdraw(
-							anotherAccount.address
-						);
-
-						console.log(`MAX WITHDRAW 3 AFTER FIRST: ${maxWithdraw3Pre}`);
-						console.log(`MAX WITHDRAW 4 AFTER FIRST: ${maxWithdraw4Pre}`);
 						const avYield = await domeInstance.availableYield();
 						expect(avYield[0]).to.be.eq(0);
-
-						console.log("Second claim done");
-
-						const maxWithdraw3 = await domeInstance.callStatic.maxWithdraw(
-							otherAccount.address
-						);
-
-						console.log(`MAX WITHDRAW 3 AFTER SECOND: ${maxWithdraw3}`);
-
-						// await expect(
-						// 	domeInstance
-						// 		.connect(otherAccount)
-						// 		.withdraw(
-						// 			maxWithdraw3,
-						// 			otherAccount.address,
-						// 			otherAccount.address
-						// 		)
-						// ).to.changeTokenBalance(assetContract, otherAccount, maxWithdraw3);
-
-						const maxWithdraw4 = await domeInstance.maxWithdraw(
-							anotherAccount.address
-						);
-
-						console.log(`MAX WITHDRAW 4 AFTER SECOND: ${maxWithdraw4}`);
-
-						// await expect(
-						// 	domeInstance
-						// 		.connect(anotherAccount)
-						// 		.withdraw(
-						// 			maxWithdraw4,
-						// 			anotherAccount.address,
-						// 			anotherAccount.address
-						// 		)
-						// ).to.changeTokenBalance(
-						// 	assetContract,
-						// 	anotherAccount,
-						// 	maxWithdraw4
-						// );
-
-						console.log("Second Deposit, claim and Withdraw done");
 					});
 
 					it("Should transfer system owners fees after claim and distribute", async function () {
@@ -2355,6 +2349,1068 @@ describe("Dome-DAO", function () {
 						});
 					});
 				});
+
+				describe("Governance", function () {
+					it("Should revert to create proposal if caller is not the dome owner", async function () {
+						const {
+							assetContract,
+							domeInstance,
+							otherAccount,
+							anotherAccount,
+							bufferContract,
+							governanceContract,
+						} = await loadFixture(deployDome);
+
+						const swapAmount = ethers.utils.parseEther("50");
+						const assetsReceived = await sushiSwap(
+							otherAccount,
+							POLYGON.ADDRESSES.WMATIC,
+							assetContract.address,
+							swapAmount
+						);
+
+						await approve(
+							otherAccount,
+							assetContract.address,
+							domeInstance.address,
+							assetsReceived
+						);
+
+						await expect(
+							domeInstance
+								.connect(otherAccount)
+								.deposit(assetsReceived, otherAccount.address)
+						).to.be.fulfilled;
+
+						const ONE_DAY = 60 * 60 * 24;
+						await time.increase(ONE_DAY * 60);
+
+						await domeInstance.connect(otherAccount).claimYieldAndDistribute();
+
+						const walletAddress = anotherAccount.address;
+						const domeReserve = await bufferContract.callStatic.domeReserves(
+							domeInstance.address
+						);
+
+						const transferAmount = domeReserve;
+
+						const reserveTransferCalldata =
+							governanceContract.interface.encodeFunctionData(
+								"reserveTransfer",
+								[walletAddress, transferAmount]
+							);
+
+						const description = "Proposal#1 Transfer funds to XXXX";
+						const duration = 10; // 10 blocks - each block ~ 12 secs
+
+						await expect(
+							governanceContract
+								.connect(anotherAccount)
+								.propose(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									description,
+									duration
+								)
+						).to.be.revertedWithCustomError(governanceContract, "Unauthorized");
+					});
+
+					it("Should allow to create proposal if caller is the dome owner", async function () {
+						const {
+							assetContract,
+							domeInstance,
+							otherAccount,
+							anotherAccount,
+							bufferContract,
+							governanceContract,
+							domeCreator,
+						} = await loadFixture(deployDome);
+
+						const swapAmount = ethers.utils.parseEther("50");
+						const assetsReceived = await sushiSwap(
+							otherAccount,
+							POLYGON.ADDRESSES.WMATIC,
+							assetContract.address,
+							swapAmount
+						);
+
+						await approve(
+							otherAccount,
+							assetContract.address,
+							domeInstance.address,
+							assetsReceived
+						);
+
+						await expect(
+							domeInstance
+								.connect(otherAccount)
+								.deposit(assetsReceived, otherAccount.address)
+						).to.be.fulfilled;
+
+						const ONE_DAY = 60 * 60 * 24;
+						await time.increase(ONE_DAY * 60);
+
+						await domeInstance.connect(otherAccount).claimYieldAndDistribute();
+
+						const walletAddress = anotherAccount.address;
+						const domeReserve = await bufferContract.callStatic.domeReserves(
+							domeInstance.address
+						);
+
+						const transferAmount = domeReserve;
+
+						const reserveTransferCalldata =
+							governanceContract.interface.encodeFunctionData(
+								"reserveTransfer",
+								[walletAddress, transferAmount]
+							);
+
+						const description = "Proposal#1 Transfer funds to XXXX";
+						const duration = 10; // 10 blocks - each block ~ 12 secs
+
+						await expect(
+							governanceContract
+								.connect(domeCreator)
+								.propose(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									description,
+									duration
+								)
+						).to.be.fulfilled;
+					});
+
+					it("Should revert to cancel proposal if caller is the dome owner", async function () {
+						const {
+							assetContract,
+							domeInstance,
+							otherAccount,
+							anotherAccount,
+							bufferContract,
+							governanceContract,
+							domeCreator,
+						} = await loadFixture(deployDome);
+
+						const swapAmount = ethers.utils.parseEther("50");
+						const assetsReceived = await sushiSwap(
+							otherAccount,
+							POLYGON.ADDRESSES.WMATIC,
+							assetContract.address,
+							swapAmount
+						);
+
+						await approve(
+							otherAccount,
+							assetContract.address,
+							domeInstance.address,
+							assetsReceived
+						);
+
+						await expect(
+							domeInstance
+								.connect(otherAccount)
+								.deposit(assetsReceived, otherAccount.address)
+						).to.be.fulfilled;
+
+						const ONE_DAY = 60 * 60 * 24;
+						await time.increase(ONE_DAY * 60);
+
+						await domeInstance.connect(otherAccount).claimYieldAndDistribute();
+
+						const walletAddress = anotherAccount.address;
+						const domeReserve = await bufferContract.callStatic.domeReserves(
+							domeInstance.address
+						);
+
+						const transferAmount = domeReserve;
+
+						const reserveTransferCalldata =
+							governanceContract.interface.encodeFunctionData(
+								"reserveTransfer",
+								[walletAddress, transferAmount]
+							);
+
+						const description = "Proposal#1 Transfer funds to XXXX";
+						const duration = 10; // 10 blocks - each block ~ 12 secs
+
+						await expect(
+							governanceContract
+								.connect(domeCreator)
+								.propose(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									description,
+									duration
+								)
+						).to.be.fulfilled;
+
+						const descriptionHash = ethers.utils.id(description);
+
+						await expect(
+							governanceContract
+								.connect(anotherAccount)
+								.cancel(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									descriptionHash
+								)
+						).to.be.revertedWith("Governor: only proposer can cancel");
+					});
+
+					it("Should allow to cancel proposal if caller is the dome owner", async function () {
+						const {
+							assetContract,
+							domeInstance,
+							otherAccount,
+							anotherAccount,
+							bufferContract,
+							governanceContract,
+							domeCreator,
+						} = await loadFixture(deployDome);
+
+						const swapAmount = ethers.utils.parseEther("50");
+						const assetsReceived = await sushiSwap(
+							otherAccount,
+							POLYGON.ADDRESSES.WMATIC,
+							assetContract.address,
+							swapAmount
+						);
+
+						await approve(
+							otherAccount,
+							assetContract.address,
+							domeInstance.address,
+							assetsReceived
+						);
+
+						await expect(
+							domeInstance
+								.connect(otherAccount)
+								.deposit(assetsReceived, otherAccount.address)
+						).to.be.fulfilled;
+
+						const ONE_DAY = 60 * 60 * 24;
+						await time.increase(ONE_DAY * 60);
+
+						await domeInstance.connect(otherAccount).claimYieldAndDistribute();
+
+						const walletAddress = anotherAccount.address;
+						const domeReserve = await bufferContract.callStatic.domeReserves(
+							domeInstance.address
+						);
+
+						const transferAmount = domeReserve;
+
+						const reserveTransferCalldata =
+							governanceContract.interface.encodeFunctionData(
+								"reserveTransfer",
+								[walletAddress, transferAmount]
+							);
+
+						const description = "Proposal#1 Transfer funds to XXXX";
+						const duration = 10; // 10 blocks - each block ~ 12 secs
+
+						await expect(
+							governanceContract
+								.connect(domeCreator)
+								.propose(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									description,
+									duration
+								)
+						).to.be.fulfilled;
+
+						const descriptionHash = ethers.utils.id(description);
+
+						await expect(
+							governanceContract
+								.connect(domeCreator)
+								.cancel(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									descriptionHash
+								)
+						).to.be.fulfilled;
+					});
+
+					it("Should revert the owner to cancel proposal if the proposal is expired", async function () {
+						const {
+							assetContract,
+							domeInstance,
+							otherAccount,
+							anotherAccount,
+							bufferContract,
+							governanceContract,
+							domeCreator,
+							PROPOSAL_STATE,
+						} = await loadFixture(deployDome);
+
+						const swapAmount = ethers.utils.parseEther("50");
+						const assetsReceived = await sushiSwap(
+							otherAccount,
+							POLYGON.ADDRESSES.WMATIC,
+							assetContract.address,
+							swapAmount
+						);
+
+						await approve(
+							otherAccount,
+							assetContract.address,
+							domeInstance.address,
+							assetsReceived
+						);
+
+						await expect(
+							domeInstance
+								.connect(otherAccount)
+								.deposit(assetsReceived, otherAccount.address)
+						).to.be.fulfilled;
+
+						const ONE_DAY = 60 * 60 * 24;
+						await time.increase(ONE_DAY * 60);
+
+						await domeInstance.connect(otherAccount).claimYieldAndDistribute();
+
+						const walletAddress = anotherAccount.address;
+						const domeReserve = await bufferContract.callStatic.domeReserves(
+							domeInstance.address
+						);
+
+						const transferAmount = domeReserve;
+
+						const reserveTransferCalldata =
+							governanceContract.interface.encodeFunctionData(
+								"reserveTransfer",
+								[walletAddress, transferAmount]
+							);
+
+						const description = "Proposal#1 Transfer funds to XXXX";
+						const duration = 10; // 10 blocks - each block ~ 12 secs
+
+						const proposalId = await governanceContract
+							.connect(domeCreator)
+							.callStatic.propose(
+								walletAddress,
+								transferAmount,
+								reserveTransferCalldata,
+								description,
+								duration
+							);
+
+						await expect(
+							governanceContract
+								.connect(domeCreator)
+								.propose(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									description,
+									duration
+								)
+						).to.be.fulfilled;
+
+						await mine(duration);
+
+						const descriptionHash = ethers.utils.id(description);
+
+						await expect(
+							governanceContract
+								.connect(domeCreator)
+								.cancel(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									descriptionHash
+								)
+						).to.be.revertedWith("Governor: proposal not active");
+
+						expect(
+							await governanceContract.callStatic.state(proposalId)
+						).to.be.equal(PROPOSAL_STATE.DEFEATED);
+					});
+
+					it("Should allow the owner to cancel proposal if the proposal is not expired", async function () {
+						const {
+							assetContract,
+							domeInstance,
+							otherAccount,
+							anotherAccount,
+							bufferContract,
+							governanceContract,
+							domeCreator,
+							PROPOSAL_STATE,
+						} = await loadFixture(deployDome);
+
+						const swapAmount = ethers.utils.parseEther("50");
+						const assetsReceived = await sushiSwap(
+							otherAccount,
+							POLYGON.ADDRESSES.WMATIC,
+							assetContract.address,
+							swapAmount
+						);
+
+						await approve(
+							otherAccount,
+							assetContract.address,
+							domeInstance.address,
+							assetsReceived
+						);
+
+						await expect(
+							domeInstance
+								.connect(otherAccount)
+								.deposit(assetsReceived, otherAccount.address)
+						).to.be.fulfilled;
+
+						const ONE_DAY = 60 * 60 * 24;
+						await time.increase(ONE_DAY * 60);
+
+						await domeInstance.connect(otherAccount).claimYieldAndDistribute();
+
+						const walletAddress = anotherAccount.address;
+						const domeReserve = await bufferContract.callStatic.domeReserves(
+							domeInstance.address
+						);
+
+						const transferAmount = domeReserve;
+
+						const reserveTransferCalldata =
+							governanceContract.interface.encodeFunctionData(
+								"reserveTransfer",
+								[walletAddress, transferAmount]
+							);
+
+						const description = "Proposal#1 Transfer funds to XXXX";
+						const duration = 10; // 10 blocks - each block ~ 12 secs
+
+						const proposalId = await governanceContract
+							.connect(domeCreator)
+							.callStatic.propose(
+								walletAddress,
+								transferAmount,
+								reserveTransferCalldata,
+								description,
+								duration
+							);
+
+						await expect(
+							governanceContract
+								.connect(domeCreator)
+								.propose(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									description,
+									duration
+								)
+						).to.be.fulfilled;
+
+						await mine(duration - 1);
+
+						const descriptionHash = ethers.utils.id(description);
+
+						await expect(
+							governanceContract
+								.connect(domeCreator)
+								.cancel(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									descriptionHash
+								)
+						).to.be.fulfilled;
+
+						expect(
+							await governanceContract.callStatic.state(proposalId)
+						).to.be.equal(PROPOSAL_STATE.CANCELED);
+					});
+
+					it("Should transfer funds after successfull proposal", async function () {
+						const {
+							assetContract,
+							domeInstance,
+							anotherAccount,
+							bufferContract,
+							governanceContract,
+							domeCreator,
+							PROPOSAL_STATE,
+						} = await loadFixture(deployDome);
+
+						const swapAmount = ethers.utils.parseEther("50");
+						const assetsReceived = await sushiSwap(
+							anotherAccount,
+							POLYGON.ADDRESSES.WMATIC,
+							assetContract.address,
+							swapAmount
+						);
+
+						await approve(
+							anotherAccount,
+							assetContract.address,
+							domeInstance.address,
+							assetsReceived
+						);
+
+						await expect(
+							domeInstance
+								.connect(anotherAccount)
+								.deposit(assetsReceived, anotherAccount.address)
+						).to.be.fulfilled;
+
+						const ONE_DAY = 60 * 60 * 24;
+						await time.increase(ONE_DAY * 60);
+
+						await domeInstance
+							.connect(anotherAccount)
+							.claimYieldAndDistribute();
+
+						expect(
+							await domeInstance.getVotes(anotherAccount.address)
+						).to.be.eq(0);
+
+						await expect(
+							domeInstance
+								.connect(anotherAccount)
+								.delegate(anotherAccount.address)
+						).to.be.fulfilled;
+
+						const sharesAmount = await domeInstance.balanceOf(
+							anotherAccount.address
+						);
+
+						expect(
+							await domeInstance.getVotes(anotherAccount.address)
+						).to.be.eq(sharesAmount);
+
+						const walletAddress = ethers.Wallet.createRandom().address;
+						const domeReserve = await bufferContract.callStatic.domeReserves(
+							domeInstance.address
+						);
+
+						const transferAmount = domeReserve;
+
+						const reserveTransferCalldata =
+							governanceContract.interface.encodeFunctionData(
+								"reserveTransfer",
+								[walletAddress, transferAmount]
+							);
+
+						const description = "Proposal#1 Transfer funds to XXXX";
+						const duration = 10; // 10 blocks - each block ~ 12 secs
+
+						const proposalId = await governanceContract
+							.connect(domeCreator)
+							.callStatic.propose(
+								walletAddress,
+								transferAmount,
+								reserveTransferCalldata,
+								description,
+								duration
+							);
+
+						await expect(
+							governanceContract
+								.connect(domeCreator)
+								.propose(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									description,
+									duration
+								)
+						).to.be.fulfilled;
+
+						await expect(
+							governanceContract.connect(anotherAccount).castVote(proposalId)
+						).to.be.fulfilled;
+
+						await mine(duration);
+
+						expect(
+							await governanceContract.callStatic.state(proposalId)
+						).to.be.equal(PROPOSAL_STATE.SUCCEEDED);
+
+						const descriptionHash = ethers.utils.id(description);
+
+						await expect(
+							governanceContract
+								.connect(domeCreator)
+								.execute(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									descriptionHash
+								)
+						).to.changeTokenBalance(
+							assetContract,
+							walletAddress,
+							transferAmount
+						);
+
+						expect(
+							await governanceContract.callStatic.state(proposalId)
+						).to.be.equal(PROPOSAL_STATE.EXECUTED);
+					});
+
+					it("Should execute only proposal with highest votes", async function () {
+						const {
+							assetContract,
+							domeInstance,
+							anotherAccount,
+							bufferContract,
+							governanceContract,
+							domeCreator,
+							PROPOSAL_STATE,
+							randomAccount,
+						} = await loadFixture(deployDome);
+
+						const swapAmount1 = ethers.utils.parseEther("50");
+						const swapAmount2 = ethers.utils.parseEther("100");
+						const [assetsReceived1, assetsReceived2] = await Promise.all([
+							sushiSwap(
+								anotherAccount,
+								POLYGON.ADDRESSES.WMATIC,
+								assetContract.address,
+								swapAmount1
+							),
+							sushiSwap(
+								randomAccount,
+								POLYGON.ADDRESSES.WMATIC,
+								assetContract.address,
+								swapAmount2
+							),
+						]);
+
+						await Promise.all([
+							approve(
+								anotherAccount,
+								assetContract.address,
+								domeInstance.address,
+								assetsReceived1
+							),
+							approve(
+								randomAccount,
+								assetContract.address,
+								domeInstance.address,
+								assetsReceived2
+							),
+						]);
+
+						await expect(
+							domeInstance
+								.connect(anotherAccount)
+								.deposit(assetsReceived1, anotherAccount.address)
+						).to.be.fulfilled;
+
+						await expect(
+							domeInstance
+								.connect(randomAccount)
+								.deposit(assetsReceived2, randomAccount.address)
+						).to.be.fulfilled;
+
+						const ONE_DAY = 60 * 60 * 24;
+						await time.increase(ONE_DAY * 60);
+
+						await domeInstance
+							.connect(anotherAccount)
+							.claimYieldAndDistribute();
+
+						expect(
+							await domeInstance.getVotes(anotherAccount.address)
+						).to.be.eq(0);
+
+						expect(await domeInstance.getVotes(randomAccount.address)).to.be.eq(
+							0
+						);
+
+						await expect(
+							domeInstance
+								.connect(anotherAccount)
+								.delegate(anotherAccount.address)
+						).to.be.fulfilled;
+
+						await expect(
+							domeInstance
+								.connect(randomAccount)
+								.delegate(randomAccount.address)
+						).to.be.fulfilled;
+
+						const sharesAmount1 = await domeInstance.balanceOf(
+							anotherAccount.address
+						);
+
+						const sharesAmount2 = await domeInstance.balanceOf(
+							randomAccount.address
+						);
+
+						expect(sharesAmount2).to.be.gt(sharesAmount1);
+
+						expect(
+							await domeInstance.getVotes(anotherAccount.address)
+						).to.be.eq(sharesAmount1);
+
+						expect(await domeInstance.getVotes(randomAccount.address)).to.be.eq(
+							sharesAmount2
+						);
+
+						const walletAddress = ethers.Wallet.createRandom().address;
+						const domeReserve = await bufferContract.callStatic.domeReserves(
+							domeInstance.address
+						);
+
+						const transferAmount = domeReserve;
+
+						const reserveTransferCalldata =
+							governanceContract.interface.encodeFunctionData(
+								"reserveTransfer",
+								[walletAddress, transferAmount]
+							);
+
+						const firstDescription = "Proposal#1 Transfer funds to XXXX";
+						const duration = 10; // 10 blocks - each block ~ 12 secs
+
+						const secondDescription = "Proposal#2 Transfer funds to XXXX";
+
+						const firstProposalId = await governanceContract
+							.connect(domeCreator)
+							.callStatic.propose(
+								walletAddress,
+								transferAmount,
+								reserveTransferCalldata,
+								firstDescription,
+								duration
+							);
+
+						const secondProposalId = await governanceContract
+							.connect(domeCreator)
+							.callStatic.propose(
+								walletAddress,
+								transferAmount,
+								reserveTransferCalldata,
+								secondDescription,
+								duration
+							);
+
+						await expect(
+							governanceContract
+								.connect(domeCreator)
+								.propose(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									firstDescription,
+									duration
+								)
+						).to.be.fulfilled;
+
+						await expect(
+							governanceContract
+								.connect(domeCreator)
+								.propose(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									secondDescription,
+									duration
+								)
+						).to.be.fulfilled;
+
+						await expect(
+							governanceContract
+								.connect(anotherAccount)
+								.castVote(firstProposalId)
+						).to.be.fulfilled;
+
+						await expect(
+							governanceContract
+								.connect(randomAccount)
+								.castVote(secondProposalId)
+						).to.be.fulfilled;
+
+						await mine(duration);
+
+						expect(
+							await governanceContract.callStatic.state(firstProposalId)
+						).to.be.equal(PROPOSAL_STATE.DEFEATED, "firstState");
+
+						expect(
+							await governanceContract.callStatic.state(secondProposalId)
+						).to.be.equal(PROPOSAL_STATE.SUCCEEDED, "secondState");
+
+						const firstDescriptionHash = ethers.utils.id(firstDescription);
+						const secondDescriptionHash = ethers.utils.id(secondDescription);
+
+						await expect(
+							governanceContract
+								.connect(domeCreator)
+								.execute(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									firstDescriptionHash
+								)
+						).to.reverted;
+
+						await expect(
+							governanceContract
+								.connect(domeCreator)
+								.execute(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									secondDescriptionHash
+								)
+						).to.changeTokenBalance(
+							assetContract,
+							walletAddress,
+							transferAmount
+						);
+
+						expect(
+							await governanceContract.callStatic.state(secondProposalId)
+						).to.be.equal(PROPOSAL_STATE.EXECUTED);
+					});
+
+					it("Should only execute proposal with highest votes on triggerProposal", async function () {
+						const {
+							assetContract,
+							domeInstance,
+							anotherAccount,
+							bufferContract,
+							governanceContract,
+							domeCreator,
+							PROPOSAL_STATE,
+							randomAccount,
+						} = await loadFixture(deployDome);
+
+						const swapAmount1 = ethers.utils.parseEther("50");
+						const swapAmount2 = ethers.utils.parseEther("100");
+						const [assetsReceived1, assetsReceived2] = await Promise.all([
+							sushiSwap(
+								anotherAccount,
+								POLYGON.ADDRESSES.WMATIC,
+								assetContract.address,
+								swapAmount1
+							),
+							sushiSwap(
+								randomAccount,
+								POLYGON.ADDRESSES.WMATIC,
+								assetContract.address,
+								swapAmount2
+							),
+						]);
+
+						await Promise.all([
+							approve(
+								anotherAccount,
+								assetContract.address,
+								domeInstance.address,
+								assetsReceived1
+							),
+							approve(
+								randomAccount,
+								assetContract.address,
+								domeInstance.address,
+								assetsReceived2
+							),
+						]);
+
+						await expect(
+							domeInstance
+								.connect(anotherAccount)
+								.deposit(assetsReceived1, anotherAccount.address)
+						).to.be.fulfilled;
+
+						await expect(
+							domeInstance
+								.connect(randomAccount)
+								.deposit(assetsReceived2, randomAccount.address)
+						).to.be.fulfilled;
+
+						const ONE_DAY = 60 * 60 * 24;
+						await time.increase(ONE_DAY * 60);
+
+						await domeInstance
+							.connect(anotherAccount)
+							.claimYieldAndDistribute();
+
+						expect(
+							await domeInstance.getVotes(anotherAccount.address)
+						).to.be.eq(0);
+
+						expect(await domeInstance.getVotes(randomAccount.address)).to.be.eq(
+							0
+						);
+
+						await expect(
+							domeInstance
+								.connect(anotherAccount)
+								.delegate(anotherAccount.address)
+						).to.be.fulfilled;
+
+						await expect(
+							domeInstance
+								.connect(randomAccount)
+								.delegate(randomAccount.address)
+						).to.be.fulfilled;
+
+						const sharesAmount1 = await domeInstance.balanceOf(
+							anotherAccount.address
+						);
+
+						const sharesAmount2 = await domeInstance.balanceOf(
+							randomAccount.address
+						);
+
+						expect(sharesAmount2).to.be.gt(sharesAmount1);
+
+						expect(
+							await domeInstance.getVotes(anotherAccount.address)
+						).to.be.eq(sharesAmount1);
+
+						expect(await domeInstance.getVotes(randomAccount.address)).to.be.eq(
+							sharesAmount2
+						);
+
+						const walletAddress = ethers.Wallet.createRandom().address;
+						const domeReserve = await bufferContract.callStatic.domeReserves(
+							domeInstance.address
+						);
+
+						const transferAmount = domeReserve;
+
+						const reserveTransferCalldata =
+							governanceContract.interface.encodeFunctionData(
+								"reserveTransfer",
+								[walletAddress, transferAmount]
+							);
+
+						const firstDescription = "Proposal#1 Transfer funds to XXXX";
+						const duration = 10; // 10 blocks - each block ~ 12 secs
+
+						const secondDescription = "Proposal#2 Transfer funds to XXXX";
+
+						const firstProposalId = await governanceContract
+							.connect(domeCreator)
+							.callStatic.propose(
+								walletAddress,
+								transferAmount,
+								reserveTransferCalldata,
+								firstDescription,
+								duration
+							);
+
+						const secondProposalId = await governanceContract
+							.connect(domeCreator)
+							.callStatic.propose(
+								walletAddress,
+								transferAmount,
+								reserveTransferCalldata,
+								secondDescription,
+								duration
+							);
+
+						await expect(
+							governanceContract
+								.connect(domeCreator)
+								.propose(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									firstDescription,
+									duration
+								)
+						).to.be.fulfilled;
+
+						await expect(
+							governanceContract
+								.connect(domeCreator)
+								.propose(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									secondDescription,
+									duration
+								)
+						).to.be.fulfilled;
+
+						await expect(
+							governanceContract
+								.connect(anotherAccount)
+								.castVote(firstProposalId)
+						).to.be.fulfilled;
+
+						await expect(
+							governanceContract
+								.connect(randomAccount)
+								.castVote(secondProposalId)
+						).to.be.fulfilled;
+
+						expect(
+							await governanceContract.callStatic.state(firstProposalId)
+						).to.be.equal(PROPOSAL_STATE.ACTIVE);
+
+						expect(
+							await governanceContract.callStatic.state(secondProposalId)
+						).to.be.equal(PROPOSAL_STATE.PRESUCCEEDED, "HERE");
+
+						const firstDescriptionHash = ethers.utils.id(firstDescription);
+						const secondDescriptionHash = ethers.utils.id(secondDescription);
+
+						await expect(
+							governanceContract
+								.connect(domeCreator)
+								.execute(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									firstDescriptionHash
+								)
+						).to.revertedWith("Governor: proposal not successful");
+
+						expect(
+							await governanceContract.callStatic.state(secondProposalId)
+						).to.be.equal(PROPOSAL_STATE.PRESUCCEEDED);
+
+						expect(
+							await governanceContract.callStatic.state(firstProposalId)
+						).to.be.equal(PROPOSAL_STATE.ACTIVE);
+
+						await expect(
+							governanceContract.connect(randomAccount).triggerProposal()
+						).to.changeTokenBalance(
+							assetContract,
+							walletAddress,
+							transferAmount
+						);
+
+						await expect(
+							governanceContract
+								.connect(domeCreator)
+								.execute(
+									walletAddress,
+									transferAmount,
+									reserveTransferCalldata,
+									secondDescriptionHash
+								)
+						).to.be.rejected;
+
+						expect(
+							await governanceContract.callStatic.state(firstProposalId)
+						).to.be.equal(PROPOSAL_STATE.ACTIVE);
+
+						expect(
+							await governanceContract.callStatic.state(secondProposalId)
+						).to.be.equal(PROPOSAL_STATE.EXECUTED);
+					});
+				});
 			});
 
 			describe("Events", function () {
@@ -2533,7 +3589,7 @@ describe("Dome-DAO", function () {
 						domeInstance
 							.connect(otherAccount)
 							.changeSystemFeePercent(newSystemOwnerPercentage)
-					).to.be.revertedWith("Caller is not the system owner");
+					).to.be.revertedWithCustomError(domeInstance, "Unauthorized");
 				});
 
 				it("Shouldn't allow owner to set fee more than 25%", async function () {
@@ -2545,7 +3601,7 @@ describe("Dome-DAO", function () {
 						domeInstance
 							.connect(owner)
 							.changeSystemFeePercent(newSystemOwnerPercentage)
-					).to.be.revertedWith("Fee percent cannot be more than 25%");
+					).to.be.revertedWithCustomError(domeInstance, "InvalidFeePercent");
 				});
 
 				it("Should allow owner to change system owner fee", async function () {
