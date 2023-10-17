@@ -14,22 +14,20 @@ async function main() {
 
 	const domeCreationFee = await domeProtocol.callStatic.domeCreationFee();
 
+	const bufferAddress = await domeProtocol.callStatic.BUFFER();
+
 	const CID = "dome";
 	const tokenName = "domeToken";
 	const tokenSymbol = "domeToken";
 	const domeInfo = { CID, tokenName, tokenSymbol };
 
-	const beneficiaryCID = "beneficiary";
-	const beneficiaryAddress = "0x05868Fb297322a3b75Bea5DFa9cF2eb13Fb427C6";
-	const beneficiaryPercent = 10000;
-
-	const beneficiary = {
-		beneficiaryCID,
-		wallet: beneficiaryAddress,
-		percent: beneficiaryPercent,
+	const bufferBeneficiary = {
+		beneficiaryCID: "BUFFER",
+		wallet: bufferAddress,
+		percent: 10000,
 	};
 
-	const beneficiariesInfo = [beneficiary];
+	const beneficiariesInfo = [bufferBeneficiary];
 	const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 	const depositorYieldPercent = 1000;
 
@@ -40,6 +38,7 @@ async function main() {
 		`Dome creation fee: ${ethers.utils.formatEther(domeCreationFee)} eth.`
 	);
 	console.log(`Depositor yield percentage: ${depositorYieldPercent / 10000} %`);
+	console.log(`Dome Owner: ${deployer.address}`);
 
 	const rl = readline.createInterface({
 		input: process.stdin,
