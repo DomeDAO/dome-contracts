@@ -83,9 +83,6 @@ abstract contract Governor is
 		address wallet;
 		uint256 amount;
 		bytes _calldata;
-		// address[] targets;
-		// uint256[] values;
-		// bytes[] calldatas;
 		string description;
 	}
 
@@ -131,9 +128,6 @@ abstract contract Governor is
 			address, // wallet
 			uint256, // amount
 			bytes memory, // calldata
-			// address[] memory,
-			// uint256[] memory,
-			// bytes[] memory,
 			string memory
 		)
 	{
@@ -175,9 +169,6 @@ abstract contract Governor is
 		address wallet,
 		uint256 amount,
 		bytes memory _calldata,
-		// address[] memory targets,
-		// uint256[] memory values,
-		// bytes[] memory calldatas,
 		bytes32 descriptionHash
 	) public pure virtual override returns (uint256) {
 		return
@@ -316,9 +307,6 @@ abstract contract Governor is
 		address wallet,
 		uint256 amount,
 		bytes memory _calldata,
-		// address[] memory targets,
-		// uint256[] memory values,
-		// bytes[] memory calldatas,
 		string memory description,
 		uint256 duration
 	) internal virtual override returns (uint256) {
@@ -339,9 +327,6 @@ abstract contract Governor is
 			wallet,
 			amount,
 			_calldata,
-			// targets,
-			// values,
-			// calldatas,
 			keccak256(bytes(description))
 		);
 
@@ -350,21 +335,9 @@ abstract contract Governor is
 			wallet: wallet,
 			amount: amount,
 			_calldata: _calldata,
-			// targets: targets,
-			// values: values,
-			// calldatas: calldatas,
 			description: description
 		});
 
-		// require(
-		// 	targets.length == values.length,
-		// 	"Governor: invalid proposal length"
-		// );
-		// require(
-		// 	targets.length == calldatas.length,
-		// 	"Governor: invalid proposal length"
-		// );
-		// require(targets.length > 0, "Governor: empty proposal");
 		require(
 			_proposals[proposalId].voteStart == 0,
 			"Governor: proposal already exists"
@@ -393,8 +366,6 @@ abstract contract Governor is
 			__proposalDetails.wallet,
 			__proposalDetails.amount,
 			__proposalDetails._calldata,
-			// new string[](__proposalDetails.targets.length),
-			// __proposalDetails.calldatas,
 			_proposalCore.voteStart,
 			_proposalCore.voteEnd,
 			__proposalDetails.description
@@ -465,9 +436,6 @@ abstract contract Governor is
 		address wallet,
 		uint256 amount,
 		bytes memory _calldata,
-		// address[] memory targets,
-		// uint256[] memory values,
-		// bytes[] memory calldatas,
 		bytes32 descriptionHash
 	) internal virtual override returns (uint256) {
 		uint256 proposalId = hashProposal(
@@ -513,10 +481,6 @@ abstract contract Governor is
 		address,
 		uint256,
 		bytes memory _calldata,
-		// uint256 /* proposalId */,
-		// address[] memory targets,
-		// uint256[] memory /* values */,
-		// bytes[] memory calldatas,
 		bytes32 /*descriptionHash*/
 	) internal virtual {
 		if (_executor() != address(this)) {
@@ -535,9 +499,6 @@ abstract contract Governor is
 		address,
 		uint256,
 		bytes memory,
-		// address[] memory /* targets */,
-		// uint256[] memory /* values */,
-		// bytes[] memory /* calldatas */,
 		bytes32 /*descriptionHash*/
 	) internal virtual {
 		if (_executor() != address(this)) {
@@ -558,9 +519,6 @@ abstract contract Governor is
 		address wallet,
 		uint256 amount,
 		bytes memory _calldata,
-		// address[] memory targets,
-		// uint256[] memory values,
-		// bytes[] memory calldatas,
 		bytes32 descriptionHash
 	) internal virtual returns (uint256) {
 		uint256 proposalId = hashProposal(
