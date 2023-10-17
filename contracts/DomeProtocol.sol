@@ -28,7 +28,7 @@ contract DomeProtocol is Ownable {
 	uint256 public domeCreationFee;
 
 	mapping(address => address) public domeCreators;
-	mapping(address => address) public governanceToDome;
+	mapping(address => address) public domeGovernance;
 	mapping(address => address[]) public creatorDomes;
 
 	address public BUFFER;
@@ -97,7 +97,7 @@ contract DomeProtocol is Ownable {
 			domeInfo,
 			beneficiariesInfo,
 			owner(),
-			BUFFER,
+			address(this),
 			_yieldProtocol,
 			systemOwnerPercentage,
 			_depositorYieldPercent
@@ -107,7 +107,7 @@ contract DomeProtocol is Ownable {
 			.createGovernance(domeAddress);
 
 		domeCreators[domeAddress] = msg.sender;
-		governanceToDome[governanceAddress] = domeAddress;
+		domeGovernance[domeAddress] = governanceAddress;
 		creatorDomes[msg.sender].push(domeAddress);
 
 		emit DomeCreated(msg.sender, domeAddress, _yieldProtocol, domeInfo.CID);
