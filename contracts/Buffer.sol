@@ -4,16 +4,16 @@ pragma solidity ^0.8.9;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-interface IDomeDAO {
+interface IDomeProtocol {
 	function domeCreators(address) external view returns (address);
 
-	function governanceToDome(address) external view returns (address);
+	function domeGovernance(address) external view returns (address);
 }
 
 contract Buffer is Ownable {
 	using SafeERC20 for IERC20;
 
-	address public immutable DOME_DAO;
+	address public immutable DOME_PROTOCOL;
 
 	// Mapping from {domeAddress} to {underlyingAssetAmount}
 	mapping(address => uint256) public domeReserves;
@@ -25,7 +25,7 @@ contract Buffer is Ownable {
 	error TransferFailed();
 
 	constructor(address _domeDAO) {
-		DOME_DAO = _domeDAO;
+		DOME_PROTOCOL = _domeDAO;
 	}
 
 	modifier onlyDomes() {
@@ -35,19 +35,9 @@ contract Buffer is Ownable {
 		_;
 	}
 
-	modifier onlyGovernances() {
-		if (!_isGovernance(msg.sender)) {
-			revert Unauthorized();
-		}
-		_;
-	}
-
 	function _isDome(address _address) private view returns (bool) {
-		return IDomeDAO(DOME_DAO).domeCreators(_address) != address(0);
-	}
-
-	function _isGovernance(address _address) private view returns (bool) {
-		return IDomeDAO(DOME_DAO).governanceToDome(_address) != address(0);
+		return
+			IDomeProtocol(DOME_PROTOCOL).domeCreators(_address) != address(0);
 	}
 
 	function addReserve(uint256 amount) external onlyDomes {
@@ -61,7 +51,14 @@ contract Buffer is Ownable {
 		address token,
 		address wallet,
 		uint256 amount
-	) external onlyGovernances returns (uint256) {
+	) external returns (uint256) {
+		address expectedGovernance = IDomeProtocol(DOME_PROTOCOL)
+			.domeGovernance(dome);
+
+		if (msg.sender != expectedGovernance) {
+			revert Unauthorized();
+		}
+
 		uint256 tokenBalance = domeReserves[dome];
 
 		if (tokenBalance < amount) {
