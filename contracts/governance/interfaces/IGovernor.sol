@@ -30,10 +30,6 @@ abstract contract IGovernor is IERC165, IERC6372 {
 		address wallet,
 		uint256 amount,
 		bytes _calldata,
-		// string[] signatures,
-		// address[] targets,
-		// uint256[] values,
-		// bytes[] calldatas,
 		uint256 voteStart,
 		uint256 voteEnd,
 		string description
@@ -128,9 +124,6 @@ abstract contract IGovernor is IERC165, IERC6372 {
 		address wallet,
 		uint256 amount,
 		bytes memory _calldata,
-		// address[] memory targets,
-		// uint256[] memory values,
-		// bytes[] memory calldatas,
 		bytes32 descriptionHash
 	) public pure virtual returns (uint256);
 
@@ -211,9 +204,6 @@ abstract contract IGovernor is IERC165, IERC6372 {
 		address wallet,
 		uint256 amount,
 		bytes memory _calldata,
-		// address[] memory targets,
-		// uint256[] memory values,
-		// bytes[] memory calldatas,
 		string memory description,
 		uint256 duration
 	) internal virtual returns (uint256 proposalId);
@@ -231,9 +221,6 @@ abstract contract IGovernor is IERC165, IERC6372 {
 		address wallet,
 		uint256 amount,
 		bytes memory _calldata,
-		// address[] memory targets,
-		// uint256[] memory values,
-		// bytes[] memory calldatas,
 		bytes32 descriptionHash
 	) internal virtual returns (uint256 proposalId);
 
@@ -248,9 +235,6 @@ abstract contract IGovernor is IERC165, IERC6372 {
 		address wallet,
 		uint256 amount,
 		bytes memory _calldata,
-		// address[] memory targets,
-		// uint256[] memory values,
-		// bytes[] memory calldatas,
 		bytes32 descriptionHash
 	) internal virtual returns (uint256 proposalId);
 
