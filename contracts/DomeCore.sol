@@ -23,7 +23,7 @@ interface IBuffer {
 	function addReserve(uint256 amount) external;
 }
 
-interface IDomeFactory {
+interface IDomeProtocol {
 	function BUFFER() external view returns (address);
 
 	function domeCreators(address) external view returns (address);
@@ -32,7 +32,7 @@ interface IDomeFactory {
 contract Dome is ERC20, ERC20Permit, ERC20Votes, IERC4626, DomeBase {
 	using SafeERC20 for IERC20;
 
-	address public immutable DOME_FACTORY;
+	address public immutable DOME_PROTOCOL;
 	IERC4626 public immutable yieldProtocol;
 
 	uint256 public totalAssets;
@@ -54,7 +54,7 @@ contract Dome is ERC20, ERC20Permit, ERC20Votes, IERC4626, DomeBase {
 		BeneficiaryInfo[] memory beneficiariesInfo,
 		address _yieldProtocol,
 		address _systemOwner,
-		address _domeFactory,
+		address _domeProtocol,
 		uint16 systemOwnerPercent,
 		uint16 _depositorYieldPercent
 	)
@@ -62,7 +62,7 @@ contract Dome is ERC20, ERC20Permit, ERC20Votes, IERC4626, DomeBase {
 		ERC20Permit(domeInfo.tokenName)
 		DomeBase(_systemOwner, systemOwnerPercent)
 	{
-		DOME_FACTORY = _domeFactory;
+		DOME_PROTOCOL = _domeProtocol;
 		DOME_CID = domeInfo.CID;
 		yieldProtocol = IERC4626(_yieldProtocol);
 
@@ -91,11 +91,11 @@ contract Dome is ERC20, ERC20Permit, ERC20Votes, IERC4626, DomeBase {
 	}
 
 	function BUFFER() public view returns (address) {
-		return IDomeFactory(DOME_FACTORY).BUFFER();
+		return IDomeProtocol(DOME_PROTOCOL).BUFFER();
 	}
 
 	function domeOwner() public view returns (address) {
-		return IDomeFactory(DOME_FACTORY).domeCreators(address(this));
+		return IDomeProtocol(DOME_PROTOCOL).domeCreators(address(this));
 	}
 
 	function asset() external view returns (address) {
