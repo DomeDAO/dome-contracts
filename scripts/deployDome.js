@@ -1,25 +1,26 @@
+require("dotenv").config();
 const { ethers } = require("hardhat");
 const readline = require("readline");
 const { POLYGON } = require("../test/constants");
 
+const { DOME_PROTOCOL_ADDRESS } = process.env;
+
 async function main() {
 	const [deployer] = await ethers.getSigners();
 
-	const domeDAOAddress = "0x24C17bf9Af7A0e372D8B3571dBa12C216Bc44E42";
-
 	const domeProtocol = await ethers.getContractAt(
 		"DomeProtocol",
-		domeDAOAddress
+		DOME_PROTOCOL_ADDRESS
 	);
 
 	const domeCreationFee = await domeProtocol.callStatic.domeCreationFee();
-
 	const bufferAddress = await domeProtocol.callStatic.BUFFER();
 
-	const CID = "dome";
-	const tokenName = "domeToken";
-	const tokenSymbol = "domeToken";
-	const domeInfo = { CID, tokenName, tokenSymbol };
+	const domeInfo = {
+		CID: "<DOME_CID>",
+		tokenName: "<DOME_TOKEN_NAME>",
+		tokenSymbol: "<DOME_TOKEN_SYMBOL>",
+	};
 
 	const bufferBeneficiary = {
 		beneficiaryCID: "BUFFER",
