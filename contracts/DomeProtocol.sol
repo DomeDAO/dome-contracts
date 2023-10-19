@@ -55,7 +55,13 @@ contract DomeProtocol is Ownable {
 		uint256 _domeCreationFee
 	) {
 		_transferOwnership(systemOwner);
+
+		if (_systemOwnerPercentage > 2500) {
+			revert InvalidFeePercent();
+		}
+
 		systemOwnerPercentage = _systemOwnerPercentage;
+
 		domeCreationFee = _domeCreationFee;
 
 		BUFFER = address(new Buffer(address(this)));
