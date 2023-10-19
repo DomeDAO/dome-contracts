@@ -95,7 +95,7 @@ In total, there are 71 individual tests.
 
 ### Running Tests
 
-If you want to run the tests locally or on your own development environment, tun the tests using the following command:
+If you want to run the tests locally or on your own development environment, run the tests using the following command:
 
 ```bash
 npx hardhat test
