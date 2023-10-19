@@ -132,7 +132,7 @@ contract DomeGovernor is Governor, GovernorVotes {
 		}
 	}
 
-	function _removeInativeProposals() internal returns (uint256 mapLength) {
+	function _removeInactiveProposals() internal returns (uint256 mapLength) {
 		for (uint i = 0; i < activeProposalVotes.length(); i++) {
 			(uint256 _proposalId, ) = activeProposalVotes.at(i);
 
@@ -277,7 +277,7 @@ contract DomeGovernor is Governor, GovernorVotes {
 		bytes memory _calldata,
 		bytes32 descriptionHash
 	) internal virtual override {
-		_removeInativeProposals();
+		_removeInactiveProposals();
 
 		super._afterExecute(
 			proposalId,

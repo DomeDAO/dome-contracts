@@ -24,8 +24,8 @@ contract Buffer is Ownable {
 	error Unauthorized();
 	error TransferFailed();
 
-	constructor(address _domeDAO) {
-		DOME_PROTOCOL = _domeDAO;
+	constructor(address _domeProtocol) {
+		DOME_PROTOCOL = _domeProtocol;
 	}
 
 	modifier onlyDomes() {
