@@ -79,7 +79,7 @@ contract DomeGovernor is Governor, GovernorVotes {
 		uint256 proposalId
 	) internal view virtual override returns (bool) {
 		uint256 votes = activeProposalVotes.get(proposalId);
-		(, uint256 highestVotedProposal) = _getHighestVote();
+		(, uint256 highestVoteCount) = _getHighestVotedProposal();
 
 		(, , uint256 amount, , ) = proposalDetails(proposalId);
 
@@ -89,7 +89,7 @@ contract DomeGovernor is Governor, GovernorVotes {
 			domeAddress
 		);
 
-		return (votes == highestVotedProposal &&
+		return (votes == highestVoteCount &&
 			votes != 0 &&
 			amount <= reserveAmount);
 	}
@@ -115,7 +115,7 @@ contract DomeGovernor is Governor, GovernorVotes {
 		activeProposalVotes.set(proposalId, proposalVote.forVotes);
 	}
 
-	function _getHighestVote()
+	function _getHighestVotedProposal()
 		internal
 		view
 		returns (uint256 proposalId, uint256 highestVote)
@@ -250,7 +250,7 @@ contract DomeGovernor is Governor, GovernorVotes {
 	}
 
 	function triggerProposal() public payable returns (uint256 proposalId) {
-		(uint256 _proposalId, ) = _getHighestVote();
+		(uint256 _proposalId, ) = _getHighestVotedProposal();
 
 		(
 			,
