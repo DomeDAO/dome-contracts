@@ -7,7 +7,7 @@ async function main() {
 	const DomeFactory = await ethers.getContractFactory("DomeFactory");
 	const GovernanceFactory =
 		await ethers.getContractFactory("GovernanceFactory");
-	const DomeProtocol = await ethers.getContractFactory("DomeProtocol ");
+	const DomeProtocol = await ethers.getContractFactory("DomeProtocol");
 
 	const domeFactory = await DomeFactory.deploy();
 	const governanceFactory = await GovernanceFactory.deploy();
