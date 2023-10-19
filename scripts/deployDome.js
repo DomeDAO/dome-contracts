@@ -8,7 +8,7 @@ async function main() {
 	const domeDAOAddress = "0x24C17bf9Af7A0e372D8B3571dBa12C216Bc44E42";
 
 	const domeProtocol = await ethers.getContractAt(
-		"DomeProtocol ",
+		"DomeProtocol",
 		domeDAOAddress
 	);
 
