@@ -43,7 +43,7 @@ Which indicates that contracts have been successfully compiled and they're ready
 
 ## Environment Variables
 
-To delpoy the protocol, you will need to add the following `environment variables` to your .env file:
+To deploy the protocol, you will need to add the following `environment variables` to your .env file:
 
 `DEPLOY_PRIV_KEY`
 `DOME_CREATION_FEE`
@@ -109,7 +109,7 @@ npm run test
 
 Keep in mind that when you run `npx hardhat test`, all contracts will be automatically compiled if they've changed.
 
-Don't forget to update [environment variables](#environment-variables) before testing, all tests are done on the polygon mainnet fork, so the `POLYGON_RPC_URL` shoul be set.
+Don't forget to update [environment variables](#environment-variables) before testing, all tests are done on the polygon mainnet fork, so the `POLYGON_RPC_URL` should be set.
 ## Deployment
 
 This section outlines the steps to deploy the `Dome` and `DomeProtocol` contracts. Before deploying, make sure to set the required environment variables and constructor parameters.
@@ -139,7 +139,7 @@ If you want to deploy somewhere else, you need to add a new network entry to har
 }
 ```
 
-And thne to tell Hardhat to connect to a specific network, you can use the --network parameter when running any task, like this:
+And then to tell Hardhat to connect to a specific network, you can use the --network parameter when running any task, like this:
 
 ```bash
 npx hardhat run scripts/scriptToRun.js --network <network-name>
@@ -177,7 +177,7 @@ With the `DomeProtocol` contract deployed, you can now proceed to deploy the `Do
    - `depositorYieldPercent` (up to 10000, representing 100%)
    - The `Dome` contract owner is the `Dome` deployer. (The `DEPLOY_PRIV_KEY` wallet)
 
-After setting the required parameters insde `scripts/deployDome.js` file. we are ready to deploy a `Dome` instance like this:
+After setting the required parameters inside `scripts/deployDome.js` file. we are ready to deploy a `Dome` instance like this:
 
 ```bash
 npx hardhat run scripts/deployDome.js --network <network>
@@ -194,7 +194,7 @@ Please ensure that you are using the correct and secure deployment parameters an
 For smart contracts verification on the blockchain we use hardhat-verify to make the source code of your contracts publicly available and verifiable on block explorers like Etherscan. Below are the steps to verify your contracts. 
 
 ### Configuration
-1. Ensure you have set required enviroment varibales for verifications on Polygon and Ethereum: `MAINNET_API_KEY`, `POLYGON_API_KEY`.
+1. Ensure you have set required environment variables for verifications on Polygon and Ethereum: `MAINNET_API_KEY`, `POLYGON_API_KEY`.
 
 2. If you want to deploy somewhere else, you need to add a new etherscan api key entry to `hardhat.config.js` file, similarly to others:
 
@@ -204,7 +204,7 @@ module.exports = {
 
   etherscan: {
     apiKey: {
-      <netowrk>: "<NETWORK_API_KEY>",
+      <network>: "<NETWORK_API_KEY>",
       // ... add more networks as needed ...
     },
   },
@@ -221,7 +221,7 @@ npm run verifyProtocol:<network>
 
 ### Verifying the Dome
 
-To verify the dome instance you shoul provide additional data inside `scripts/verifyDome.js` file:
+To verify the dome instance you should provide additional data inside `scripts/verifyDome.js` file:
 - `domeInfo` (cid, tokenName, tokenSymbol)
 - `beneficiariesInfo` (cid, wallet, percent up to 10000, representing 100%)
 - `yieldProtocol` (yield protocol used in that dome)
