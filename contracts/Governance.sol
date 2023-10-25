@@ -24,6 +24,10 @@ interface IBuffer {
 	function domeReserves(address) external view returns (uint256);
 }
 
+interface IWrappedVoting {
+	function DOME_ADDRESS() external view returns (address);
+}
+
 struct ProposalVote {
 	uint256 forVotes;
 	mapping(address => bool) hasVoted;
@@ -34,13 +38,16 @@ contract DomeGovernor is Governor, GovernorVotes {
 
 	EnumerableMap.UintToUintMap internal activeProposalVotes;
 	mapping(uint256 => ProposalVote) private _proposalVotes;
+	address public immutable DOME_ADDRESS;
 
 	event ReserveTransfered(uint256 amount);
 
 	error Unauthorized();
 	error NoActiveProposals();
 
-	constructor(IVotes _token) Governor("DomeGovernor") GovernorVotes(_token) {}
+	constructor(IVotes _token) Governor("DomeGovernor") GovernorVotes(_token) {
+		DOME_ADDRESS = IWrappedVoting(address(token)).DOME_ADDRESS();
+	}
 
 	function COUNTING_MODE()
 		public
@@ -83,10 +90,9 @@ contract DomeGovernor is Governor, GovernorVotes {
 
 		(, , uint256 amount, , ) = proposalDetails(proposalId);
 
-		address domeAddress = address(token);
-		address bufferAddress = IDome(domeAddress).BUFFER();
+		address bufferAddress = IDome(DOME_ADDRESS).BUFFER();
 		uint256 reserveAmount = IBuffer(bufferAddress).domeReserves(
-			domeAddress
+			DOME_ADDRESS
 		);
 
 		return (votes == highestVoteCount &&
@@ -154,12 +160,11 @@ contract DomeGovernor is Governor, GovernorVotes {
 		address wallet,
 		uint256 amount
 	) public onlyGovernance {
-		address domeAddress = address(token);
-		address asset = IDome(domeAddress).asset();
-		address bufferAddress = IDome(domeAddress).BUFFER();
+		address asset = IDome(DOME_ADDRESS).asset();
+		address bufferAddress = IDome(DOME_ADDRESS).BUFFER();
 
 		uint256 reserveAmount = IBuffer(bufferAddress).submitTransfer(
-			domeAddress,
+			DOME_ADDRESS,
 			asset,
 			wallet,
 			amount
@@ -175,7 +180,7 @@ contract DomeGovernor is Governor, GovernorVotes {
 		string memory description,
 		uint256 duration
 	) public returns (uint256) {
-		address domeOwner = IDome(address(token)).domeOwner();
+		address domeOwner = IDome(DOME_ADDRESS).domeOwner();
 		if (msg.sender != domeOwner) {
 			revert Unauthorized();
 		}
