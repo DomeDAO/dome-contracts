@@ -4,8 +4,6 @@ pragma solidity ^0.8.17;
 
 import {IERC4626, IERC20Metadata, ERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import {DomeBase, SafeERC20} from "./base/DomeBase.sol";
-import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
-import {ERC20Votes} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 
 struct BeneficiaryInfo {
 	string beneficiaryCID;
@@ -27,9 +25,15 @@ interface IDomeProtocol {
 	function BUFFER() external view returns (address);
 
 	function domeCreators(address) external view returns (address);
+
+	function mintRewardTokens(
+		address asset,
+		address to,
+		uint256 amount
+	) external returns (uint256);
 }
 
-contract Dome is ERC20, ERC20Permit, ERC20Votes, IERC4626, DomeBase {
+contract Dome is ERC20, IERC4626, DomeBase {
 	using SafeERC20 for IERC20;
 
 	address public immutable DOME_PROTOCOL;
@@ -38,6 +42,8 @@ contract Dome is ERC20, ERC20Permit, ERC20Votes, IERC4626, DomeBase {
 	uint256 public totalAssets;
 	mapping(address => uint256) private _assets;
 	mapping(address => uint256) private _depositorYield;
+
+	mapping(address => uint256) private _stakerRewards;
 
 	string public DOME_CID;
 
@@ -59,7 +65,6 @@ contract Dome is ERC20, ERC20Permit, ERC20Votes, IERC4626, DomeBase {
 		uint16 _depositorYieldPercent
 	)
 		ERC20(domeInfo.tokenName, domeInfo.tokenSymbol)
-		ERC20Permit(domeInfo.tokenName)
 		DomeBase(_systemOwner, systemOwnerPercent)
 	{
 		DOME_PROTOCOL = _domeProtocol;
@@ -187,6 +192,10 @@ contract Dome is ERC20, ERC20Permit, ERC20Votes, IERC4626, DomeBase {
 	) internal {
 		if (caller != owner) {
 			_decreaseAllowance(owner, caller, shares);
+		}
+
+		if (assets > _assets[owner]) {
+			_stakerRewards[owner] = 0;
 		}
 
 		(uint256 updatedAssetAmount, uint256 yield) = _assetsWithdrawForOwner(
@@ -390,25 +399,47 @@ contract Dome is ERC20, ERC20Permit, ERC20Votes, IERC4626, DomeBase {
 		return (assets, 0);
 	}
 
+	function generatedYieldOf(address owner) public view returns (uint256) {
+		uint256 totalAssetsFromShares = yieldProtocol.previewRedeem(
+			balanceOf(owner)
+		);
+
+		return totalAssetsFromShares - _assets[owner];
+	}
+
+	function claim() external returns (uint256) {
+		uint256 generatedYield = generatedYieldOf(msg.sender);
+
+		uint256 depositorsYieldPortion = (generatedYield *
+			depositorYieldPercent) / 10000;
+		generatedYield = generatedYield - depositorsYieldPortion;
+
+		uint256 systemFeePortion = (generatedYield * systemFeePercent) / 10000;
+		uint256 rewardAmount = (generatedYield - systemFeePortion) -
+			_stakerRewards[msg.sender];
+		_stakerRewards[msg.sender] += rewardAmount;
+
+		return
+			IDomeProtocol(DOME_PROTOCOL).mintRewardTokens(
+				yieldProtocol.asset(),
+				msg.sender,
+				rewardAmount
+			);
+	}
+
 	function _afterTokenTransfer(
 		address from,
 		address to,
 		uint256 amount
-	) internal override(ERC20, ERC20Votes) {
+	) internal override {
 		super._afterTokenTransfer(from, to, amount);
 	}
 
-	function _mint(
-		address to,
-		uint256 amount
-	) internal override(ERC20, ERC20Votes) {
+	function _mint(address to, uint256 amount) internal override {
 		super._mint(to, amount);
 	}
 
-	function _burn(
-		address account,
-		uint256 amount
-	) internal override(ERC20, ERC20Votes) {
+	function _burn(address account, uint256 amount) internal override {
 		super._burn(account, amount);
 	}
 }
