@@ -4,7 +4,7 @@ pragma solidity ^0.8.17;
 import {DomeGovernor, IVotes} from "./Governance.sol";
 
 contract GovernanceFactory {
-	event GovernanceCreated(address indexed token, address governance);
+	event GovernanceCreated(address token, address governance);
 
 	function createGovernance(
 		address token
