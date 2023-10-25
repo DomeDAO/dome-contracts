@@ -5,7 +5,6 @@ const {
 	HARDHAT_DEV_MNEMONIC,
 	POLYGON_RPC_URL,
 	POLYGON_API_KEY,
-	DEV_PRIV_KEY,
 	COINMARKETCAP_API,
 	MAINNET_RPC_URL,
 	MAINNET_API_KEY,
@@ -54,18 +53,17 @@ module.exports = {
 		},
 		goerli: {
 			url: GOERLI_RPC_URL || "",
-			accounts: DEV_PRIV_KEY ? [DEV_PRIV_KEY] : [],
+			accounts: DEPLOY_PRIV_KEY ? [DEPLOY_PRIV_KEY] : [],
 		},
 		mumbai: {
 			url: MUMBAI_RPC_URL || "",
-			accounts: DEV_PRIV_KEY ? [DEV_PRIV_KEY] : [],
+			accounts: DEPLOY_PRIV_KEY ? [DEPLOY_PRIV_KEY] : [],
 		},
 		node_network: {
 			url: "http://127.0.0.1:8545/",
 		},
 	},
 	gasReporter: {
-		// enabled: COINMARKETCAP_API === undefined ? false : true,
 		enabled: false,
 		currency: "USD",
 		token: "ETH",

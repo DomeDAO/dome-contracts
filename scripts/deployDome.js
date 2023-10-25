@@ -1,35 +1,34 @@
+require("dotenv").config();
 const { ethers } = require("hardhat");
 const readline = require("readline");
 const { POLYGON } = require("../test/constants");
 
+const { DOME_PROTOCOL_ADDRESS } = process.env;
+
 async function main() {
 	const [deployer] = await ethers.getSigners();
 
-	const domeDAOAddress = "0x24C17bf9Af7A0e372D8B3571dBa12C216Bc44E42";
-
 	const domeProtocol = await ethers.getContractAt(
-		"DomeProtocol ",
-		domeDAOAddress
+		"DomeProtocol",
+		DOME_PROTOCOL_ADDRESS
 	);
 
 	const domeCreationFee = await domeProtocol.callStatic.domeCreationFee();
+	const bufferAddress = await domeProtocol.callStatic.BUFFER();
 
-	const CID = "dome";
-	const tokenName = "domeToken";
-	const tokenSymbol = "domeToken";
-	const domeInfo = { CID, tokenName, tokenSymbol };
-
-	const beneficiaryCID = "beneficiary";
-	const beneficiaryAddress = "0x05868Fb297322a3b75Bea5DFa9cF2eb13Fb427C6";
-	const beneficiaryPercent = 10000;
-
-	const beneficiary = {
-		beneficiaryCID,
-		wallet: beneficiaryAddress,
-		percent: beneficiaryPercent,
+	const domeInfo = {
+		CID: "<DOME_CID>",
+		tokenName: "<DOME_TOKEN_NAME>",
+		tokenSymbol: "<DOME_TOKEN_SYMBOL>",
 	};
 
-	const beneficiariesInfo = [beneficiary];
+	const bufferBeneficiary = {
+		beneficiaryCID: "BUFFER",
+		wallet: bufferAddress,
+		percent: 10000,
+	};
+
+	const beneficiariesInfo = [bufferBeneficiary];
 	const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 	const depositorYieldPercent = 1000;
 
@@ -40,6 +39,7 @@ async function main() {
 		`Dome creation fee: ${ethers.utils.formatEther(domeCreationFee)} eth.`
 	);
 	console.log(`Depositor yield percentage: ${depositorYieldPercent / 10000} %`);
+	console.log(`Dome Owner: ${deployer.address}`);
 
 	const rl = readline.createInterface({
 		input: process.stdin,

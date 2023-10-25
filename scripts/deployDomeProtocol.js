@@ -1,5 +1,9 @@
+require("dotenv").config();
 const { ethers } = require("hardhat");
 const readline = require("readline");
+
+const { DOME_CREATION_FEE, SYSTEM_OWNER_PERCENTAGE, SYSTEM_OWNER } =
+	process.env;
 
 async function main() {
 	const [deployer] = await ethers.getSigners();
@@ -7,10 +11,10 @@ async function main() {
 	const DomeFactory = await ethers.getContractFactory("DomeFactory");
 	const GovernanceFactory =
 		await ethers.getContractFactory("GovernanceFactory");
-	const DomeProtocol = await ethers.getContractFactory("DomeProtocol ");
+	const DomeProtocol = await ethers.getContractFactory("DomeProtocol");
 
-	const domeFactory = await DomeFactory.deploy();
-	const governanceFactory = await GovernanceFactory.deploy();
+	const domeFactory = await DomeFactory.connect(deployer).deploy();
+	const governanceFactory = await GovernanceFactory.connect(deployer).deploy();
 
 	await Promise.all([domeFactory.deployed(), governanceFactory.deployed()]);
 
@@ -21,9 +25,9 @@ async function main() {
 		`GovernanceFactory was successfully deployed at : ${governanceFactory.address}`
 	);
 
-	const domeCreationFee = ethers.utils.parseEther("1");
-	const systemOwnerPercentage = 1000;
-	const systemOwner = deployer.address;
+	const domeCreationFee = DOME_CREATION_FEE;
+	const systemOwnerPercentage = SYSTEM_OWNER_PERCENTAGE;
+	const systemOwner = SYSTEM_OWNER;
 
 	console.log(`\nDeploying DomeProtocol  with the following parameters:`);
 	console.log(
@@ -46,7 +50,7 @@ async function main() {
 		})
 	);
 
-	const domeProtocol = await DomeProtocol.deploy(
+	const domeProtocol = await DomeProtocol.connect(deployer).deploy(
 		systemOwner,
 		domeFactory.address,
 		governanceFactory.address,
@@ -58,7 +62,7 @@ async function main() {
 	const bufferAddress = await domeProtocol.callStatic.BUFFER();
 
 	console.log(
-		`DomeProtocol  was successfully deployed at ${domeProtocol.address} with BUFFER at ${bufferAddress}`
+		`DomeProtocol was successfully deployed at ${domeProtocol.address} with BUFFER at ${bufferAddress}`
 	);
 }
 

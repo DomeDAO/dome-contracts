@@ -21,7 +21,7 @@ contract DomeFactory {
 		DomeInfo memory domeInfo,
 		BeneficiaryInfo[] memory beneficiariesInfo,
 		address systemOwner,
-		address buffer,
+		address domeProtocol,
 		address _yieldProtocol,
 		uint16 systemOwnerPercentage,
 		uint16 _depositorYieldPercent
@@ -31,7 +31,7 @@ contract DomeFactory {
 			beneficiariesInfo,
 			_yieldProtocol,
 			systemOwner,
-			buffer,
+			domeProtocol,
 			systemOwnerPercentage,
 			_depositorYieldPercent
 		);

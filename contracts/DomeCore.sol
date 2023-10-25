@@ -23,10 +23,16 @@ interface IBuffer {
 	function addReserve(uint256 amount) external;
 }
 
+interface IDomeProtocol {
+	function BUFFER() external view returns (address);
+
+	function domeCreators(address) external view returns (address);
+}
+
 contract Dome is ERC20, ERC20Permit, ERC20Votes, IERC4626, DomeBase {
 	using SafeERC20 for IERC20;
 
-	address public immutable BUFFER;
+	address public immutable DOME_PROTOCOL;
 	IERC4626 public immutable yieldProtocol;
 
 	uint256 public totalAssets;
@@ -48,7 +54,7 @@ contract Dome is ERC20, ERC20Permit, ERC20Votes, IERC4626, DomeBase {
 		BeneficiaryInfo[] memory beneficiariesInfo,
 		address _yieldProtocol,
 		address _systemOwner,
-		address bufferAddress,
+		address _domeProtocol,
 		uint16 systemOwnerPercent,
 		uint16 _depositorYieldPercent
 	)
@@ -56,7 +62,7 @@ contract Dome is ERC20, ERC20Permit, ERC20Votes, IERC4626, DomeBase {
 		ERC20Permit(domeInfo.tokenName)
 		DomeBase(_systemOwner, systemOwnerPercent)
 	{
-		BUFFER = bufferAddress;
+		DOME_PROTOCOL = _domeProtocol;
 		DOME_CID = domeInfo.CID;
 		yieldProtocol = IERC4626(_yieldProtocol);
 
@@ -65,8 +71,9 @@ contract Dome is ERC20, ERC20Permit, ERC20Votes, IERC4626, DomeBase {
 			beneficiaries.push(beneficiariesInfo[i]);
 			_totalPercent += beneficiariesInfo[i].percent;
 		}
-
-		require(_totalPercent == 10000, "Beneficiaries percent check failed");
+		if (_totalPercent != 10000) {
+			revert InvalidFeePercent();
+		}
 
 		depositorYieldPercent = _depositorYieldPercent;
 
@@ -81,6 +88,14 @@ contract Dome is ERC20, ERC20Permit, ERC20Votes, IERC4626, DomeBase {
 		returns (uint8)
 	{
 		return IERC20Metadata(yieldProtocol.asset()).decimals();
+	}
+
+	function BUFFER() public view returns (address) {
+		return IDomeProtocol(DOME_PROTOCOL).BUFFER();
+	}
+
+	function domeOwner() public view returns (address) {
+		return IDomeProtocol(DOME_PROTOCOL).domeCreators(address(this));
 	}
 
 	function asset() external view returns (address) {
@@ -127,10 +142,9 @@ contract Dome is ERC20, ERC20Permit, ERC20Votes, IERC4626, DomeBase {
 		uint256 yieldSharesReceived = _getBalance(address(yieldProtocol)) -
 			yieldSharesBalanceBefore;
 
-		require(
-			yieldSharesReceived > 0,
-			"Doesn't get anything from yield protocol"
-		);
+		if (!(yieldSharesReceived > 0)) {
+			revert TransferFailed();
+		}
 
 		// We mint our wrapped share only after share validation
 		_mint(receiver, yieldSharesReceived);
@@ -230,6 +244,11 @@ contract Dome is ERC20, ERC20Permit, ERC20Votes, IERC4626, DomeBase {
 		uint256 depositorsTotalAssetsWithYield = yieldProtocol.previewRedeem(
 			totalSupply()
 		);
+
+		if (depositorsTotalAssetsWithYield < totalAssets) {
+			return (0, 0);
+		}
+
 		uint256 generatedYield = depositorsTotalAssetsWithYield - totalAssets;
 		uint256 depositorsYieldPortion = (generatedYield *
 			depositorYieldPercent) / 10000;
@@ -256,8 +275,8 @@ contract Dome is ERC20, ERC20Permit, ERC20Votes, IERC4626, DomeBase {
 				distributeAmout
 			);
 
-			if (beneficiaries[i].wallet == BUFFER) {
-				IBuffer(BUFFER).addReserve(distributeAmout);
+			if (beneficiaries[i].wallet == BUFFER()) {
+				IBuffer(BUFFER()).addReserve(distributeAmout);
 			}
 
 			emit Distribute(beneficiaries[i].wallet, distributeAmout);

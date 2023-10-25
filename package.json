@@ -1,17 +1,33 @@
 {
-  "name": "dome-dao",
-  "version": "1.0.0",
-  "devDependencies": {
-    "@nomicfoundation/hardhat-chai-matchers": "^1.0.0",
-    "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
-    "@nomicfoundation/hardhat-toolbox": "^2.0.2",
-    "@openzeppelin/contracts": "^4.7.3",
-    "@openzeppelin/hardhat-upgrades": "^1.21.0",
-    "dotenv": "^10.0.0",
-    "eslint": "^8.50.0",
-    "eslint-config-prettier": "^9.0.0",
-    "eslint-plugin-prettier": "^5.0.0",
-    "hardhat": "^2.17.4",
-    "solhint": "^3.3.7"
-  }
+	"name": "dome-protocol",
+	"version": "1.0.0",
+	"scripts": {
+		"deployProtocol:mainnet": "hardhat run scripts/deployDomeProtocol.js --network mainnet",
+		"deployProtocol:goerli": "hardhat run scripts/deployDomeProtocol.js --network goerli",
+		"deployProtocol:polygon": "hardhat run scripts/deployDomeProtocol.js --network polygon",
+		"deployProtocol:mumbai": "hardhat run scripts/deployDomeProtocol.js --network mumbai",
+		"deployProtocol:hardhat": "hardhat run scripts/deployDomeProtocol.js --network hardhat",
+		"test": "hardhat test",
+		"verifyProtocol:mainnet": "hardhat run scripts/verifyDomeProtocol.js --network mainnet",
+		"verifyProtocol:goerli": "hardhat run scripts/verifyDomeProtocol.js --network goerli",
+		"verifyProtocol:polygon": "hardhat run scripts/verifyDomeProtocol.js --network polygon",
+		"verifyProtocol:mumbai": "hardhat run scripts/verifyDomeProtocol.js --network mumbai",
+		"verifyDome:mainnet": "hardhat run scripts/verifyDome.js --network mainnet",
+		"verifyDome:goerli": "hardhat run scripts/verifyDome.js --network goerli",
+		"verifyDome:polygon": "hardhat run scripts/verifyDome.js --network polygon",
+		"verifyDome:mumbai": "hardhat run scripts/verifyDome.js --network mumbai"
+	},
+	"devDependencies": {
+		"@nomicfoundation/hardhat-chai-matchers": "^1.0.0",
+		"@nomicfoundation/hardhat-network-helpers": "^1.0.0",
+		"@nomicfoundation/hardhat-toolbox": "^2.0.2",
+		"@openzeppelin/contracts": "^4.9.3",
+		"@openzeppelin/hardhat-upgrades": "^1.21.0",
+		"dotenv": "^10.0.0",
+		"eslint": "^8.50.0",
+		"eslint-config-prettier": "^9.0.0",
+		"eslint-plugin-prettier": "^5.0.0",
+		"hardhat": "^2.17.4",
+		"solhint": "^3.3.7"
+	}
 }
