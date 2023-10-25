@@ -4,11 +4,18 @@ pragma solidity ^0.8.17;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {DomeInfo, BeneficiaryInfo} from "./DomeCore.sol";
 import {Buffer} from "./Buffer.sol";
+import {RewardToken} from "./RewardToken.sol";
 
 interface IGovernanceFactory {
 	function createGovernance(
 		address token
 	) external returns (address governanceAddress);
+}
+
+interface IWrappedVotingFactory {
+	function createWrapper(
+		address token
+	) external returns (address wrappedVoting);
 }
 
 interface IDomeFactory {
@@ -23,6 +30,17 @@ interface IDomeFactory {
 	) external returns (address);
 }
 
+interface IPriceTracker {
+	function convertToUSDC(
+		address asset,
+		uint256 amount
+	) external view returns (uint256);
+}
+
+interface IRewardToken {
+	function mint(address to, uint256 amount) external;
+}
+
 contract DomeProtocol is Ownable {
 	uint16 public systemOwnerPercentage;
 	uint256 public domeCreationFee;
@@ -33,12 +51,16 @@ contract DomeProtocol is Ownable {
 
 	address public BUFFER;
 	address public GOVERNANCE_FACTORY;
+	address public WRAPPEDVOTING_FACTORY;
 	address public DOME_FACTORY;
+	address public REWARD_TOKEN;
+	address public PRICE_TRACKER;
 	address private _owner;
 
 	error UnpaidFee();
 	error InvalidFeePercent();
 	error TransferFailed();
+	error Unauthorized();
 
 	event DomeCreated(
 		address indexed creator,
@@ -51,6 +73,8 @@ contract DomeProtocol is Ownable {
 		address systemOwner,
 		address _domeFactory,
 		address _governanceFactory,
+		address _wrappedvotingFactory,
+		address _priceTracker,
 		uint16 _systemOwnerPercentage,
 		uint256 _domeCreationFee
 	) {
@@ -64,8 +88,11 @@ contract DomeProtocol is Ownable {
 
 		domeCreationFee = _domeCreationFee;
 
+		PRICE_TRACKER = _priceTracker;
 		BUFFER = address(new Buffer(address(this)));
+		REWARD_TOKEN = address(new RewardToken(address(this)));
 		DOME_FACTORY = _domeFactory;
+		WRAPPEDVOTING_FACTORY = _wrappedvotingFactory;
 		GOVERNANCE_FACTORY = _governanceFactory;
 	}
 
@@ -82,10 +109,15 @@ contract DomeProtocol is Ownable {
 
 	function updateFactories(
 		address _domeFactory,
+		address _wrappedvotingFactory,
 		address _governanceFactory
 	) external onlyOwner {
 		if (_domeFactory != address(0)) {
 			DOME_FACTORY = _domeFactory;
+		}
+
+		if (_wrappedvotingFactory != address(0)) {
+			WRAPPEDVOTING_FACTORY = _wrappedvotingFactory;
 		}
 
 		if (_governanceFactory != address(0)) {
@@ -98,8 +130,8 @@ contract DomeProtocol is Ownable {
 		BeneficiaryInfo[] memory beneficiariesInfo,
 		uint16 _depositorYieldPercent,
 		address _yieldProtocol
-	) external payable payedEnough {
-		address domeAddress = IDomeFactory(DOME_FACTORY).initialize(
+	) external payable payedEnough returns (address domeAddress) {
+		domeAddress = IDomeFactory(DOME_FACTORY).initialize(
 			domeInfo,
 			beneficiariesInfo,
 			owner(),
@@ -109,14 +141,47 @@ contract DomeProtocol is Ownable {
 			_depositorYieldPercent
 		);
 
-		address governanceAddress = IGovernanceFactory(GOVERNANCE_FACTORY)
-			.createGovernance(domeAddress);
+		for (uint8 i; i < beneficiariesInfo.length; i++) {
+			if (beneficiariesInfo[i].wallet == BUFFER) {
+				address wrappedVoting = IWrappedVotingFactory(
+					WRAPPEDVOTING_FACTORY
+				).createWrapper(domeAddress);
+
+				address governanceAddress = IGovernanceFactory(
+					GOVERNANCE_FACTORY
+				).createGovernance(wrappedVoting);
+
+				domeGovernance[domeAddress] = governanceAddress;
+			}
+		}
 
 		domeCreators[domeAddress] = msg.sender;
-		domeGovernance[domeAddress] = governanceAddress;
 		creatorDomes[msg.sender].push(domeAddress);
 
 		emit DomeCreated(msg.sender, domeAddress, _yieldProtocol, domeInfo.CID);
+	}
+
+	function mintRewardTokens(
+		address asset,
+		address to,
+		uint256 amount
+	) external returns (uint256) {
+		if (domeCreators[msg.sender] == address(0)) {
+			revert Unauthorized();
+		}
+
+		uint256 convertedAmount = IPriceTracker(PRICE_TRACKER).convertToUSDC(
+			asset,
+			amount
+		);
+
+		IRewardToken(REWARD_TOKEN).mint(to, convertedAmount);
+
+		return convertedAmount;
+	}
+
+	function changePriceTracker(address _priceTracker) external onlyOwner {
+		PRICE_TRACKER = _priceTracker;
 	}
 
 	function changeSystemOwnerPercentage(uint16 percentage) external onlyOwner {
