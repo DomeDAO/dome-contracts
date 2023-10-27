@@ -201,6 +201,14 @@ With the `DomeProtocol` contract deployed, you can now proceed to deploy the `Do
    - `depositorYieldPercent` (up to 10000, representing 100%)
    - The `Dome` contract owner is the `Dome` deployer. (The `DEPLOY_PRIV_KEY` wallet)
 
+Here is a [ list of ERC4626 protocols ](https://erc4626.info/vaults/) which are fully compatible with dome protocol, you can use them as `yield protocol` for deployment.
+
+![ERC4626 vault list](/assets/erc4626list.png)
+
+After you've decided with the chain and protocol to use, you should copy its contract address and paste it as `yieldProtocol` under deployment script(`scripts/deployDome.js`)
+
+![ERC4626 contract postion](/assets/erc4626contract.png)
+
 After setting the required parameters inside `scripts/deployDome.js` file. we are ready to deploy a `Dome` instance like this:
 
 ```bash
