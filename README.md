@@ -205,9 +205,41 @@ Here is a [ list of ERC4626 protocols ](https://erc4626.info/vaults/) which are 
 
 ![ERC4626 vault list](/assets/erc4626list.png)
 
+You may be wondering what underlying tokens uses the yield protocol.
+There is a technical and reliable way to check this.
+
+Firstly you should click on contract address of that yield located on the right side.
+![ERC4626 contract position](/assets/erc4626contract.png)
+
+It will redirect you to [ etherscan.io ](https://etherscan.io/) (In our case yield protocol is on ethereum, in the case of other evm, it could be [bscscan.com](https://bscscan.com/), [ ftmscan.com ](https://ftmscan.com/), [ polygonscan.com ](https://polygonscan.com/), etc.), where you would be able to interact with the blockchain.
+
+On the explorer page you will see the `Contracts` and `Read Contract` tabs opened.
+![Erc4626 without proxy](/assets/erc4626VaultwithoutProxy.png)
+##
+### Note
+Some yield protocols can be `upgradable`, in that case you should navigate to `Read as Proxy` tab, under `Contract` tab.
+
+![Erc4626 with proxy](/assets/erc4626VaultwithProxy.png)
+
+##
+
 After you've decided with the chain and protocol to use, you should copy its contract address and paste it as `yieldProtocol` under deployment script(`scripts/deployDome.js`)
 
-![ERC4626 contract postion](/assets/erc4626contract.png)
+![ERC4626 contract position](/assets/erc4626contract.png)
+
+After that you should see all available read function on that yield protocol.
+But we are interested only in one of them called `asset`.
+
+![ERC4626 contract asset](/assets/erc4626asset.png)
+
+By simply clicking on that button we can see its value.
+After you've found the address, you can `click` on that `address` and the explorer will redirect you to that token page with its info.
+
+![ERC4626 asset info](/assets/erc4626tokeninfo.png)
+
+In our case the underlying asset of the yield protocol is `ConvexCRV` token, congratulations!
+
+#
 
 After setting the required parameters inside `scripts/deployDome.js` file. we are ready to deploy a `Dome` instance like this:
 
