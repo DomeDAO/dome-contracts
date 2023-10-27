@@ -43,13 +43,14 @@ async function main() {
 	console.log(
 		`- Dome creation fee: ${ethers.utils.formatEther(domeCreationFee)} eth.`
 	);
+	console.log(`- Yield protocol: ${yieldProtocol} %`);
 	console.log(
 		`- Depositor yield percentage: ${depositorYieldPercent / 10000} %`
 	);
 	console.log(`- Dome Owner: ${deployer.address}`);
 
 	await new Promise((resolve) =>
-		rl.question("\nPress any key to proceed ?", (ans) => {
+		rl.question("\nPress any key to proceed...", (ans) => {
 			rl.close();
 			resolve(ans);
 		})
