@@ -40,8 +40,10 @@ describe("Rewards", function () {
 		const domeCreationFee = ethers.utils.parseEther("1");
 		const systemOwnerPercentage = 1000;
 
+		const systemOwner = owner;
+
 		const domeProtocol = await DomeProtocol.deploy(
-			owner.address,
+			systemOwner.address,
 			domeFactory.address,
 			governanceFactory.address,
 			wrappedVotingFactory.address,
@@ -108,6 +110,7 @@ describe("Rewards", function () {
 		);
 
 		return {
+			systemOwner,
 			priceTracker,
 			rewardTokenContract,
 			randomAccount,
@@ -129,6 +132,39 @@ describe("Rewards", function () {
 	}
 
 	describe("Validations", function () {
+		it("Should revert staker to claim reward token if rewards were not enabled", async function () {
+			const { assetContract, domeInstance, otherAccount } =
+				await loadFixture(deployDome);
+
+			const swapAmount = ethers.utils.parseEther("50");
+			const assetsReceived = await sushiSwap(
+				otherAccount,
+				POLYGON.ADDRESSES.WMATIC,
+				assetContract.address,
+				swapAmount
+			);
+
+			await approve(
+				otherAccount,
+				assetContract.address,
+				domeInstance.address,
+				assetsReceived
+			);
+
+			await expect(
+				domeInstance
+					.connect(otherAccount)
+					.deposit(assetsReceived, otherAccount.address)
+			).to.be.fulfilled;
+
+			const ONE_DAY = 60 * 60 * 24;
+			await time.increase(ONE_DAY * 60);
+
+			await expect(
+				domeInstance.connect(otherAccount).claim()
+			).to.be.revertedWithCustomError(domeInstance, "InActive");
+		});
+
 		it("Should allow staker to claim reward token if yield was generated", async function () {
 			const {
 				assetContract,
@@ -138,6 +174,7 @@ describe("Rewards", function () {
 				systemOwnerPercentage,
 				priceTracker,
 				rewardTokenContract,
+				domeCreator,
 			} = await loadFixture(deployDome);
 
 			const swapAmount = ethers.utils.parseEther("50");
@@ -185,6 +222,8 @@ describe("Rewards", function () {
 				assetContract.address,
 				rewardInAssetAmount
 			);
+
+			await domeInstance.connect(domeCreator).unpauseRewards();
 
 			await expect(
 				domeInstance.connect(otherAccount).claim()
@@ -200,6 +239,7 @@ describe("Rewards", function () {
 				systemOwnerPercentage,
 				priceTracker,
 				rewardTokenContract,
+				domeCreator,
 			} = await loadFixture(deployDome);
 
 			const swapAmount = ethers.utils.parseEther("50");
@@ -247,6 +287,8 @@ describe("Rewards", function () {
 				assetContract.address,
 				rewardInAssetAmount
 			);
+
+			await domeInstance.connect(domeCreator).unpauseRewards();
 
 			await expect(
 				domeInstance.connect(otherAccount).claim()
@@ -266,8 +308,10 @@ describe("Rewards", function () {
 				systemOwnerPercentage,
 				priceTracker,
 				rewardTokenContract,
+				domeCreator,
 			} = await loadFixture(deployDome);
 
+			await domeInstance.connect(domeCreator).unpauseRewards();
 			const ONE_DAY = 60 * 60 * 24;
 			{
 				const swapAmount = ethers.utils.parseEther("50");
@@ -410,6 +454,7 @@ describe("Rewards", function () {
 				systemOwnerPercentage,
 				priceTracker,
 				rewardTokenContract,
+				domeCreator,
 			} = await loadFixture(deployDome);
 
 			const swapAmount = ethers.utils.parseEther("50");
@@ -458,6 +503,8 @@ describe("Rewards", function () {
 				rewardInAssetAmount
 			);
 
+			await domeInstance.connect(domeCreator).unpauseRewards();
+
 			await expect(domeInstance.connect(otherAccount).claim())
 				.to.emit(rewardTokenContract, "RewardClaimed")
 				.withArgs(otherAccount.address, rewardAmount);
@@ -465,6 +512,175 @@ describe("Rewards", function () {
 			await expect(domeInstance.connect(otherAccount).claim())
 				.to.emit(rewardTokenContract, "RewardClaimed")
 				.withArgs(otherAccount.address, 0);
+		});
+	});
+
+	describe("Ownership", function () {
+		it("Should revert pausing/unpausing rewards if caller is neither DomeOwner, nor SystemOwner", async function () {
+			const { assetContract, domeInstance, otherAccount, anotherAccount } =
+				await loadFixture(deployDome);
+
+			const swapAmount = ethers.utils.parseEther("50");
+			const assetsReceived = await sushiSwap(
+				otherAccount,
+				POLYGON.ADDRESSES.WMATIC,
+				assetContract.address,
+				swapAmount
+			);
+
+			await approve(
+				otherAccount,
+				assetContract.address,
+				domeInstance.address,
+				assetsReceived
+			);
+
+			await expect(
+				domeInstance
+					.connect(otherAccount)
+					.deposit(assetsReceived, otherAccount.address)
+			).to.be.fulfilled;
+
+			const ONE_DAY = 60 * 60 * 24;
+			await time.increase(ONE_DAY * 60);
+
+			await expect(
+				domeInstance.connect(anotherAccount).unpauseRewards()
+			).to.be.revertedWithCustomError(domeInstance, "Unauthorized");
+		});
+
+		it("Should allow unpausing rewards if caller is DomeOwner", async function () {
+			const { assetContract, domeInstance, otherAccount, domeCreator } =
+				await loadFixture(deployDome);
+
+			const swapAmount = ethers.utils.parseEther("50");
+			const assetsReceived = await sushiSwap(
+				otherAccount,
+				POLYGON.ADDRESSES.WMATIC,
+				assetContract.address,
+				swapAmount
+			);
+
+			await approve(
+				otherAccount,
+				assetContract.address,
+				domeInstance.address,
+				assetsReceived
+			);
+
+			await expect(
+				domeInstance
+					.connect(otherAccount)
+					.deposit(assetsReceived, otherAccount.address)
+			).to.be.fulfilled;
+
+			const ONE_DAY = 60 * 60 * 24;
+			await time.increase(ONE_DAY * 60);
+
+			await expect(domeInstance.connect(domeCreator).unpauseRewards()).to.be
+				.fulfilled;
+		});
+
+		it("Should allow unpausing rewards if caller is SystemOwner", async function () {
+			const { assetContract, domeInstance, otherAccount, systemOwner } =
+				await loadFixture(deployDome);
+
+			const swapAmount = ethers.utils.parseEther("50");
+			const assetsReceived = await sushiSwap(
+				otherAccount,
+				POLYGON.ADDRESSES.WMATIC,
+				assetContract.address,
+				swapAmount
+			);
+
+			await approve(
+				otherAccount,
+				assetContract.address,
+				domeInstance.address,
+				assetsReceived
+			);
+
+			await expect(
+				domeInstance
+					.connect(otherAccount)
+					.deposit(assetsReceived, otherAccount.address)
+			).to.be.fulfilled;
+
+			const ONE_DAY = 60 * 60 * 24;
+			await time.increase(ONE_DAY * 60);
+
+			await expect(domeInstance.connect(systemOwner).unpauseRewards()).to.be
+				.fulfilled;
+		});
+
+		it("Should allow pausing rewards if caller is DomeOwner", async function () {
+			const { assetContract, domeInstance, otherAccount, domeCreator } =
+				await loadFixture(deployDome);
+
+			const swapAmount = ethers.utils.parseEther("50");
+			const assetsReceived = await sushiSwap(
+				otherAccount,
+				POLYGON.ADDRESSES.WMATIC,
+				assetContract.address,
+				swapAmount
+			);
+
+			await approve(
+				otherAccount,
+				assetContract.address,
+				domeInstance.address,
+				assetsReceived
+			);
+
+			await expect(
+				domeInstance
+					.connect(otherAccount)
+					.deposit(assetsReceived, otherAccount.address)
+			).to.be.fulfilled;
+
+			const ONE_DAY = 60 * 60 * 24;
+			await time.increase(ONE_DAY * 60);
+
+			await expect(domeInstance.connect(domeCreator).unpauseRewards()).to.be
+				.fulfilled;
+
+			await expect(domeInstance.connect(domeCreator).pauseRewards()).to.be
+				.fulfilled;
+		});
+
+		it("Should allow pausing rewards if caller is SystemOwner", async function () {
+			const { assetContract, domeInstance, otherAccount, systemOwner } =
+				await loadFixture(deployDome);
+
+			const swapAmount = ethers.utils.parseEther("50");
+			const assetsReceived = await sushiSwap(
+				otherAccount,
+				POLYGON.ADDRESSES.WMATIC,
+				assetContract.address,
+				swapAmount
+			);
+
+			await approve(
+				otherAccount,
+				assetContract.address,
+				domeInstance.address,
+				assetsReceived
+			);
+
+			await expect(
+				domeInstance
+					.connect(otherAccount)
+					.deposit(assetsReceived, otherAccount.address)
+			).to.be.fulfilled;
+
+			const ONE_DAY = 60 * 60 * 24;
+			await time.increase(ONE_DAY * 60);
+
+			await expect(domeInstance.connect(systemOwner).unpauseRewards()).to.be
+				.fulfilled;
+
+			await expect(domeInstance.connect(systemOwner).pauseRewards()).to.be
+				.fulfilled;
 		});
 	});
 });
