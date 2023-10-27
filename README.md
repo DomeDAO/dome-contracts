@@ -80,9 +80,11 @@ If you want to get detailed information about `deployment gas prices`, you will 
 The project includes a comprehensive set of unit tests to ensure the correctness and robustness of the smart contracts. These tests cover the following aspects:
 
 - **DomeProtocol Contract Testing:**
+
   - Validation of contract functionality.
   - Ownership management.
   - Events emission.
+
 - **DomeInstance Contract Testing:**
 
   - Validation of contract functionality.
@@ -95,9 +97,20 @@ The project includes a comprehensive set of unit tests to ensure the correctness
   - Validation of governance mechanisms.
 
 - **Reward Contract Testing:**
+
   - Validation of contract functionality.
 
-In total, there are 79 individual tests.
+- **Burn Testing:**
+
+  - Validation of contract functionality.
+  - Events emission.
+
+- **Donate Testing:**
+
+  - Validation of contract functionality.
+  - Events emission.
+
+In total, there are 102 individual tests.
 
 ### Running Tests
 
