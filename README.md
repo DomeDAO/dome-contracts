@@ -223,10 +223,6 @@ Some yield protocols can be `upgradable`, in that case you should navigate to `R
 
 ##
 
-After you've decided with the chain and protocol to use, you should copy its contract address and paste it as `yieldProtocol` under deployment script(`scripts/deployDome.js`)
-
-![ERC4626 contract position](/assets/erc4626contract.png)
-
 After that you should see all available read function on that yield protocol.
 But we are interested only in one of them called `asset`.
 
@@ -240,6 +236,10 @@ After you've found the address, you can `click` on that `address` and the explor
 In our case the underlying asset of the yield protocol is `ConvexCRV` token, congratulations!
 
 #
+
+After you've decided with the chain and protocol to use, you should copy its contract address and paste it as `yieldProtocol` under deployment script(`scripts/deployDome.js`)
+
+![ERC4626 contract position](/assets/erc4626contract.png)
 
 After setting the required parameters inside `scripts/deployDome.js` file. we are ready to deploy a `Dome` instance like this:
 
