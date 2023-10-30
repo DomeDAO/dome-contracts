@@ -52,8 +52,14 @@ contract Dome is ERC20, IERC4626, DomeBase {
 	uint16 public immutable depositorYieldPercent;
 	uint256 public depositorsYield;
 
+	bool public rewardsPaused = true;
+
+	error InActive();
+
 	event YieldClaimed(address _yieldProtocol, uint256 _amount);
 	event Distribute(address indexed beneficiary, uint256 amount);
+	event Donate(address indexed donor, address indexed token, uint256 amount);
+	event Burn(address indexed donor, uint256 shares);
 
 	constructor(
 		DomeInfo memory domeInfo,
@@ -103,12 +109,28 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		return IDomeProtocol(DOME_PROTOCOL).domeCreators(address(this));
 	}
 
-	function asset() external view returns (address) {
+	function asset() public view returns (address) {
 		return yieldProtocol.asset();
 	}
 
 	function totalShares() public view returns (uint256) {
 		return _getBalance(address(yieldProtocol));
+	}
+
+	function pauseRewards() external {
+		if (msg.sender != domeOwner() && msg.sender != systemOwner) {
+			revert Unauthorized();
+		}
+
+		rewardsPaused = true;
+	}
+
+	function unpauseRewards() external {
+		if (msg.sender != domeOwner() && msg.sender != systemOwner) {
+			revert Unauthorized();
+		}
+
+		rewardsPaused = false;
 	}
 
 	function deposit(
@@ -189,7 +211,7 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		address owner,
 		uint256 assets,
 		uint256 shares
-	) internal {
+	) internal returns (uint256) {
 		if (caller != owner) {
 			_decreaseAllowance(owner, caller, shares);
 		}
@@ -221,6 +243,8 @@ contract Dome is ERC20, IERC4626, DomeBase {
 			updatedAssetAmount + yield,
 			shares
 		);
+
+		return updatedAssetAmount + yield;
 	}
 
 	function _decreaseAllowance(
@@ -275,20 +299,20 @@ contract Dome is ERC20, IERC4626, DomeBase {
 
 	function _distribute(uint256 amount) internal {
 		for (uint256 i; i < beneficiaries.length; i++) {
-			uint256 distributeAmout = (amount * beneficiaries[i].percent) /
+			uint256 distributeAmount = (amount * beneficiaries[i].percent) /
 				10000;
 
 			// If beneficiary is Buffer, we send assets to them
 			IERC20(yieldProtocol.asset()).safeTransfer(
 				beneficiaries[i].wallet,
-				distributeAmout
+				distributeAmount
 			);
 
 			if (beneficiaries[i].wallet == BUFFER()) {
-				IBuffer(BUFFER()).addReserve(distributeAmout);
+				IBuffer(BUFFER()).addReserve(distributeAmount);
 			}
 
-			emit Distribute(beneficiaries[i].wallet, distributeAmout);
+			emit Distribute(beneficiaries[i].wallet, distributeAmount);
 		}
 	}
 
@@ -300,42 +324,6 @@ contract Dome is ERC20, IERC4626, DomeBase {
 
 		_distribute(assets);
 		emit YieldClaimed(address(yieldProtocol), assets);
-	}
-
-	function convertToShares(
-		uint256 assets
-	) external view returns (uint256 shares) {
-		return yieldProtocol.convertToShares(assets);
-	}
-
-	function convertToAssets(
-		uint256 shares
-	) external view returns (uint256 assets) {
-		return yieldProtocol.convertToAssets(shares);
-	}
-
-	function maxDeposit(
-		address receiver
-	) external view returns (uint256 maxAssets) {
-		return yieldProtocol.maxDeposit(receiver);
-	}
-
-	function previewDeposit(
-		uint256 assets
-	) external view returns (uint256 shares) {
-		return yieldProtocol.previewDeposit(assets);
-	}
-
-	function maxMint(
-		address receiver
-	) external view returns (uint256 maxShares) {
-		return yieldProtocol.maxMint(receiver);
-	}
-
-	function previewMint(
-		uint256 shares
-	) external view returns (uint256 assets) {
-		return yieldProtocol.previewMint(shares);
 	}
 
 	function previewWithdraw(
@@ -408,6 +396,10 @@ contract Dome is ERC20, IERC4626, DomeBase {
 	}
 
 	function claim() external returns (uint256) {
+		if (rewardsPaused) {
+			revert InActive();
+		}
+
 		uint256 generatedYield = generatedYieldOf(msg.sender);
 
 		uint256 depositorsYieldPortion = (generatedYield *
@@ -427,6 +419,72 @@ contract Dome is ERC20, IERC4626, DomeBase {
 			);
 	}
 
+	function donate(address token, uint256 amount) external payable {
+		if (token == address(this)) {
+			burn(amount);
+		} else {
+			amount = _pullTokens(token, amount);
+			_donate(token, amount);
+		}
+
+		emit Donate(msg.sender, token, amount);
+	}
+
+	function _donate(address token, uint256 amount) internal {
+		uint256 bufferPercent;
+		for (uint256 i; i < beneficiaries.length; i++) {
+			if (beneficiaries[i].wallet == BUFFER()) {
+				bufferPercent = beneficiaries[i].percent;
+			}
+		}
+
+		uint256 additionalPercent;
+		// Redistribute buffer's percent among other beneficiaries
+		if (token != asset() && bufferPercent > 0) {
+			additionalPercent = bufferPercent / (beneficiaries.length - 1);
+		}
+
+		for (uint256 i; i < beneficiaries.length; i++) {
+			uint256 percent = beneficiaries[i].percent;
+
+			if (additionalPercent > 0) {
+				if (beneficiaries[i].wallet == BUFFER()) {
+					continue;
+				}
+
+				percent += additionalPercent;
+			}
+
+			uint256 distributeAmount = (amount * percent) / 10000;
+			// If beneficiary is Buffer, we send assets to them
+			IERC20(token).safeTransfer(
+				beneficiaries[i].wallet,
+				distributeAmount
+			);
+
+			if (additionalPercent == 0 && beneficiaries[i].wallet == BUFFER()) {
+				IBuffer(BUFFER()).addReserve(distributeAmount);
+			}
+
+			emit Distribute(beneficiaries[i].wallet, distributeAmount);
+		}
+	}
+
+	function burn(uint shares) public {
+		uint256 assets = previewRedeem(shares);
+
+		uint256 amount = _withdraw(
+			msg.sender,
+			address(this),
+			msg.sender,
+			assets,
+			shares
+		);
+
+		_distribute(amount);
+		emit Burn(msg.sender, shares);
+	}
+
 	function _afterTokenTransfer(
 		address from,
 		address to,
@@ -441,5 +499,41 @@ contract Dome is ERC20, IERC4626, DomeBase {
 
 	function _burn(address account, uint256 amount) internal override {
 		super._burn(account, amount);
+	}
+
+	function convertToShares(
+		uint256 assets
+	) external view returns (uint256 shares) {
+		return yieldProtocol.convertToShares(assets);
+	}
+
+	function convertToAssets(
+		uint256 shares
+	) external view returns (uint256 assets) {
+		return yieldProtocol.convertToAssets(shares);
+	}
+
+	function maxDeposit(
+		address receiver
+	) external view returns (uint256 maxAssets) {
+		return yieldProtocol.maxDeposit(receiver);
+	}
+
+	function previewDeposit(
+		uint256 assets
+	) external view returns (uint256 shares) {
+		return yieldProtocol.previewDeposit(assets);
+	}
+
+	function maxMint(
+		address receiver
+	) external view returns (uint256 maxShares) {
+		return yieldProtocol.maxMint(receiver);
+	}
+
+	function previewMint(
+		uint256 shares
+	) external view returns (uint256 assets) {
+		return yieldProtocol.previewMint(shares);
 	}
 }

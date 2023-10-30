@@ -67,7 +67,7 @@ async function main() {
 
 	console.log(`\nDeploying DomeProtocol  with the following parameters:`);
 	console.log(
-		`Dome creation fee: ${ethers.utils.formatEther(domeCreationFee)} eth.`
+		`- Dome creation fee: ${ethers.utils.formatEther(domeCreationFee)} eth.`
 	);
 	console.log(`- SystemOwner: ${systemOwner}`);
 	console.log(`- System owner percentage: ${systemOwnerPercentage / 10000} %`);
@@ -77,7 +77,7 @@ async function main() {
 	console.log(`- PriceTracker: ${priceTracker.address}`);
 
 	await new Promise((resolve) =>
-		rl.question("\nPress any key to proceed ?", (ans) => {
+		rl.question("\nPress any key to proceed...", (ans) => {
 			rl.close();
 			resolve(ans);
 		})
