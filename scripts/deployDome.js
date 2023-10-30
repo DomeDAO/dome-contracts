@@ -2,8 +2,13 @@ require("dotenv").config();
 const { ethers } = require("hardhat");
 const readline = require("readline");
 const { POLYGON } = require("../test/constants");
+const { getDomeEnvVars } = require("../config");
+const { DOME_PROTOCOL_ADDRESS } = getDomeEnvVars();
 
-const { DOME_PROTOCOL_ADDRESS } = process.env;
+const rl = readline.createInterface({
+	input: process.stdin,
+	output: process.stdout,
+});
 
 async function main() {
 	const [deployer] = await ethers.getSigners();
@@ -33,27 +38,34 @@ async function main() {
 	const depositorYieldPercent = 1000;
 
 	console.log(`Deploying Dome with the following parameters:`);
-	console.log(`DomeInfo: ${JSON.stringify(domeInfo)}`);
-	console.log(`BeneficiariesInfo: ${JSON.stringify(beneficiariesInfo)}`);
+	console.log(`- DomeInfo: ${JSON.stringify(domeInfo)}`);
+	console.log(`- BeneficiariesInfo: ${JSON.stringify(beneficiariesInfo)}`);
 	console.log(
-		`Dome creation fee: ${ethers.utils.formatEther(domeCreationFee)} eth.`
+		`- Dome creation fee: ${ethers.utils.formatEther(domeCreationFee)} eth.`
 	);
-	console.log(`Depositor yield percentage: ${depositorYieldPercent / 10000} %`);
-	console.log(`Dome Owner: ${deployer.address}`);
-
-	const rl = readline.createInterface({
-		input: process.stdin,
-		output: process.stdout,
-	});
+	console.log(
+		`- Depositor yield percentage: ${depositorYieldPercent / 10000} %`
+	);
+	console.log(`- Dome Owner: ${deployer.address}`);
 
 	await new Promise((resolve) =>
-		rl.question("\nSubmitting ?", (ans) => {
+		rl.question("\nPress any key to proceed ?", (ans) => {
 			rl.close();
 			resolve(ans);
 		})
 	);
 
-	const tx = await domeProtocol
+	const domeAddress = await domeProtocol
+		.connect(deployer)
+		.callStatic.createDome(
+			domeInfo,
+			beneficiariesInfo,
+			depositorYieldPercent,
+			yieldProtocol,
+			{ value: domeCreationFee }
+		);
+
+	await domeProtocol
 		.connect(deployer)
 		.createDome(
 			domeInfo,
@@ -62,15 +74,8 @@ async function main() {
 			yieldProtocol,
 			{ value: domeCreationFee }
 		);
-	const response = await tx.wait();
 
-	const domeAddress = response.events.find(
-		(event) =>
-			event.topics[0] ===
-			"0xf3e2fa62c1f52d87e22f305ca3b16beeeac792b82453f9c10b4a52e79d03db36"
-	).args.domeAddress;
-
-	console.log(`Dome was successfully deployed at: ${domeAddress}`);
+	console.log(`Dome was deployed at: ${domeAddress}`);
 }
 
 main().catch((error) => {

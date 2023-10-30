@@ -3,12 +3,6 @@ pragma solidity ^0.8.17;
 
 import {DomeInfo, BeneficiaryInfo, Dome} from "./DomeCore.sol";
 
-interface IGovernanceFactory {
-	function createGovernance(
-		address token
-	) external returns (address governanceAddress);
-}
-
 contract DomeFactory {
 	event DomeCreated(
 		address indexed creator,

@@ -1,29 +1,65 @@
 require("dotenv").config();
 const { ethers } = require("hardhat");
 const readline = require("readline");
+const { POLYGON } = require("../test/constants");
+const { getProtocolEnvVars } = require("../config");
 
 const { DOME_CREATION_FEE, SYSTEM_OWNER_PERCENTAGE, SYSTEM_OWNER } =
-	process.env;
+	getProtocolEnvVars();
+
+const rl = readline.createInterface({
+	input: process.stdin,
+	output: process.stdout,
+});
 
 async function main() {
 	const [deployer] = await ethers.getSigners();
 
-	const DomeFactory = await ethers.getContractFactory("DomeFactory");
-	const GovernanceFactory =
-		await ethers.getContractFactory("GovernanceFactory");
-	const DomeProtocol = await ethers.getContractFactory("DomeProtocol");
+	const [
+		DomeFactory,
+		GovernanceFactory,
+		WrappedVotingFactory,
+		PriceTrackerFactory,
+		DomeProtocol,
+	] = await Promise.all([
+		ethers.getContractFactory("DomeFactory"),
+		ethers.getContractFactory("GovernanceFactory"),
+		ethers.getContractFactory("WrappedVotingFactory"),
+		ethers.getContractFactory("PriceTracker"),
+		ethers.getContractFactory("DomeProtocol"),
+	]);
 
-	const domeFactory = await DomeFactory.connect(deployer).deploy();
-	const governanceFactory = await GovernanceFactory.connect(deployer).deploy();
+	const UNISWAP_ROUTER = POLYGON.ADDRESSES.SUSHI_ROUTER02;
+	const USDC = POLYGON.ADDRESSES.USDC;
 
-	await Promise.all([domeFactory.deployed(), governanceFactory.deployed()]);
-
+	console.log("You are going to deploy:\n");
+	console.log("- DomeFactory");
+	console.log("- GovernanceFactory");
+	console.log("- WrappedVotingFactory");
 	console.log(
-		`DomeFactory was successfully deployed at : ${domeFactory.address}`
+		`- PriceTracker with UniswapLike proxy contract at ${UNISWAP_ROUTER}`
 	);
-	console.log(
-		`GovernanceFactory was successfully deployed at : ${governanceFactory.address}`
+
+	await new Promise((resolve) =>
+		rl.question("\nPress any key to proceed...", (ans) => {
+			// rl.close();
+			resolve(ans);
+		})
 	);
+
+	const [domeFactory, governanceFactory, wrappedVotingFactory, priceTracker] =
+		await Promise.all([
+			DomeFactory.deploy(),
+			GovernanceFactory.deploy(),
+			WrappedVotingFactory.deploy(),
+			PriceTrackerFactory.deploy(UNISWAP_ROUTER, USDC),
+		]);
+
+	console.log("\nDeployment addresses: ");
+	console.log(`- DomeFactory: ${domeFactory.address}`);
+	console.log(`- GovernanceFactory: ${governanceFactory.address}`);
+	console.log(`- WrappedVotingFactory: ${wrappedVotingFactory.address}`);
+	console.log(`- PriceTracker: ${priceTracker.address}`);
 
 	const domeCreationFee = DOME_CREATION_FEE;
 	const systemOwnerPercentage = SYSTEM_OWNER_PERCENTAGE;
@@ -33,18 +69,15 @@ async function main() {
 	console.log(
 		`Dome creation fee: ${ethers.utils.formatEther(domeCreationFee)} eth.`
 	);
-	console.log(`SystemOwner: ${systemOwner}`);
-	console.log(`System owner percentage: ${systemOwnerPercentage / 10000} %`);
-	console.log(`GovernanceFactory: ${governanceFactory.address}`);
-	console.log(`DomeFactory: ${domeFactory.address}`);
-
-	const rl = readline.createInterface({
-		input: process.stdin,
-		output: process.stdout,
-	});
+	console.log(`- SystemOwner: ${systemOwner}`);
+	console.log(`- System owner percentage: ${systemOwnerPercentage / 10000} %`);
+	console.log(`- DomeFactory: ${domeFactory.address}`);
+	console.log(`- GovernanceFactory: ${governanceFactory.address}`);
+	console.log(`- WrappedVotingFactory: ${wrappedVotingFactory.address}`);
+	console.log(`- PriceTracker: ${priceTracker.address}`);
 
 	await new Promise((resolve) =>
-		rl.question("\nSubmitting ?", (ans) => {
+		rl.question("\nPress any key to proceed ?", (ans) => {
 			rl.close();
 			resolve(ans);
 		})
@@ -54,16 +87,19 @@ async function main() {
 		systemOwner,
 		domeFactory.address,
 		governanceFactory.address,
+		wrappedVotingFactory.address,
+		priceTracker.address,
 		systemOwnerPercentage,
 		domeCreationFee
 	);
 
 	await domeProtocol.deployed();
 	const bufferAddress = await domeProtocol.callStatic.BUFFER();
+	const rewardTokenAddress = await domeProtocol.REWARD_TOKEN();
 
-	console.log(
-		`DomeProtocol was successfully deployed at ${domeProtocol.address} with BUFFER at ${bufferAddress}`
-	);
+	console.log(`DomeProtocol was deployed at ${domeProtocol.address}`);
+	console.log(`- BUFFER at ${bufferAddress}`);
+	console.log(`- REWARD_TOKEN at ${rewardTokenAddress}`);
 }
 
 main().catch((error) => {
