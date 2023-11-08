@@ -8,7 +8,7 @@ const {
 	DOME_PROTOCOL_ADDRESS,
 } = getProtocolVerifyEnvVars();
 
-getEnvVars("POLYGON_API_KEY");
+getEnvVars(["POLYGON_API_KEY"]);
 
 async function main() {
 	const domeProtocol = await ethers.getContractAt(

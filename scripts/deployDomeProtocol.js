@@ -47,13 +47,22 @@ async function main() {
 		})
 	);
 
-	const [domeFactory, governanceFactory, wrappedVotingFactory, priceTracker] =
-		await Promise.all([
-			DomeFactory.deploy(),
-			GovernanceFactory.deploy(),
-			WrappedVotingFactory.deploy(),
-			PriceTrackerFactory.deploy(UNISWAP_ROUTER, USDC),
-		]);
+	// Deploy contracts sequentially
+	const domeFactory = await DomeFactory.deploy();
+	await domeFactory.deployed();
+	console.log(`- DomeFactory: ${domeFactory.address}`);
+
+	const governanceFactory = await GovernanceFactory.deploy();
+	await governanceFactory.deployed();
+	console.log(`- GovernanceFactory: ${governanceFactory.address}`);
+
+	const wrappedVotingFactory = await WrappedVotingFactory.deploy();
+	await wrappedVotingFactory.deployed();
+	console.log(`- WrappedVotingFactory: ${wrappedVotingFactory.address}`);
+
+	const priceTracker = await PriceTrackerFactory.deploy(UNISWAP_ROUTER, USDC);
+	await priceTracker.deployed();
+	console.log(`- PriceTracker: ${priceTracker.address}`);
 
 	console.log("\nDeployment addresses: ");
 	console.log(`- DomeFactory: ${domeFactory.address}`);

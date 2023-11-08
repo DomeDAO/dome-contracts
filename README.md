@@ -56,6 +56,8 @@ To deploy the protocol, you will need to add the following `environment variable
 `GOERLI_RPC_URL`
 `MUMBAI_RPC_URL`
 
+You can find the RPC URL's on: https://chainlist.org/
+
 To deploy a `dome instance`, you will need to add the deployed `DomeProtocol's` address to your .env file:
 
 `DOME_PROTOCOL_ADDRESS `
@@ -147,7 +149,7 @@ Before deploying the contracts, ensure the following prerequisites are met:
    - `DOME_CREATION_FEE` (in wei)
    - `SYSTEM_OWNER_PERCENTAGE` (up to 2500, representing 25%)
    - `SYSTEM_OWNER`
-   - `DEPLOY_PRIV_KEY`
+   - `DEPLOY_PRIV_KEY` (Exctract it from Metamask or you wallet )
 
 4. Once you're ready to deploy the protocol, you should decide which network to use. We have predefined network entries, which you can use to deploy to a remote network such as `mainnet`, `polygon` or their testnets: `goerli`, `mumbai`. For these networks, the corresponding environment variables should be set: `POLYGON_RPC_URL`, `MAINNET_RPC_URL`,`GOERLI_RPC_URL`, `MUMBAI_RPC_URL`.
 
