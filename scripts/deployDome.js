@@ -34,7 +34,7 @@ async function main() {
 	};
 
 	const beneficiariesInfo = [bufferBeneficiary];
-	const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
+	const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
 	const depositorYieldPercent = 1000;
 
 	console.log(`Deploying Dome with the following parameters:`);

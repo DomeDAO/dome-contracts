@@ -72,7 +72,7 @@ describe("AAVE Yield Protocol", function () {
 
 		const beneficiariesInfo = [randomBeneficiary, bufferBeneficiary];
 
-		const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
+		const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
 		const depositorYieldPercent = 1000;
 
 		const domeAddress = await domeProtocol
