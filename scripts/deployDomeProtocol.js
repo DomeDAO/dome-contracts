@@ -3,6 +3,7 @@ const { ethers } = require("hardhat");
 const readline = require("readline");
 const { POLYGON } = require("../test/constants");
 const { getProtocolEnvVars } = require("../config");
+const { writeDeploy } = require("./utils");
 
 const { DOME_CREATION_FEE, SYSTEM_OWNER_PERCENTAGE, SYSTEM_OWNER } =
 	getProtocolEnvVars();
@@ -32,6 +33,8 @@ async function main() {
 	const UNISWAP_ROUTER = POLYGON.ADDRESSES.SUSHI_ROUTER02;
 	const USDC = POLYGON.ADDRESSES.USDC;
 
+	const priceTrackerConstructorArguments = [UNISWAP_ROUTER, USDC];
+
 	console.log("You are going to deploy:\n");
 	console.log("- DomeFactory");
 	console.log("- GovernanceFactory");
@@ -47,12 +50,16 @@ async function main() {
 		})
 	);
 
+	console.log("Deploying contracts...");
+	let nonce = await deployer.getTransactionCount();
 	const [domeFactory, governanceFactory, wrappedVotingFactory, priceTracker] =
 		await Promise.all([
-			DomeFactory.deploy(),
-			GovernanceFactory.deploy(),
-			WrappedVotingFactory.deploy(),
-			PriceTrackerFactory.deploy(UNISWAP_ROUTER, USDC),
+			DomeFactory.deploy({ nonce: nonce }),
+			GovernanceFactory.deploy({ nonce: ++nonce }),
+			WrappedVotingFactory.deploy({ nonce: ++nonce }),
+			PriceTrackerFactory.deploy(...priceTrackerConstructorArguments, {
+				nonce: ++nonce,
+			}),
 		]);
 
 	console.log("\nDeployment addresses: ");
@@ -83,14 +90,18 @@ async function main() {
 		})
 	);
 
-	const domeProtocol = await DomeProtocol.connect(deployer).deploy(
+	const protocolConstructorArguments = [
 		systemOwner,
 		domeFactory.address,
 		governanceFactory.address,
 		wrappedVotingFactory.address,
 		priceTracker.address,
 		systemOwnerPercentage,
-		domeCreationFee
+		domeCreationFee,
+	];
+
+	const domeProtocol = await DomeProtocol.connect(deployer).deploy(
+		...protocolConstructorArguments
 	);
 
 	await domeProtocol.deployed();
@@ -100,6 +111,32 @@ async function main() {
 	console.log(`DomeProtocol was deployed at ${domeProtocol.address}`);
 	console.log(`- BUFFER at ${bufferAddress}`);
 	console.log(`- REWARD_TOKEN at ${rewardTokenAddress}`);
+
+	const deployment = {
+		DOME_PROTOCOL: {
+			address: domeProtocol.address,
+			constructorArguments: protocolConstructorArguments,
+		},
+		DOME_FACTORY: {
+			address: domeFactory.address,
+			constructorArguments: [],
+		},
+		GOVERNANCE_FACTORY: {
+			address: governanceFactory.address,
+			constructorArguments: [],
+		},
+		WRAPPEDVOTING_FACTORY: {
+			address: wrappedVotingFactory.address,
+			constructorArguments: [],
+		},
+		PRICE_TRACKER: {
+			address: priceTracker.address,
+			constructorArguments: priceTrackerConstructorArguments,
+		},
+	};
+
+	const network = await deployer.provider.getNetwork();
+	writeDeploy(network.name, deployment);
 }
 
 main().catch((error) => {

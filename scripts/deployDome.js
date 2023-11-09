@@ -3,6 +3,7 @@ const { ethers } = require("hardhat");
 const readline = require("readline");
 const { POLYGON } = require("../test/constants");
 const { getDomeEnvVars } = require("../config");
+const { writeDeploy } = require("./utils");
 const { DOME_PROTOCOL_ADDRESS } = getDomeEnvVars();
 
 const rl = readline.createInterface({
@@ -34,7 +35,8 @@ async function main() {
 	};
 
 	const beneficiariesInfo = [bufferBeneficiary];
-	const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
+	// const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
+	const yieldProtocol = "0x22cbbf2898ce3aa7a9c1dd536bf3dfc3ce0f58d1";
 	const depositorYieldPercent = 1000;
 
 	console.log(`Deploying Dome with the following parameters:`);
@@ -43,7 +45,7 @@ async function main() {
 	console.log(
 		`- Dome creation fee: ${ethers.utils.formatEther(domeCreationFee)} eth.`
 	);
-	console.log(`- Yield protocol: ${yieldProtocol} %`);
+	console.log(`- Yield protocol: ${yieldProtocol}`);
 	console.log(
 		`- Depositor yield percentage: ${depositorYieldPercent / 10000} %`
 	);
@@ -56,27 +58,48 @@ async function main() {
 		})
 	);
 
+	const domeCreationArguments = [
+		domeInfo,
+		beneficiariesInfo,
+		depositorYieldPercent,
+		yieldProtocol,
+	];
+
 	const domeAddress = await domeProtocol
 		.connect(deployer)
-		.callStatic.createDome(
-			domeInfo,
-			beneficiariesInfo,
-			depositorYieldPercent,
-			yieldProtocol,
-			{ value: domeCreationFee }
-		);
+		.callStatic.createDome(...domeCreationArguments, {
+			value: domeCreationFee,
+		});
 
 	await domeProtocol
 		.connect(deployer)
-		.createDome(
-			domeInfo,
-			beneficiariesInfo,
-			depositorYieldPercent,
-			yieldProtocol,
-			{ value: domeCreationFee }
-		);
+		.createDome(...domeCreationArguments, { value: domeCreationFee });
 
 	console.log(`Dome was deployed at: ${domeAddress}`);
+
+	const systemOwner = await domeProtocol.callStatic.owner();
+	const systemOwnerPercentage =
+		await domeProtocol.callStatic.systemOwnerPercentage();
+	const domeConstructorArguments = [
+		domeInfo,
+		beneficiariesInfo,
+		yieldProtocol,
+		systemOwner,
+		domeProtocol.address,
+		systemOwnerPercentage,
+		depositorYieldPercent,
+	];
+
+	const deployment = {
+		DOME: {
+			address: domeAddress,
+			constructorArguments: domeConstructorArguments,
+		},
+	};
+
+	const network = await deployer.provider.getNetwork();
+
+	writeDeploy(network.name, deployment);
 }
 
 main().catch((error) => {
