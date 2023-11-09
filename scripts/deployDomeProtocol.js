@@ -83,6 +83,13 @@ async function main() {
 	console.log(`- WrappedVotingFactory: ${wrappedVotingFactory.address}`);
 	console.log(`- PriceTracker: ${priceTracker.address}`);
 
+	await Promise.all([
+		domeFactory.deployed(),
+		governanceFactory.deployed(),
+		wrappedVotingFactory.deployed(),
+		priceTracker.deployed(),
+	]);
+
 	await new Promise((resolve) =>
 		rl.question("\nPress any key to proceed...", (ans) => {
 			rl.close();
