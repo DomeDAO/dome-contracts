@@ -133,6 +133,14 @@ async function main() {
 			address: priceTracker.address,
 			constructorArguments: priceTrackerConstructorArguments,
 		},
+		BUFFER: {
+			address: bufferAddress,
+			constructorArguments: [domeProtocol.address],
+		},
+		REWARD_TOKEN: {
+			address: rewardTokenAddress,
+			constructorArguments: [domeProtocol.address],
+		},
 	};
 
 	const network = await deployer.provider.getNetwork();
