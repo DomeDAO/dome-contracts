@@ -27,15 +27,15 @@ async function main() {
 
 	const dome = await ethers.getContractAt("Dome", DOME_PROTOCOL_ADDRESS);
 
-	const constructorArguments = dome.interface.encodeDeploy(
+	const constructorArguments = [
 		domeInfo,
 		beneficiariesInfo,
 		yieldProtocol,
 		systemOwner,
 		domeProtocolAddress,
 		systemOwnerPercentage,
-		depositorYieldPercent
-	);
+		depositorYieldPercent,
+	];
 
 	await run("verify:verify", {
 		address: dome.address,
