@@ -9,6 +9,8 @@ async function main() {
 		GOVERNANCE_FACTORY,
 		WRAPPEDVOTING_FACTORY,
 		PRICE_TRACKER,
+		BUFFER,
+		REWARD_TOKEN,
 	} = getLatestProtocolDeploy(network.name);
 
 	const domeProtocol = await ethers.getContractAt(
@@ -46,6 +48,16 @@ async function main() {
 	await run("verify:verify", {
 		address: priceTrackerAddress,
 		constructorArguments: PRICE_TRACKER.constructorArguments,
+	});
+
+	await run("verify:verify", {
+		address: BUFFER.address,
+		constructorArguments: BUFFER.constructorArguments,
+	});
+
+	await run("verify:verify", {
+		address: REWARD_TOKEN.address,
+		constructorArguments: REWARD_TOKEN.constructorArguments,
 	});
 }
 
