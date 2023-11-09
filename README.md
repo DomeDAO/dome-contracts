@@ -56,6 +56,8 @@ To deploy the protocol, you will need to add the following `environment variable
 `GOERLI_RPC_URL`
 `MUMBAI_RPC_URL`
 
+You can find the RPC URL's on: https://chainlist.org/
+
 To deploy a `dome instance`, you will need to add the deployed `DomeProtocol's` address to your .env file:
 
 `DOME_PROTOCOL_ADDRESS `
@@ -147,7 +149,7 @@ Before deploying the contracts, ensure the following prerequisites are met:
    - `DOME_CREATION_FEE` (in wei)
    - `SYSTEM_OWNER_PERCENTAGE` (up to 2500, representing 25%)
    - `SYSTEM_OWNER`
-   - `DEPLOY_PRIV_KEY`
+   - `DEPLOY_PRIV_KEY` (Exctract it from Metamask or you wallet )
 
 4. Once you're ready to deploy the protocol, you should decide which network to use. We have predefined network entries, which you can use to deploy to a remote network such as `mainnet`, `polygon` or their testnets: `goerli`, `mumbai`. For these networks, the corresponding environment variables should be set: `POLYGON_RPC_URL`, `MAINNET_RPC_URL`,`GOERLI_RPC_URL`, `MUMBAI_RPC_URL`.
 
@@ -283,6 +285,17 @@ Once you've configured your API keys and deployed your contract, you can use the
 ```
 npm run verifyProtocol:<network>
 ```
+##
+We also support recent deployment verification, which reads deployment metadata and uses that data for verification without any additional configuration:
+
+Using our predefined networks (mainnet, goerli, polygon, mumbai) which are listed in `package.json`
+```
+npm run verifyLatestProtocol:<network> 
+```
+Or for you custom ones listed in `hardhat.config.js`
+```
+npm run verifyLatestProtocol --network <network>
+```
 
 ### Verifying the Dome
 
@@ -300,10 +313,14 @@ To verify the dome instance you should provide additional data inside `scripts/v
 npm run verifyDome:<network>
 ```
 
-### Note
+##
+We also support recent deployment verification, which reads deployment metadata and uses that data for verification without any additional configuration:
 
-To verify contracts on custom network, you should use the following command:
-
+Using our predefined networks (mainnet, goerli, polygon, mumbai) which are listed in `package.json`
 ```
-npx hardhat verify --network mainnet DEPLOYED_CONTRACT_ADDRESS "Constructor argument 1"
+npm run verifyLatestDome:<network> 
+```
+Or for you custom ones listed in `hardhat.config.js`
+```
+npm run  verifyLatestDome --network <network>
 ```
