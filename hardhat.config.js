@@ -72,6 +72,7 @@ module.exports = {
 	},
 	etherscan: {
 		apiKey: {
+			polygonMumbai: POLYGON_API_KEY || "",
 			polygon: POLYGON_API_KEY || "",
 			mainnet: MAINNET_API_KEY || "",
 		},
