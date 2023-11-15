@@ -3,6 +3,7 @@ const { ADDRESSES } = require("../constants/polygon");
 
 const uniV2Interface = new ethers.utils.Interface([
 	"function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)",
+	"function addLiquidityETH(address token, uint amountTokenDesired, uint amountTokenMin, uint amountETHMin, address to, uint deadline) external payable returns (uint amountToken, uint amountETH, uint liquidity)",
 ]);
 
 const erc20Interface = new ethers.utils.Interface([
@@ -29,6 +30,46 @@ const aaveLendingPoolV3Interface = new ethers.utils.Interface([
 	"function repayWithATokens( address asset, uint256 amount, uint256 interestRateMode) external returns (uint256)",
 	"function deposit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external",
 ]);
+
+const mintableInterface = new ethers.utils.Interface([
+	"function mint(address, uint256) external",
+]);
+
+async function mint(token, account, amount) {
+	const calldata = mintableInterface.encodeFunctionData("mint", [
+		account.address,
+		amount,
+	]);
+
+	const tx = await account.sendTransaction({
+		to: token,
+		data: calldata,
+	});
+
+	return tx.wait;
+}
+
+async function addLiquidityETH(account, token, amount, ethAmount) {
+	const calldata = uniV2Interface.encodeFunctionData("addLiquidityETH", [
+		token,
+		amount,
+		ethAmount,
+		0,
+		account.address,
+		Date.now() + 12800,
+	]);
+
+	await approve(account, token, ADDRESSES.SUSHI_ROUTER02, amount);
+
+	const tx = await account.sendTransaction({
+		to: ADDRESSES.SUSHI_ROUTER02,
+		data: calldata,
+		value: ethAmount,
+		gasLimit: 4000000,
+	});
+
+	return tx.wait;
+}
 
 function generateUniV2SwapData(fromToken, toToken, receiver) {
 	return uniV2Interface.encodeFunctionData("swapExactETHForTokens", [
@@ -64,7 +105,8 @@ async function getApproveData(to, amount) {
 async function approve(account, tokenAddress, to, amount) {
 	const data = getApproveData(to, amount);
 
-	return account.sendTransaction({ to: tokenAddress, data });
+	const tx = await account.sendTransaction({ to: tokenAddress, data });
+	return tx.wait;
 }
 
 async function sushiSwap(
@@ -190,4 +232,6 @@ module.exports = {
 	aaveSupply,
 	getAaveRepayData,
 	aaveRepay,
+	addLiquidityETH,
+	mint,
 };
