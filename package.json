@@ -38,6 +38,7 @@
 		"eslint-config-prettier": "^9.0.0",
 		"eslint-plugin-prettier": "^5.0.0",
 		"hardhat": "^2.17.4",
-		"solhint": "^3.3.7"
+		"solhint": "^3.3.7",
+		"solmate": "^6.2.0"
 	}
 }
