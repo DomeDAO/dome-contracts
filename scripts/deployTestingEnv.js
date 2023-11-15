@@ -166,14 +166,13 @@ async function deployDome(deployer, domeProtocol, yieldProtocol) {
 		depositorYieldPercent,
 		yieldProtocol,
 	];
-	console.log(1);
+
 	const domeAddress = await domeProtocol
 		.connect(deployer)
 		.callStatic.createDome(...domeCreationArguments, {
 			value: domeCreationFee,
 		});
 
-	console.log(2);
 	await domeProtocol.connect(deployer).createDome(...domeCreationArguments, {
 		value: domeCreationFee,
 	});
