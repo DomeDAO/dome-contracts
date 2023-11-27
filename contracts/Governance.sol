@@ -40,13 +40,25 @@ contract DomeGovernor is Governor, GovernorVotes {
 	mapping(uint256 => ProposalVote) private _proposalVotes;
 	address public immutable DOME_ADDRESS;
 
+	uint256 private _votingDelay;
+	uint256 private _votingPeriod;
+	uint256 private _proposalThreshold;
+
 	event ReserveTransfered(uint256 amount);
 
 	error Unauthorized();
 	error NoActiveProposals();
 
-	constructor(IVotes _token) Governor("DomeGovernor") GovernorVotes(_token) {
+	constructor(
+		IVotes _token,
+		uint256 votingDelay_,
+		uint256 votingPeriod_,
+		uint256 proposalThreshold_
+	) Governor("DomeGovernor") GovernorVotes(_token) {
 		DOME_ADDRESS = IWrappedVoting(address(token)).DOME_ADDRESS();
+		_votingDelay = votingDelay_;
+		_votingPeriod = votingPeriod_;
+		_proposalThreshold = proposalThreshold_;
 	}
 
 	function COUNTING_MODE()
@@ -57,6 +69,27 @@ contract DomeGovernor is Governor, GovernorVotes {
 		returns (string memory)
 	{
 		return "support=bravo&quorum=for,abstain";
+	}
+
+	/**
+	 * @dev See {IGovernor-votingDelay}.
+	 */
+	function votingDelay() public view override returns (uint256) {
+		return _votingDelay;
+	}
+
+	/**
+	 * @dev See {IGovernor-votingPeriod}.
+	 */
+	function votingPeriod() public view override returns (uint256) {
+		return _votingPeriod;
+	}
+
+	/**
+	 * @dev Part of the Governor Bravo's interface: _"The number of votes required in order for a voter to become a proposer"_.
+	 */
+	function proposalThreshold() public view override returns (uint256) {
+		return _proposalThreshold;
 	}
 
 	/**
@@ -79,9 +112,6 @@ contract DomeGovernor is Governor, GovernorVotes {
 		return proposalVote.forVotes;
 	}
 
-	/**
-	 * @dev See {Governor-_voteSucceeded}. In this module, the forVotes must be strictly over the againstVotes.
-	 */
 	function _voteSucceeded(
 		uint256 proposalId
 	) internal view virtual override returns (bool) {
@@ -145,9 +175,10 @@ contract DomeGovernor is Governor, GovernorVotes {
 			ProposalState currentState = state(_proposalId);
 
 			if (
-				currentState != ProposalState.Canceled &&
-				currentState != ProposalState.Expired &&
-				currentState != ProposalState.Executed
+				currentState == ProposalState.Canceled ||
+				currentState == ProposalState.Defeated ||
+				currentState == ProposalState.Expired ||
+				currentState == ProposalState.Executed
 			) {
 				activeProposalVotes.remove(_proposalId);
 			}
@@ -177,21 +208,14 @@ contract DomeGovernor is Governor, GovernorVotes {
 		address wallet,
 		uint256 amount,
 		bytes memory _calldata,
-		string memory description,
-		uint256 duration
+		string memory description
 	) public returns (uint256) {
-		address domeOwner = IDome(DOME_ADDRESS).domeOwner();
-		if (msg.sender != domeOwner) {
-			revert Unauthorized();
-		}
-
 		uint256 proposalId = super.propose(
 			address(this),
 			wallet,
 			amount,
 			_calldata,
-			description,
-			duration
+			description
 		);
 
 		activeProposalVotes.set(proposalId, 0);
@@ -205,37 +229,14 @@ contract DomeGovernor is Governor, GovernorVotes {
 		bytes memory _calldata,
 		bytes32 descriptionHash
 	) public payable returns (uint256 proposalId) {
-		uint256 _proposalId = hashProposal(
-			address(this),
-			wallet,
-			amount,
-			_calldata,
-			descriptionHash
-		);
-
-		ProposalState currentState = state(_proposalId);
-
-		if (currentState != ProposalState.PreSucceeded) {
-			return
-				super.execute(
-					address(this),
-					wallet,
-					amount,
-					_calldata,
-					descriptionHash
-				);
-		} else {
-			super._execute(
-				_proposalId,
+		return
+			super.execute(
 				address(this),
 				wallet,
 				amount,
 				_calldata,
 				descriptionHash
 			);
-
-			return proposalId;
-		}
 	}
 
 	function cancel(
@@ -281,7 +282,7 @@ contract DomeGovernor is Governor, GovernorVotes {
 		uint256 amount,
 		bytes memory _calldata,
 		bytes32 descriptionHash
-	) internal virtual override {
+	) internal override {
 		_removeInactiveProposals();
 
 		super._afterExecute(
