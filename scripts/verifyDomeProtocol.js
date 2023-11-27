@@ -54,7 +54,7 @@ async function main() {
 		constructorArguments: [],
 	});
 
-	const PRICE_TRACKER_ROUTER = POLYGON.ADDRESSES.SUSHI_ROUTER02;
+	const PRICE_TRACKER_ROUTER = POLYGON.ADDRESSES.SUSHI_ROUTER_02;
 	const PRICE_TRACKER_TOKEN = POLYGON.ADDRESSES.USDC;
 
 	const priceTrackerConstructorArguments = [
