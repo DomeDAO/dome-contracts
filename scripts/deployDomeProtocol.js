@@ -30,7 +30,7 @@ async function main() {
 		ethers.getContractFactory("DomeProtocol"),
 	]);
 
-	const UNISWAP_ROUTER = POLYGON.ADDRESSES.SUSHI_ROUTER02;
+	const UNISWAP_ROUTER = POLYGON.ADDRESSES.SUSHI_ROUTER_02;
 	const USDC = POLYGON.ADDRESSES.USDC;
 
 	const priceTrackerConstructorArguments = [UNISWAP_ROUTER, USDC];

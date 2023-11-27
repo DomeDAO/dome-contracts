@@ -42,7 +42,7 @@ async function deployProtocol(deployer) {
 		ethers.getContractFactory("FakeERC4626"),
 	]);
 
-	const UNISWAP_ROUTER = POLYGON.TESTNET.SUSHI_ROUTER02;
+	const UNISWAP_ROUTER = POLYGON.TESTNET.SUSHI_ROUTER_02;
 	const UNDERLYING_ASSET = POLYGON.TESTNET.USDC;
 
 	let nonce = await deployer.getTransactionCount();
