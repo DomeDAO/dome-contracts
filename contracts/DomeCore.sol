@@ -55,6 +55,7 @@ contract Dome is ERC20, IERC4626, DomeBase {
 	bool public rewardsPaused = true;
 
 	error InActive();
+	error Unauthorized();
 
 	event YieldClaimed(address _yieldProtocol, uint256 _amount);
 	event Distribute(address indexed beneficiary, uint256 amount);
