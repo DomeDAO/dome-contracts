@@ -1,11 +1,18 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
-const { POLYGON } = require("./constants");
+const {
+	POLYGON: { MAINNET },
+} = require("../constants");
 const {
 	loadFixture,
 	time,
 } = require("@nomicfoundation/hardhat-network-helpers");
-const { getBalanceOf, approve, sushiSwap } = require("./utils");
+const {
+	getBalanceOf,
+	approve,
+	swap,
+	convertDurationToBlocks,
+} = require("../utils");
 
 describe("AAVE Yield Protocol", function () {
 	async function deployDomeWithAAVE() {
@@ -25,8 +32,8 @@ describe("AAVE Yield Protocol", function () {
 			ethers.getContractFactory("DomeProtocol"),
 		]);
 
-		const UNISWAP_ROUTER = POLYGON.ADDRESSES.SUSHI_ROUTER02;
-		const USDC = POLYGON.ADDRESSES.USDC;
+		const UNISWAP_ROUTER = MAINNET.ADDRESSES.SUSHI_ROUTER_02;
+		const USDC = MAINNET.ADDRESSES.USDC;
 
 		const [domeFactory, governanceFactory, wrappedVotingFactory, priceTracker] =
 			await Promise.all([
@@ -72,7 +79,13 @@ describe("AAVE Yield Protocol", function () {
 
 		const beneficiariesInfo = [randomBeneficiary, bufferBeneficiary];
 
-		const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
+		const governanceSettings = {
+			votingDelay: convertDurationToBlocks("1 week"),
+			votingPeriod: convertDurationToBlocks("6 month"),
+			proposalThreshold: 1,
+		};
+
+		const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 		const depositorYieldPercent = 1000;
 
 		const domeAddress = await domeProtocol
@@ -80,6 +93,7 @@ describe("AAVE Yield Protocol", function () {
 			.callStatic.createDome(
 				domeInfo,
 				beneficiariesInfo,
+				governanceSettings,
 				depositorYieldPercent,
 				yieldProtocol,
 				{
@@ -92,6 +106,7 @@ describe("AAVE Yield Protocol", function () {
 			.createDome(
 				domeInfo,
 				beneficiariesInfo,
+				governanceSettings,
 				depositorYieldPercent,
 				yieldProtocol,
 				{
@@ -144,9 +159,9 @@ describe("AAVE Yield Protocol", function () {
 				await loadFixture(deployDomeWithAAVE);
 
 			const swapAmount = ethers.utils.parseEther("100");
-			const assetsReceived = await sushiSwap(
+			const assetsReceived = await swap(
 				otherAccount,
-				POLYGON.ADDRESSES.WMATIC,
+				MAINNET.ADDRESSES.WMATIC,
 				assetContract.address,
 				swapAmount
 			);
@@ -193,9 +208,9 @@ describe("AAVE Yield Protocol", function () {
 				await loadFixture(deployDomeWithAAVE);
 
 			const swapAmount = ethers.utils.parseEther("100");
-			const assetsReceived = await sushiSwap(
+			const assetsReceived = await swap(
 				otherAccount,
-				POLYGON.ADDRESSES.WMATIC,
+				MAINNET.ADDRESSES.WMATIC,
 				assetContract.address,
 				swapAmount
 			);
@@ -239,16 +254,16 @@ describe("AAVE Yield Protocol", function () {
 				const swapAmount2 = ethers.utils.parseEther("50");
 
 				await Promise.all([
-					sushiSwap(
+					swap(
 						otherAccount,
-						POLYGON.ADDRESSES.WMATIC,
+						MAINNET.ADDRESSES.WMATIC,
 						assetContract.address,
 						swapAmount1,
 						otherAccount.address
 					),
-					sushiSwap(
+					swap(
 						anotherAccount,
-						POLYGON.ADDRESSES.WMATIC,
+						MAINNET.ADDRESSES.WMATIC,
 						assetContract.address,
 						swapAmount2,
 						anotherAccount.address
@@ -323,16 +338,16 @@ describe("AAVE Yield Protocol", function () {
 				const swapAmount4 = ethers.utils.parseEther("35");
 
 				await Promise.all([
-					sushiSwap(
+					swap(
 						otherAccount,
-						POLYGON.ADDRESSES.WMATIC,
+						MAINNET.ADDRESSES.WMATIC,
 						assetContract.address,
 						swapAmount3,
 						otherAccount.address
 					),
-					sushiSwap(
+					swap(
 						anotherAccount,
-						POLYGON.ADDRESSES.WMATIC,
+						MAINNET.ADDRESSES.WMATIC,
 						assetContract.address,
 						swapAmount4,
 						anotherAccount.address
@@ -390,9 +405,9 @@ describe("AAVE Yield Protocol", function () {
 			} = await loadFixture(deployDomeWithAAVE);
 
 			const swapAmount = ethers.utils.parseEther("100");
-			const assetsReceived = await sushiSwap(
+			const assetsReceived = await swap(
 				otherAccount,
-				POLYGON.ADDRESSES.WMATIC,
+				MAINNET.ADDRESSES.WMATIC,
 				assetContract.address,
 				swapAmount
 			);
@@ -455,9 +470,9 @@ describe("AAVE Yield Protocol", function () {
 			} = await loadFixture(deployDomeWithAAVE);
 
 			const swapAmount = ethers.utils.parseEther("100");
-			const assetsReceived = await sushiSwap(
+			const assetsReceived = await swap(
 				otherAccount,
-				POLYGON.ADDRESSES.WMATIC,
+				MAINNET.ADDRESSES.WMATIC,
 				assetContract.address,
 				swapAmount
 			);
@@ -533,9 +548,9 @@ describe("AAVE Yield Protocol", function () {
 			} = await loadFixture(deployDomeWithAAVE);
 
 			const swapAmount = ethers.utils.parseEther("100");
-			const assetsReceived = await sushiSwap(
+			const assetsReceived = await swap(
 				otherAccount,
-				POLYGON.ADDRESSES.WMATIC,
+				MAINNET.ADDRESSES.WMATIC,
 				assetContract.address,
 				swapAmount
 			);
@@ -611,9 +626,9 @@ describe("AAVE Yield Protocol", function () {
 			} = await loadFixture(deployDomeWithAAVE);
 
 			const swapAmount = ethers.utils.parseEther("100");
-			const assetsReceived = await sushiSwap(
+			const assetsReceived = await swap(
 				otherAccount,
-				POLYGON.ADDRESSES.WMATIC,
+				MAINNET.ADDRESSES.WMATIC,
 				assetContract.address,
 				swapAmount
 			);
@@ -690,9 +705,9 @@ describe("AAVE Yield Protocol", function () {
 			} = await loadFixture(deployDomeWithAAVE);
 
 			const swapAmount = ethers.utils.parseEther("100");
-			const assetsReceived = await sushiSwap(
+			const assetsReceived = await swap(
 				otherAccount,
-				POLYGON.ADDRESSES.WMATIC,
+				MAINNET.ADDRESSES.WMATIC,
 				assetContract.address,
 				swapAmount
 			);
@@ -734,9 +749,9 @@ describe("AAVE Yield Protocol", function () {
 			} = await loadFixture(deployDomeWithAAVE);
 
 			const swapAmount = ethers.utils.parseEther("100");
-			const assetsReceived = await sushiSwap(
+			const assetsReceived = await swap(
 				otherAccount,
-				POLYGON.ADDRESSES.WMATIC,
+				MAINNET.ADDRESSES.WMATIC,
 				assetContract.address,
 				swapAmount
 			);
@@ -780,9 +795,9 @@ describe("AAVE Yield Protocol", function () {
 			} = await loadFixture(deployDomeWithAAVE);
 
 			const swapAmount = ethers.utils.parseEther("100");
-			const assetsReceived = await sushiSwap(
+			const assetsReceived = await swap(
 				otherAccount,
-				POLYGON.ADDRESSES.WMATIC,
+				MAINNET.ADDRESSES.WMATIC,
 				assetContract.address,
 				swapAmount
 			);
