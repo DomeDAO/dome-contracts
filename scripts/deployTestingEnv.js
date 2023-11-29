@@ -25,7 +25,7 @@ async function main() {
 	console.log("\nStarting verification in 20s");
 	await new Promise((r) => setTimeout(r, 20000));
 	console.log("Starting verification...");
-	const network = await ethers.provider.getNetwork();
+	const network = await deployer.provider.getNetwork();
 
 	await verifyDome(network);
 	await verifyProtocol(network);
@@ -265,73 +265,25 @@ async function deployDome(deployer, domeProtocol, yieldProtocol) {
 }
 
 async function verifyDome(network) {
-	const deployment = getLatestDomeDeploy(network);
+	const deployment = getLatestDomeDeploy(network.name);
 
 	for (const key of Object.keys(deployment)) {
 		await run("verify:verify", {
 			address: deployment[key].address,
-			constructorArguments: deployment.constructorArguments,
+			constructorArguments: deployment[key].constructorArguments,
 		});
 	}
 }
 
 async function verifyProtocol(network) {
-	const {
-		DOME_PROTOCOL,
-		DOME_FACTORY,
-		GOVERNANCE_FACTORY,
-		WRAPPEDVOTING_FACTORY,
-		PRICE_TRACKER,
-		BUFFER,
-		REWARD_TOKEN,
-	} = getLatestProtocolDeploy(network.name);
+	const deployment = getLatestProtocolDeploy(network.name);
 
-	const domeProtocol = await ethers.getContractAt(
-		"DomeProtocol",
-		DOME_PROTOCOL.address
-	);
-
-	const domeFactoryAddress = await domeProtocol.callStatic.DOME_FACTORY();
-	const governanceFactoryAddress =
-		await domeProtocol.callStatic.GOVERNANCE_FACTORY();
-	const wrappedVotingFactoryAddress =
-		await domeProtocol.callStatic.WRAPPEDVOTING_FACTORY();
-	const priceTrackerAddress = await domeProtocol.callStatic.PRICE_TRACKER();
-
-	await run("verify:verify", {
-		address: domeProtocol.address,
-		constructorArguments: DOME_PROTOCOL.constructorArguments,
-	});
-
-	await run("verify:verify", {
-		address: domeFactoryAddress,
-		constructorArguments: DOME_FACTORY.constructorArguments,
-	});
-
-	await run("verify:verify", {
-		address: governanceFactoryAddress,
-		constructorArguments: GOVERNANCE_FACTORY.constructorArguments,
-	});
-
-	await run("verify:verify", {
-		address: wrappedVotingFactoryAddress,
-		constructorArguments: WRAPPEDVOTING_FACTORY.constructorArguments,
-	});
-
-	await run("verify:verify", {
-		address: priceTrackerAddress,
-		constructorArguments: PRICE_TRACKER.constructorArguments,
-	});
-
-	await run("verify:verify", {
-		address: BUFFER.address,
-		constructorArguments: BUFFER.constructorArguments,
-	});
-
-	await run("verify:verify", {
-		address: REWARD_TOKEN.address,
-		constructorArguments: REWARD_TOKEN.constructorArguments,
-	});
+	for (const key of Object.keys(deployment)) {
+		await run("verify:verify", {
+			address: deployment[key].address,
+			constructorArguments: deployment[key].constructorArguments,
+		});
+	}
 }
 
 main().catch((error) => {
