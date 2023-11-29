@@ -1,4 +1,5 @@
 # DomeProtocol
+
 ```mermaid
 sequenceDiagram
 autonumber
@@ -11,6 +12,7 @@ autonumber
     P -->>+WrappedVotingFactory: Create Voting Token
     P -->>+GovernanceFactory: Create Governance
 ```
+
 ```mermaid
 sequenceDiagram
     box Purple
@@ -29,13 +31,13 @@ sequenceDiagram
     U->> D: claimYieldAndDistribute
     D->> Beneficiary: transfer beneficiary yield portion
     D->> SystemOwner: transfer system owner portion
-   
-   
+
+
     U->> +D: claim
-    D->> Reward Contract: claim generated reward token 
+    D->> Reward Contract: claim generated reward token
     D->> -U: trasnfers reward token user
-    
-    
+
+
     U->> +D: donate
     Note over U,D: Donates erc20 tokens, transfers to beneficiaries
     U->> +D: burn
@@ -305,6 +307,7 @@ After setting the required parameters inside `scripts/deployDome.js` file. we ar
 ```bash
 npm run deployDome.js -- --network <network>
 ```
+
 Also you can use predefined network deployment scripts:
 
 ```bash
