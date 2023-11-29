@@ -39,7 +39,7 @@ async function main() {
 	const beneficiariesInfo = [bufferBeneficiary];
 
 	// convertDurationToBlocks function understands only predefined time ranges
-	// such as: min, hour, day, week, month
+	// such as: minute, hour, day, week, month
 	// without any time range specified it will be parsed as secs
 	const governanceSettings = {
 		votingDelay: convertDurationToBlocks(process.env.VOTING_DELAY),
