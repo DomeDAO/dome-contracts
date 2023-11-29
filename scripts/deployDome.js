@@ -42,13 +42,13 @@ async function main() {
 	// such as: min, hour, day, week, month
 	// without any time range specified it will be parsed as secs
 	const governanceSettings = {
-		votingDelay: convertDurationToBlocks("1 week"),
-		votingPeriod: convertDurationToBlocks("6 month"),
+		votingDelay: convertDurationToBlocks(process.env.VOTING_DELAY),
+		votingPeriod: convertDurationToBlocks(process.env.VOTING_PERIOD),
 		proposalThreshold: 1,
 	};
 
 	const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
-	const depositorYieldPercent = 1000;
+	const depositorYieldPercent = process.env.DEPOSITOR_YIELD_PERCENTAGE || 0;
 
 	console.log(`Deploying Dome with the following parameters:`);
 	console.log(`- DomeInfo: ${JSON.stringify(domeInfo)}`);
