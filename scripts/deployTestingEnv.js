@@ -3,7 +3,11 @@ const { ethers, run } = require("hardhat");
 const {
 	POLYGON: { MUMBAI },
 } = require("../test/constants");
-const { addLiquidityETH, mint } = require("../test/utils");
+const {
+	addLiquidityETH,
+	mint,
+	convertDurationToBlocks,
+} = require("../test/utils");
 const {
 	writeDeploy,
 	getLatestDomeDeploy,
@@ -133,6 +137,7 @@ async function deployProtocol(deployer) {
 	};
 
 	const network = await deployer.provider.getNetwork();
+
 	writeDeploy(network.name, deployment);
 
 	return {
@@ -160,11 +165,18 @@ async function deployDome(deployer, domeProtocol, yieldProtocol) {
 
 	const beneficiariesInfo = [bufferBeneficiary];
 
+	const governanceSettings = {
+		votingDelay: convertDurationToBlocks("0"),
+		votingPeriod: convertDurationToBlocks("6 month"),
+		proposalThreshold: 1,
+	};
+
 	const depositorYieldPercent = 1000;
 
 	const domeCreationArguments = [
 		domeInfo,
 		beneficiariesInfo,
+		governanceSettings,
 		depositorYieldPercent,
 		yieldProtocol,
 	];
@@ -175,15 +187,19 @@ async function deployDome(deployer, domeProtocol, yieldProtocol) {
 			value: domeCreationFee,
 		});
 
-	await domeProtocol.connect(deployer).createDome(...domeCreationArguments, {
-		value: domeCreationFee,
-	});
+	const tx = await domeProtocol
+		.connect(deployer)
+		.createDome(...domeCreationArguments, {
+			value: domeCreationFee,
+		});
+
+	await tx.wait();
 
 	console.log(`Dome was deployed at: ${domeAddress}`);
 	console.log("YieldProtocol: ", yieldProtocol);
 
 	const dome = await ethers.getContractAt("Dome", domeAddress);
-	const underlyingAsset = await dome.asset();
+	const underlyingAsset = await dome.callStatic.asset();
 	console.log("UnderlyingAsset: ", underlyingAsset);
 
 	const systemOwner = await domeProtocol.callStatic.owner();
@@ -207,6 +223,39 @@ async function deployDome(deployer, domeProtocol, yieldProtocol) {
 		},
 	};
 
+	const governanceAddress =
+		await domeProtocol.callStatic.domeGovernance(domeAddress);
+
+	if (governanceAddress !== ethers.constants.AddressZero) {
+		const governance = await ethers.getContractAt(
+			"DomeGovernor",
+			governanceAddress
+		);
+
+		const wrappedVotingAddress = await governance.callStatic.token();
+		const governanceConstructorArguments = [
+			wrappedVotingAddress,
+			governanceSettings.votingDelay,
+			governanceSettings.votingPeriod,
+			governanceSettings.proposalThreshold,
+		];
+
+		const wrappedConstructorArguments = [domeAddress];
+
+		deployment.GOVERNANCE = {
+			address: governanceAddress,
+			constructorArguments: governanceConstructorArguments,
+		};
+
+		deployment.WRAPPED_VOTING = {
+			address: wrappedVotingAddress,
+			constructorArguments: wrappedConstructorArguments,
+		};
+
+		console.log(`WRappedVoting deployed at: ${wrappedVotingAddress}`);
+		console.log(`Governance deployed at: ${governanceAddress}`);
+	}
+
 	const network = await deployer.provider.getNetwork();
 	writeDeploy(network.name, deployment);
 
@@ -216,14 +265,14 @@ async function deployDome(deployer, domeProtocol, yieldProtocol) {
 }
 
 async function verifyDome(network) {
-	const { DOME } = getLatestDomeDeploy(network.name);
+	const deployment = getLatestDomeDeploy(network);
 
-	const dome = await ethers.getContractAt("Dome", DOME.address);
-
-	await run("verify:verify", {
-		address: dome.address,
-		constructorArguments: DOME.constructorArguments,
-	});
+	for (const key of Object.keys(deployment)) {
+		await run("verify:verify", {
+			address: deployment[key].address,
+			constructorArguments: deployment.constructorArguments,
+		});
+	}
 }
 
 async function verifyProtocol(network) {
