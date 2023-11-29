@@ -1,4 +1,46 @@
 # DomeProtocol
+```mermaid
+sequenceDiagram
+autonumber
+    box Purple
+    participant U as User
+    participant P as DomeProtocol
+    end
+    U->> +P: createDome
+    P ->>+DomeFactory: Create Dome Instance
+    P -->>+WrappedVotingFactory: Create Voting Token
+    P -->>+GovernanceFactory: Create Governance
+```
+```mermaid
+sequenceDiagram
+    box Purple
+    participant U as User
+    participant D as Dome
+    end
+    U->> +D: deposit/mint
+    D->> -U: mint shares transfer underlying to dome
+    U->> +D: withdraw/redeem
+    D->> -U: burn shares trasnfer underlying to user
+    box rgb(33,66,99)
+    participant Beneficiary
+    participant SystemOwner
+    participant Reward Contract
+    end
+    U->> D: claimYieldAndDistribute
+    D->> Beneficiary: transfer beneficiary yield portion
+    D->> SystemOwner: transfer system owner portion
+   
+   
+    U->> +D: claim
+    D->> Reward Contract: claim generated reward token 
+    D->> -U: trasnfers reward token user
+    
+    
+    U->> +D: donate
+    Note over U,D: Donates erc20 tokens, transfers to beneficiaries
+    U->> +D: burn
+    Note over U,D: Burns shares, transfers underlying to beneficiaries
+```
 
 ## Prerequisites
 
@@ -28,19 +70,19 @@ npm install
 
 ## Compiling contracts
 
-To compile the contract run `npx hardhat compile` in your terminal.
+To compile the contract run `npm run build` in your terminal.
 
 ```bash
-npx hardhat compile
+npm run build
 ```
 
 After successful compilation you'll get the output:
 
 ```bash
-Compiled 43 Solidity files successfully
+Compiled 52 Solidity files successfully
 ```
 
-Which indicates that contracts have been successfully compiled and they're ready to be used.
+Which indicates, as you may have guessed, that contracts have been successfully compiled and they're ready to be used.
 
 ## Environment Variables
 
@@ -61,21 +103,18 @@ You can find the RPC URL's on: https://chainlist.org/
 To deploy a `dome instance`, you will need to add the deployed `DomeProtocol's` address to your .env file:
 
 `DOME_PROTOCOL_ADDRESS `
-`DEPLOY_PRIV_KEY`
 
-For further development and running `tests on forks`, you will need to add a development mnemonic to your .env file:
-
-`HARDHAT_DEV_MNEMONIC`
-
-For contract `verification`, you will need to add the api keys for the required networks:
+For contract `verification`, you will need to add the explorer api keys for the required networks:
 
 `POLYGON_API_KEY`
 
 `MAINNET_API_KEY`
 
-If you want to get detailed information about `deployment gas prices`, you will need to add the `Coinmarketcap` api key to your .env file:
+If you want to get detailed information about `deployment/execution gas prices`, you will need to add the `COINMARKETCAP_API` api key to your .env file:
 
-`COINMARKETCAP_API`
+Get one from: https://coinmarketcap.com/api/
+
+![Gas report](/assets/gas-report.png)
 
 ## Running Tests
 
@@ -119,41 +158,31 @@ In total, there are 102 individual tests.
 If you want to run the tests locally or on your own development environment, run the tests using the following command:
 
 ```bash
-npx hardhat test
-```
-
-or using package manager:
-
-```bash
 npm run test
 ```
-
-Keep in mind that when you run `npx hardhat test`, all contracts will be automatically compiled if they've changed.
 
 Don't forget to update [environment variables](#environment-variables) before testing, all tests are done on the polygon mainnet fork, so the `POLYGON_RPC_URL` should be set.
 
 ## Deployment
 
-This section outlines the steps to deploy the `Dome` and `DomeProtocol` contracts. Before deploying, make sure to set the required environment variables and constructor parameters.
+This section outlines the steps to deploy the `Dome` and `DomeProtocol` contracts. Before deploying, make sure to `set the required environment variables` and constructor parameters.
 
 ### Prerequisites
 
 Before deploying the contracts, ensure the following prerequisites are met:
 
-1. `Node.js` and `npm` are installed on your machine.
+1. You have the necessary Ethereum accounts configured for deploying contracts.
 
-2. You have the necessary Ethereum accounts configured for deploying contracts.
-
-3. You have the required environment variables set:
+2. You have the required environment variables set:
 
    - `DOME_CREATION_FEE` (in wei)
    - `SYSTEM_OWNER_PERCENTAGE` (up to 2500, representing 25%)
-   - `SYSTEM_OWNER`
-   - `DEPLOY_PRIV_KEY` (Exctract it from Metamask or you wallet )
+   - `SYSTEM_OWNER` (public wallet address)
+   - `DEPLOY_PRIV_KEY` (Extract it from Metamask or you wallet )
 
-4. Once you're ready to deploy the protocol, you should decide which network to use. We have predefined network entries, which you can use to deploy to a remote network such as `mainnet`, `polygon` or their testnets: `goerli`, `mumbai`. For these networks, the corresponding environment variables should be set: `POLYGON_RPC_URL`, `MAINNET_RPC_URL`,`GOERLI_RPC_URL`, `MUMBAI_RPC_URL`.
+3. Once you're ready to deploy the protocol, you should decide which network to use. We have predefined network entries, which you can use to deploy to a remote network such as `mainnet`, `polygon` or their testnets: `goerli`, `mumbai`. For these networks, the corresponding environment variables should be set: `POLYGON_RPC_URL`, `MAINNET_RPC_URL`,`GOERLI_RPC_URL`, `MUMBAI_RPC_URL`.
 
-If you want to deploy somewhere else, you need to add a new network entry to hardhat.config.js file similarly to the others:
+If you want to deploy somewhere else, you need to add a new network entry to `hardhat.config.js` file similarly to the others:
 
 ```
 <network>: {
@@ -162,7 +191,7 @@ If you want to deploy somewhere else, you need to add a new network entry to har
 }
 ```
 
-And then to tell Hardhat to connect to a specific network, you can use the --network parameter when running any task, like this:
+And then to tell Hardhat to connect to a specific network, you can use the --network parameter when running any hardhat tasks, like this:
 
 ```bash
 npx hardhat run scripts/scriptToRun.js --network <network-name>
@@ -170,13 +199,32 @@ npx hardhat run scripts/scriptToRun.js --network <network-name>
 
 ### Deploying DomeProtocol
 
-1. Start by deploying `DomeProtocol` using the `deployDomeProtocol` script:
+1. Start by deploying `DomeProtocol`:
 
 ```bash
-npx hardhat run scripts/deployDomeProtocol.js --network <network>
+npm run deployProtocol -- --network <network>
 ```
 
-This script will also deploy three additional contracts, `DomeFactory`, `GovernanceFactory`, `WrappedVotingFactory`, `PriceTracker`, `Buffer` and `RewardToken`. You will be prompted to submit the deployment.
+Also you can use predefined network deployment scripts:
+
+```bash
+npm run deployProtocol:mainnet
+npm run deployProtocol:goerli
+npm run deployProtocol:polygon
+npm run deployProtocol:mumbai
+npm run deployProtocol:hardhat
+```
+
+This script will also deploy some additional required contracts:
+
+- `DomeFactory`
+- `GovernanceFactory`
+- `WrappedVotingFactory`
+- `PriceTracker`
+- `Buffer`
+- `RewardToken`.
+
+You will be prompted to submit the deployment of them.
 
 2. After successful deployment, you will get output similar to this one:
 
@@ -190,24 +238,30 @@ The address of the `DomeProtocol` contract should be set as an environment varia
 
 - `DOME_PROTOCOL_ADDRESS`
 
-This is required for further `Dome` deployments using nodejs:
+This is required for further `Dome` deployments:
 
 ### Deploying Dome
 
 With the `DomeProtocol` contract deployed, you can now proceed to deploy the `Dome` contract.
 
 1. Deploy `Dome` with the following required constructor parameters, you should modify them inside `scripts/deployDome.js` file:
-   - `domeInfo` (cid, tokenName, tokenSymbol)
-   - `beneficiariesInfo` (cid, wallet, percent up to 10000, representing 100%)
-   - `yieldProtocol` (default is set to Polygon Mainnet Aave USDC protocol)
-   - `depositorYieldPercent` (up to 10000, representing 100%)
+   - `DomeInfo` (CID, TokenName, TokenSymbol)
+     <img src="assets/dome-info.png" width="400"/>
+   - `BeneficiariesInfo` (CID, wallet address, percent up to 10000, representing 100%)
+     <img src="assets/beneficiary-info.png" width="400"/>
+   - `YieldProtocol` (default is set to Polygon Mainnet Aave USDC protocol)
+     <img src="assets/yield-protocol.png" width="400"/>
+   - `DepositorYieldPercent` (up to 10000, representing 100%)
+     <img src="assets/depositor-yield-percent.png" width="400"/>
+   - `GovernanceSettings` (use only if you have buffer set as beneficiary)
+     <img src="assets/governance-settings.png" width="400"/>
    - The `Dome` contract owner is the `Dome` deployer. (The `DEPLOY_PRIV_KEY` wallet)
 
 Here is a [ list of ERC4626 protocols ](https://erc4626.info/vaults/) which are fully compatible with dome protocol, you can use them as `yield protocol` for deployment.
 
 ![ERC4626 vault list](/assets/erc4626list.png)
 
-You may be wondering what underlying tokens uses the yield protocol.
+You may be wondering what underlying token uses the yield protocol.
 There is a technical and reliable way to check this.
 
 Firstly you should click on contract address of that yield located on the right side.
@@ -217,8 +271,11 @@ It will redirect you to [ etherscan.io ](https://etherscan.io/) (In our case yie
 
 On the explorer page you will see the `Contracts` and `Read Contract` tabs opened.
 ![Erc4626 without proxy](/assets/erc4626VaultwithoutProxy.png)
+
 ##
+
 ### Note
+
 Some yield protocols can be `upgradable`, in that case you should navigate to `Read as Proxy` tab, under `Contract` tab.
 
 ![Erc4626 with proxy](/assets/erc4626VaultwithProxy.png)
@@ -246,7 +303,16 @@ After you've decided with the chain and protocol to use, you should copy its con
 After setting the required parameters inside `scripts/deployDome.js` file. we are ready to deploy a `Dome` instance like this:
 
 ```bash
-npx hardhat run scripts/deployDome.js --network <network>
+npm run deployDome.js -- --network <network>
+```
+Also you can use predefined network deployment scripts:
+
+```bash
+npm run deployDome:mainnet
+npm run deployDome:goerli
+npm run deployDome:polygon
+npm run deployDome:mumbai
+npm run deployDome:hardhat
 ```
 
 After following these steps, both the `Dome` and `DomeProtocol` contracts should be successfully deployed, and you can start interacting with them as needed.
@@ -285,16 +351,21 @@ Once you've configured your API keys and deployed your contract, you can use the
 ```
 npm run verifyProtocol:<network>
 ```
+
 ##
+
 We also support recent deployment verification, which reads deployment metadata and uses that data for verification without any additional configuration:
 
 Using our predefined networks (mainnet, goerli, polygon, mumbai) which are listed in `package.json`
+
 ```
-npm run verifyLatestProtocol:<network> 
+npm run verifyLatestProtocol:<network>
 ```
-Or for you custom ones listed in `hardhat.config.js`
+
+Or for your custom ones listed in `hardhat.config.js`
+
 ```
-npm run verifyLatestProtocol --network <network>
+npm run verifyLatestProtocol -- --network <network>
 ```
 
 ### Verifying the Dome
@@ -314,13 +385,17 @@ npm run verifyDome:<network>
 ```
 
 ##
+
 We also support recent deployment verification, which reads deployment metadata and uses that data for verification without any additional configuration:
 
 Using our predefined networks (mainnet, goerli, polygon, mumbai) which are listed in `package.json`
+
 ```
-npm run verifyLatestDome:<network> 
+npm run verifyLatestDome:<network>
 ```
+
 Or for you custom ones listed in `hardhat.config.js`
+
 ```
-npm run  verifyLatestDome --network <network>
+npm run  verifyLatestDome -- --network <network>
 ```
