@@ -140,7 +140,7 @@ function convertDurationToBlocks(duration, blockTime = 2) {
 	const value = duration.match(/\d+/)[0];
 
 	switch (true) {
-		case duration.includes("min"):
+		case duration.includes("minute"):
 			return Math.floor((value * 60) / blockTime);
 		case duration.includes("hour"):
 			return Math.floor((value * 60 * 60) / blockTime);
