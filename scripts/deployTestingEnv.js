@@ -1,6 +1,8 @@
 require("dotenv").config();
 const { ethers, run } = require("hardhat");
-const { POLYGON } = require("../test/constants");
+const {
+	POLYGON: { MUMBAI },
+} = require("../test/constants");
 const { addLiquidityETH, mint } = require("../test/utils");
 const {
 	writeDeploy,
@@ -42,8 +44,8 @@ async function deployProtocol(deployer) {
 		ethers.getContractFactory("FakeERC4626"),
 	]);
 
-	const UNISWAP_ROUTER = POLYGON.TESTNET.SUSHI_ROUTER_02;
-	const UNDERLYING_ASSET = POLYGON.TESTNET.USDC;
+	const UNISWAP_ROUTER = MUMBAI.ADDRESSES.SUSHI_ROUTER_02;
+	const UNDERLYING_ASSET = MUMBAI.ADDRESSES.USDC;
 
 	let nonce = await deployer.getTransactionCount();
 	const priceTrackerConstructorArguments = [UNISWAP_ROUTER, UNDERLYING_ASSET];
