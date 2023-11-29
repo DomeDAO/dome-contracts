@@ -2,7 +2,6 @@ require("dotenv").config();
 require("@nomicfoundation/hardhat-toolbox");
 
 const {
-	HARDHAT_DEV_MNEMONIC,
 	POLYGON_RPC_URL,
 	POLYGON_API_KEY,
 	COINMARKETCAP_API,
@@ -33,7 +32,6 @@ module.exports = {
 	networks: {
 		hardhat: {
 			accounts: {
-				mnemonic: HARDHAT_DEV_MNEMONIC,
 				count: 10,
 				accountsBalance: "1000000000000000000000000",
 			},
@@ -64,7 +62,7 @@ module.exports = {
 		},
 	},
 	gasReporter: {
-		enabled: false,
+		enabled: true,
 		currency: "USD",
 		token: "ETH",
 		coinmarketcap: COINMARKETCAP_API,
