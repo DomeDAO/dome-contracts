@@ -1,7 +1,9 @@
 require("dotenv").config();
 const { ethers } = require("hardhat");
 const readline = require("readline");
-const { POLYGON } = require("../test/constants");
+const {
+	POLYGON: { MAINNET },
+} = require("../test/constants");
 const { getProtocolEnvVars } = require("../config");
 const { writeDeploy } = require("./utils");
 
@@ -30,8 +32,8 @@ async function main() {
 		ethers.getContractFactory("DomeProtocol"),
 	]);
 
-	const UNISWAP_ROUTER = POLYGON.ADDRESSES.SUSHI_ROUTER_02;
-	const USDC = POLYGON.ADDRESSES.USDC;
+	const UNISWAP_ROUTER = MAINNET.ADDRESSES.SUSHI_ROUTER_02;
+	const USDC = MAINNET.ADDRESSES.USDC;
 
 	const priceTrackerConstructorArguments = [UNISWAP_ROUTER, USDC];
 
@@ -45,7 +47,6 @@ async function main() {
 
 	await new Promise((resolve) =>
 		rl.question("\nPress any key to proceed...", (ans) => {
-			// rl.close();
 			resolve(ans);
 		})
 	);

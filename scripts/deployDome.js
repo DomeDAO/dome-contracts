@@ -4,6 +4,7 @@ const readline = require("readline");
 const { POLYGON } = require("../test/constants");
 const { getDomeEnvVars } = require("../config");
 const { writeDeploy } = require("./utils");
+const { convertDurationToBlocks } = require("../test/utils");
 const { DOME_PROTOCOL_ADDRESS } = getDomeEnvVars();
 
 const rl = readline.createInterface({
@@ -34,9 +35,19 @@ async function main() {
 		percent: 10000,
 	};
 
+	// Percentage of beneficiaries should sum up to 10.000, or the deployment will be failed
 	const beneficiariesInfo = [bufferBeneficiary];
-	// const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
-	const yieldProtocol = "0x22cbbf2898ce3aa7a9c1dd536bf3dfc3ce0f58d1";
+
+	// convertDurationToBlocks function understands only predefined time ranges
+	// such as: min, hour, day, week, month
+	// without any time range specified it will be parsed as secs
+	const governanceSettings = {
+		votingDelay: convertDurationToBlocks("1 week"),
+		votingPeriod: convertDurationToBlocks("6 month"),
+		proposalThreshold: 1,
+	};
+
+	const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 	const depositorYieldPercent = 1000;
 
 	console.log(`Deploying Dome with the following parameters:`);
@@ -50,6 +61,12 @@ async function main() {
 		`- Depositor yield percentage: ${depositorYieldPercent / 10000} %`
 	);
 	console.log(`- Dome Owner: ${deployer.address}`);
+	console.log(`----------Governance----------`);
+	console.log(`- Voting Delay: ${governanceSettings.votingDelay} `);
+	console.log(`- Voting Period: ${governanceSettings.votingPeriod} `);
+	console.log(
+		`- Voting Proposal Threshold: ${governanceSettings.proposalThreshold} `
+	);
 
 	await new Promise((resolve) =>
 		rl.question("\nPress any key to proceed...", (ans) => {
@@ -61,6 +78,7 @@ async function main() {
 	const domeCreationArguments = [
 		domeInfo,
 		beneficiariesInfo,
+		governanceSettings,
 		depositorYieldPercent,
 		yieldProtocol,
 	];
@@ -92,10 +110,41 @@ async function main() {
 
 	const deployment = {
 		DOME: {
+			protocol: domeProtocol.address,
 			address: domeAddress,
 			constructorArguments: domeConstructorArguments,
 		},
 	};
+
+	const governanceAddress =
+		await domeProtocol.callStatic.domeGovernance(domeAddress);
+
+	if (governanceAddress !== ethers.constants.AddressZero) {
+		const governance = await ethers.getContractAt(
+			"DomeGovernor",
+			governanceAddress
+		);
+
+		const wrappedVotingAddress = await governance.callStatic.token();
+		const governanceConstructorArguments = [
+			wrappedVotingAddress,
+			governanceSettings.votingDelay,
+			governanceSettings.votingPeriod,
+			governanceSettings.proposalThreshold,
+		];
+
+		const wrappedConstructorArguments = [domeAddress];
+
+		deployment.GOVERNANCE = {
+			address: governanceAddress,
+			constructorArguments: governanceConstructorArguments,
+		};
+
+		deployment.WRAPPED_VOTING = {
+			address: wrappedVotingAddress,
+			constructorArguments: wrappedConstructorArguments,
+		};
+	}
 
 	const network = await deployer.provider.getNetwork();
 
