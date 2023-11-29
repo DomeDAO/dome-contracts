@@ -16,7 +16,6 @@ abstract contract DomeBase {
 
 	event SystemFeeClaimed(uint256 amount);
 
-	error Unauthorized();
 	error InvalidFeePercent();
 	error TransferFailed();
 
@@ -27,18 +26,6 @@ abstract contract DomeBase {
 		if (_feePercent > 2500) {
 			revert InvalidFeePercent();
 		}
-	}
-
-	function changeSystemFeePercent(uint16 _feePercent) external {
-		if (msg.sender != systemOwner) {
-			revert Unauthorized();
-		}
-
-		if (_feePercent > 2500) {
-			revert InvalidFeePercent();
-		}
-
-		systemFeePercent = _feePercent;
 	}
 
 	/// @notice Returns address token balance

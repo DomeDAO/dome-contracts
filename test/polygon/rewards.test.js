@@ -1,11 +1,13 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
-const { POLYGON } = require("./constants");
+const {
+	POLYGON: { MAINNET },
+} = require("../constants");
 const {
 	loadFixture,
 	time,
 } = require("@nomicfoundation/hardhat-network-helpers");
-const { approve, sushiSwap } = require("./utils");
+const { approve, swap, convertDurationToBlocks } = require("../utils");
 
 describe("Rewards", function () {
 	async function deployDome() {
@@ -26,8 +28,8 @@ describe("Rewards", function () {
 			ethers.getContractFactory("DomeProtocol"),
 		]);
 
-		const UNISWAP_ROUTER = POLYGON.ADDRESSES.SUSHI_ROUTER02;
-		const USDC = POLYGON.ADDRESSES.USDC;
+		const UNISWAP_ROUTER = MAINNET.ADDRESSES.SUSHI_ROUTER_02;
+		const USDC = MAINNET.ADDRESSES.USDC;
 
 		const [domeFactory, governanceFactory, wrappedVotingFactory, priceTracker] =
 			await Promise.all([
@@ -74,7 +76,13 @@ describe("Rewards", function () {
 
 		const beneficiariesInfo = [randomBeneficiary, bufferBeneficiary];
 
-		const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
+		const governanceSettings = {
+			votingDelay: convertDurationToBlocks("1 week"),
+			votingPeriod: convertDurationToBlocks("6 month"),
+			proposalThreshold: 1,
+		};
+
+		const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 		const depositorYieldPercent = 1000;
 
 		const domeAddress = await domeProtocol
@@ -82,6 +90,7 @@ describe("Rewards", function () {
 			.callStatic.createDome(
 				domeInfo,
 				beneficiariesInfo,
+				governanceSettings,
 				depositorYieldPercent,
 				yieldProtocol,
 				{ value: domeCreationFee }
@@ -92,6 +101,7 @@ describe("Rewards", function () {
 			.createDome(
 				domeInfo,
 				beneficiariesInfo,
+				governanceSettings,
 				depositorYieldPercent,
 				yieldProtocol,
 				{ value: domeCreationFee }
@@ -136,10 +146,10 @@ describe("Rewards", function () {
 			const { assetContract, domeInstance, otherAccount } =
 				await loadFixture(deployDome);
 
-			const swapAmount = ethers.utils.parseEther("50");
-			const assetsReceived = await sushiSwap(
+			const swapAmount = ethers.utils.parseEther("20");
+			const assetsReceived = await swap(
 				otherAccount,
-				POLYGON.ADDRESSES.WMATIC,
+				MAINNET.ADDRESSES.WMATIC,
 				assetContract.address,
 				swapAmount
 			);
@@ -177,10 +187,11 @@ describe("Rewards", function () {
 				domeCreator,
 			} = await loadFixture(deployDome);
 
-			const swapAmount = ethers.utils.parseEther("50");
-			const assetsReceived = await sushiSwap(
+			const swapAmount = ethers.utils.parseEther("20");
+
+			const assetsReceived = await swap(
 				otherAccount,
-				POLYGON.ADDRESSES.WMATIC,
+				MAINNET.ADDRESSES.WMATIC,
 				assetContract.address,
 				swapAmount
 			);
@@ -242,10 +253,10 @@ describe("Rewards", function () {
 				domeCreator,
 			} = await loadFixture(deployDome);
 
-			const swapAmount = ethers.utils.parseEther("50");
-			const assetsReceived = await sushiSwap(
+			const swapAmount = ethers.utils.parseEther("20");
+			const assetsReceived = await swap(
 				otherAccount,
-				POLYGON.ADDRESSES.WMATIC,
+				MAINNET.ADDRESSES.WMATIC,
 				assetContract.address,
 				swapAmount
 			);
@@ -266,6 +277,8 @@ describe("Rewards", function () {
 			const ONE_DAY = 60 * 60 * 24;
 			await time.increase(ONE_DAY * 60);
 
+			await domeInstance.connect(domeCreator).unpauseRewards();
+
 			const generatedYield = await domeInstance.callStatic.generatedYieldOf(
 				otherAccount.address
 			);
@@ -283,12 +296,10 @@ describe("Rewards", function () {
 				.sub(systemOwnerPortion)
 				.sub(depositorsYieldPortion);
 
-			const rewardAmount = await priceTracker.convertToUSDC(
+			const rewardAmount = await priceTracker.callStatic.convertToUSDC(
 				assetContract.address,
 				rewardInAssetAmount
 			);
-
-			await domeInstance.connect(domeCreator).unpauseRewards();
 
 			await expect(
 				domeInstance.connect(otherAccount).claim()
@@ -314,10 +325,10 @@ describe("Rewards", function () {
 			await domeInstance.connect(domeCreator).unpauseRewards();
 			const ONE_DAY = 60 * 60 * 24;
 			{
-				const swapAmount = ethers.utils.parseEther("50");
-				const assetsReceived = await sushiSwap(
+				const swapAmount = ethers.utils.parseEther("20");
+				const assetsReceived = await swap(
 					otherAccount,
-					POLYGON.ADDRESSES.WMATIC,
+					MAINNET.ADDRESSES.WMATIC,
 					assetContract.address,
 					swapAmount
 				);
@@ -389,10 +400,10 @@ describe("Rewards", function () {
 				).to.changeTokenBalance(rewardTokenContract, otherAccount, 0);
 			}
 
-			const swapAmount = ethers.utils.parseEther("50");
-			const assetsReceived = await sushiSwap(
+			const swapAmount = ethers.utils.parseEther("20");
+			const assetsReceived = await swap(
 				otherAccount,
-				POLYGON.ADDRESSES.WMATIC,
+				MAINNET.ADDRESSES.WMATIC,
 				assetContract.address,
 				swapAmount
 			);
@@ -457,10 +468,10 @@ describe("Rewards", function () {
 				domeCreator,
 			} = await loadFixture(deployDome);
 
-			const swapAmount = ethers.utils.parseEther("50");
-			const assetsReceived = await sushiSwap(
+			const swapAmount = ethers.utils.parseEther("20");
+			const assetsReceived = await swap(
 				otherAccount,
-				POLYGON.ADDRESSES.WMATIC,
+				MAINNET.ADDRESSES.WMATIC,
 				assetContract.address,
 				swapAmount
 			);
@@ -520,10 +531,10 @@ describe("Rewards", function () {
 			const { assetContract, domeInstance, otherAccount, anotherAccount } =
 				await loadFixture(deployDome);
 
-			const swapAmount = ethers.utils.parseEther("50");
-			const assetsReceived = await sushiSwap(
+			const swapAmount = ethers.utils.parseEther("20");
+			const assetsReceived = await swap(
 				otherAccount,
-				POLYGON.ADDRESSES.WMATIC,
+				MAINNET.ADDRESSES.WMATIC,
 				assetContract.address,
 				swapAmount
 			);
@@ -553,10 +564,10 @@ describe("Rewards", function () {
 			const { assetContract, domeInstance, otherAccount, domeCreator } =
 				await loadFixture(deployDome);
 
-			const swapAmount = ethers.utils.parseEther("50");
-			const assetsReceived = await sushiSwap(
+			const swapAmount = ethers.utils.parseEther("20");
+			const assetsReceived = await swap(
 				otherAccount,
-				POLYGON.ADDRESSES.WMATIC,
+				MAINNET.ADDRESSES.WMATIC,
 				assetContract.address,
 				swapAmount
 			);
@@ -585,10 +596,10 @@ describe("Rewards", function () {
 			const { assetContract, domeInstance, otherAccount, systemOwner } =
 				await loadFixture(deployDome);
 
-			const swapAmount = ethers.utils.parseEther("50");
-			const assetsReceived = await sushiSwap(
+			const swapAmount = ethers.utils.parseEther("20");
+			const assetsReceived = await swap(
 				otherAccount,
-				POLYGON.ADDRESSES.WMATIC,
+				MAINNET.ADDRESSES.WMATIC,
 				assetContract.address,
 				swapAmount
 			);
@@ -617,10 +628,10 @@ describe("Rewards", function () {
 			const { assetContract, domeInstance, otherAccount, domeCreator } =
 				await loadFixture(deployDome);
 
-			const swapAmount = ethers.utils.parseEther("50");
-			const assetsReceived = await sushiSwap(
+			const swapAmount = ethers.utils.parseEther("20");
+			const assetsReceived = await swap(
 				otherAccount,
-				POLYGON.ADDRESSES.WMATIC,
+				MAINNET.ADDRESSES.WMATIC,
 				assetContract.address,
 				swapAmount
 			);
@@ -652,10 +663,10 @@ describe("Rewards", function () {
 			const { assetContract, domeInstance, otherAccount, systemOwner } =
 				await loadFixture(deployDome);
 
-			const swapAmount = ethers.utils.parseEther("50");
-			const assetsReceived = await sushiSwap(
+			const swapAmount = ethers.utils.parseEther("20");
+			const assetsReceived = await swap(
 				otherAccount,
-				POLYGON.ADDRESSES.WMATIC,
+				MAINNET.ADDRESSES.WMATIC,
 				assetContract.address,
 				swapAmount
 			);

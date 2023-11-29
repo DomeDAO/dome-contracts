@@ -3,14 +3,14 @@ const { getLatestDomeDeploy } = require("./utils");
 
 async function main() {
 	const network = await ethers.provider.getNetwork();
-	const { DOME } = getLatestDomeDeploy(network.name);
+	const deployment = getLatestDomeDeploy(network.name);
 
-	const dome = await ethers.getContractAt("Dome", DOME.address);
-
-	await run("verify:verify", {
-		address: dome.address,
-		constructorArguments: DOME.constructorArguments,
-	});
+	for (const key of Object.keys(deployment)) {
+		await run("verify:verify", {
+			address: deployment[key].address,
+			constructorArguments: deployment.constructorArguments,
+		});
+	}
 }
 
 main().catch((error) => {

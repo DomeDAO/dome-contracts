@@ -7,9 +7,19 @@ contract GovernanceFactory {
 	event GovernanceCreated(address token, address governance);
 
 	function createGovernance(
-		address token
+		address token,
+		uint256 votingDelay,
+		uint256 votingPeriod,
+		uint256 proposalThreshold
 	) external returns (address governanceAddress) {
-		governanceAddress = address(new DomeGovernor(IVotes(token)));
+		governanceAddress = address(
+			new DomeGovernor(
+				IVotes(token),
+				votingDelay,
+				votingPeriod,
+				proposalThreshold
+			)
+		);
 
 		emit GovernanceCreated(token, governanceAddress);
 	}

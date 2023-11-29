@@ -1,7 +1,10 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
-const { POLYGON } = require("./constants");
 const { loadFixture } = require("@nomicfoundation/hardhat-network-helpers");
+const { convertDurationToBlocks } = require("../utils");
+const {
+	POLYGON: { MAINNET },
+} = require("../constants");
 
 describe("DomeProtocol", function () {
 	async function deployDomeProtocol() {
@@ -21,8 +24,8 @@ describe("DomeProtocol", function () {
 			ethers.getContractFactory("DomeProtocol"),
 		]);
 
-		const UNISWAP_ROUTER = POLYGON.ADDRESSES.SUSHI_ROUTER02;
-		const USDC = POLYGON.ADDRESSES.USDC;
+		const UNISWAP_ROUTER = MAINNET.ADDRESSES.SUSHI_ROUTER_02;
+		const USDC = MAINNET.ADDRESSES.USDC;
 
 		const [domeFactory, governanceFactory, wrappedVotingFactory, priceTracker] =
 			await Promise.all([
@@ -101,7 +104,14 @@ describe("DomeProtocol", function () {
 			];
 
 			const beneficiariesInfo = [beneficiary];
-			const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
+
+			const governanceSettings = {
+				votingDelay: convertDurationToBlocks("0 min"),
+				votingPeriod: convertDurationToBlocks("6 month"),
+				proposalThreshold: 1,
+			};
+
+			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 			const depositorYieldPercent = 1000;
 
 			await expect(
@@ -110,6 +120,7 @@ describe("DomeProtocol", function () {
 					.createDome(
 						domeInfo,
 						beneficiariesInfo,
+						governanceSettings,
 						depositorYieldPercent,
 						yieldProtocol
 					)
@@ -137,7 +148,14 @@ describe("DomeProtocol", function () {
 			];
 
 			const beneficiariesInfo = [beneficiary];
-			const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
+
+			const governanceSettings = {
+				votingDelay: convertDurationToBlocks("0 min"),
+				votingPeriod: convertDurationToBlocks("6 month"),
+				proposalThreshold: 1,
+			};
+
+			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 			const depositorYieldPercent = 1000;
 
 			await expect(
@@ -146,6 +164,7 @@ describe("DomeProtocol", function () {
 					.createDome(
 						domeInfo,
 						beneficiariesInfo,
+						governanceSettings,
 						depositorYieldPercent,
 						yieldProtocol,
 						{ value: domeCreationFee.div(2) }
@@ -174,7 +193,14 @@ describe("DomeProtocol", function () {
 			];
 
 			const beneficiariesInfo = [beneficiary];
-			const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
+
+			const governanceSettings = {
+				votingDelay: convertDurationToBlocks("0 min"),
+				votingPeriod: convertDurationToBlocks("6 month"),
+				proposalThreshold: 1,
+			};
+
+			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 			const depositorYieldPercent = 1000;
 
 			await expect(
@@ -183,6 +209,7 @@ describe("DomeProtocol", function () {
 					.createDome(
 						domeInfo,
 						beneficiariesInfo,
+						governanceSettings,
 						depositorYieldPercent,
 						yieldProtocol,
 						{ value: domeCreationFee }
@@ -211,7 +238,14 @@ describe("DomeProtocol", function () {
 			];
 
 			const beneficiariesInfo = [beneficiary];
-			const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
+
+			const governanceSettings = {
+				votingDelay: convertDurationToBlocks("0 min"),
+				votingPeriod: convertDurationToBlocks("6 month"),
+				proposalThreshold: 1,
+			};
+
+			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 			const depositorYieldPercent = 1000;
 
 			await expect(
@@ -220,6 +254,7 @@ describe("DomeProtocol", function () {
 					.createDome(
 						domeInfo,
 						beneficiariesInfo,
+						governanceSettings,
 						depositorYieldPercent,
 						yieldProtocol,
 						{ value: domeCreationFee }
@@ -253,7 +288,14 @@ describe("DomeProtocol", function () {
 			];
 
 			const beneficiariesInfo = [beneficiary];
-			const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
+
+			const governanceSettings = {
+				votingDelay: convertDurationToBlocks("0 min"),
+				votingPeriod: convertDurationToBlocks("6 month"),
+				proposalThreshold: 1,
+			};
+
+			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 			const depositorYieldPercent = 1000;
 
 			const domeAddress = await domeProtocol
@@ -261,6 +303,7 @@ describe("DomeProtocol", function () {
 				.callStatic.createDome(
 					domeInfo,
 					beneficiariesInfo,
+					governanceSettings,
 					depositorYieldPercent,
 					yieldProtocol,
 					{ value: domeCreationFee }
@@ -272,6 +315,7 @@ describe("DomeProtocol", function () {
 					.createDome(
 						domeInfo,
 						beneficiariesInfo,
+						governanceSettings,
 						depositorYieldPercent,
 						yieldProtocol,
 						{ value: domeCreationFee }
@@ -309,7 +353,14 @@ describe("DomeProtocol", function () {
 			];
 
 			const beneficiariesInfo = [beneficiary];
-			const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
+
+			const governanceSettings = {
+				votingDelay: convertDurationToBlocks("0 min"),
+				votingPeriod: convertDurationToBlocks("6 month"),
+				proposalThreshold: 1,
+			};
+
+			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 			const depositorYieldPercent = 1000;
 
 			await expect(
@@ -318,6 +369,7 @@ describe("DomeProtocol", function () {
 					.createDome(
 						domeInfo,
 						beneficiariesInfo,
+						governanceSettings,
 						depositorYieldPercent,
 						yieldProtocol,
 						{ value: domeCreationFee }
@@ -353,7 +405,14 @@ describe("DomeProtocol", function () {
 			];
 
 			const beneficiariesInfo = [beneficiary];
-			const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
+
+			const governanceSettings = {
+				votingDelay: convertDurationToBlocks("0 min"),
+				votingPeriod: convertDurationToBlocks("6 month"),
+				proposalThreshold: 1,
+			};
+
+			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 			const depositorYieldPercent = 1000;
 
 			await expect(
@@ -362,6 +421,7 @@ describe("DomeProtocol", function () {
 					.createDome(
 						domeInfo,
 						beneficiariesInfo,
+						governanceSettings,
 						depositorYieldPercent,
 						yieldProtocol,
 						{ value: domeCreationFee }

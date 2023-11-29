@@ -218,7 +218,6 @@ abstract contract Governor is
 
 		bool voteSucceded = _voteSucceeded(proposalId);
 
-
 		if (deadline >= currentTimepoint) {
 			if (voteSucceded) {
 				return ProposalState.PreSucceeded;
@@ -232,6 +231,13 @@ abstract contract Governor is
 		} else {
 			return ProposalState.Defeated;
 		}
+	}
+
+	/**
+	 * @dev Part of the Governor Bravo's interface: _"The number of votes required in order for a voter to become a proposer"_.
+	 */
+	function proposalThreshold() public view virtual returns (uint256) {
+		return 0;
 	}
 
 	/**
@@ -307,8 +313,7 @@ abstract contract Governor is
 		address wallet,
 		uint256 amount,
 		bytes memory _calldata,
-		string memory description,
-		uint256 duration
+		string memory description
 	) internal virtual override returns (uint256) {
 		address proposer = _msgSender();
 		require(
@@ -318,7 +323,7 @@ abstract contract Governor is
 
 		uint256 currentTimepoint = clock();
 		require(
-			getVotes(proposer, currentTimepoint - 1) >= 0,
+			getVotes(proposer, currentTimepoint - 1) >= proposalThreshold(),
 			"Governor: proposer votes below proposal threshold"
 		);
 
@@ -338,13 +343,15 @@ abstract contract Governor is
 			description: description
 		});
 
+		require(target != address(0), "Governor: empty proposal");
+
 		require(
 			_proposals[proposalId].voteStart == 0,
 			"Governor: proposal already exists"
 		);
 
-		uint256 snapshot = currentTimepoint;
-		uint256 deadline = snapshot + duration;
+		uint256 snapshot = currentTimepoint + votingDelay();
+		uint256 deadline = snapshot + votingPeriod();
 
 		_proposals[proposalId] = ProposalCore({
 			proposer: proposer,
@@ -394,7 +401,7 @@ abstract contract Governor is
 
 		ProposalState currentState = state(proposalId);
 		require(
-			currentState == ProposalState.Succeeded,
+			currentState == ProposalState.Succeeded || currentState == ProposalState.PreSucceeded,
 			"Governor: proposal not successful"
 		);
 

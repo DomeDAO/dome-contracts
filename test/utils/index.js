@@ -1,5 +1,5 @@
 const { ethers } = require("hardhat");
-const { ADDRESSES } = require("../constants/polygon");
+const { POLYGON, ETHEREUM } = require("../constants");
 
 const uniV2Interface = new ethers.utils.Interface([
 	"function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)",
@@ -20,20 +20,16 @@ const erc20Interface = new ethers.utils.Interface([
 	"event Approval(address indexed _owner, address indexed _spender, uint256 _value)",
 ]);
 
-const aaveLendingPoolV3Interface = new ethers.utils.Interface([
-	"function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external",
-	"function supplyWithPermit( address asset, uint256 amount, address onBehalfOf, uint16 referralCode, uint256 deadline, uint8 permitV, bytes32 permitR, bytes32 permitS) external",
-	"function withdraw(address asset, uint256 amount, address to) external returns (uint256)",
-	"function borrow( address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf) external",
-	"function repay( address asset, uint256 amount, uint256 interestRateMode, address onBehalfOf) external returns (uint256)",
-	"function repayWithPermit( address asset, uint256 amount, uint256 interestRateMode, address onBehalfOf, uint256 deadline, uint8 permitV, bytes32 permitR, bytes32 permitS) external returns (uint256)",
-	"function repayWithATokens( address asset, uint256 amount, uint256 interestRateMode) external returns (uint256)",
-	"function deposit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external",
-]);
-
 const mintableInterface = new ethers.utils.Interface([
 	"function mint(address, uint256) external",
 ]);
+
+const UNISWAP_LIKE_ROUTER_02 = {
+	1: ETHEREUM.MAINNET.ADDRESSES.UNISWAP_ROUTER_02,
+	5: ETHEREUM.MAINNET.ADDRESSES.UNISWAP_ROUTER_02,
+	137: POLYGON.MAINNET.ADDRESSES.SUSHI_ROUTER_02,
+	80001: POLYGON.MUMBAI.ADDRESSES.SUSHI_ROUTER_02,
+};
 
 async function mint(token, account, amount) {
 	const calldata = mintableInterface.encodeFunctionData("mint", [
@@ -49,20 +45,23 @@ async function mint(token, account, amount) {
 	return tx.wait;
 }
 
-async function addLiquidityETH(account, token, amount, ethAmount) {
+async function addLiquidityETH(signer, token, amount, ethAmount) {
+	const chainId = (await signer.provider.getNetwork()).chainId;
+	const to = UNISWAP_LIKE_ROUTER_02[chainId];
+
 	const calldata = uniV2Interface.encodeFunctionData("addLiquidityETH", [
 		token,
 		amount,
 		ethAmount,
 		0,
-		account.address,
+		signer.address,
 		Date.now() + 12800,
 	]);
 
-	await approve(account, token, ADDRESSES.SUSHI_ROUTER02, amount);
+	await approve(signer, token, to, amount);
 
-	const tx = await account.sendTransaction({
-		to: ADDRESSES.SUSHI_ROUTER02,
+	const tx = await signer.sendTransaction({
+		to,
 		data: calldata,
 		value: ethAmount,
 		gasLimit: 4000000,
@@ -71,16 +70,16 @@ async function addLiquidityETH(account, token, amount, ethAmount) {
 	return tx.wait;
 }
 
-function generateUniV2SwapData(fromToken, toToken, receiver) {
+function generateUniV2SwapData(fromToken, toToken, receiver, signer = null) {
 	return uniV2Interface.encodeFunctionData("swapExactETHForTokens", [
-		0,
+		1,
 		[fromToken, toToken],
 		receiver,
 		Date.now() + 12800,
 	]);
 }
 
-async function getBalanceOf(tokenAddress, address, foramtUnits = 0) {
+async function getBalanceOf(tokenAddress, address, formatUnits = 0) {
 	const response = await ethers.provider.call({
 		to: tokenAddress,
 		data: erc20Interface.encodeFunctionData("balanceOf", [address]),
@@ -91,8 +90,8 @@ async function getBalanceOf(tokenAddress, address, foramtUnits = 0) {
 		response
 	).balance;
 
-	if (foramtUnits) {
-		return ethers.utils.formatUnits(decodedValue, foramtUnits);
+	if (formatUnits) {
+		return ethers.utils.formatUnits(decodedValue, formatUnits);
 	}
 
 	return decodedValue;
@@ -109,129 +108,61 @@ async function approve(account, tokenAddress, to, amount) {
 	return tx.wait;
 }
 
-async function sushiSwap(
-	account,
-	fromToken,
-	toToken,
-	amount,
-	receiver = account.address
-) {
-	const data = generateUniV2SwapData(fromToken, toToken, receiver);
+/**
+ *
+ * @param {import('ethers').Signer} signer
+ * @param {string} src
+ * @param {string} dst
+ * @param {(import('ethers').BigNumber | number)} amount
+ * @param {string} dstReceiver
+ * @returns
+ */
+async function swap(signer, src, dst, amount, dstReceiver = signer.address) {
+	const chainId = (await signer.provider.getNetwork()).chainId;
+	const to = UNISWAP_LIKE_ROUTER_02[chainId];
 
-	await Promise.all([
-		account.call({
-			to: ADDRESSES.SUSHI_ROUTER02,
-			data,
-			value: amount,
-		}),
-		account.sendTransaction({
-			to: ADDRESSES.SUSHI_ROUTER02,
-			data,
-			value: amount,
-		}),
-	]);
+	const data = generateUniV2SwapData(src, dst, dstReceiver, signer);
 
-	const balance = await getBalanceOf(toToken, receiver);
+	const balanceBefore = await getBalanceOf(dst, dstReceiver);
 
-	return balance;
-}
-
-async function getAavev3SupplyData(
-	asset,
-	amount,
-	onBehalfOf,
-	referralCode = 0
-) {
-	return aaveLendingPoolV3Interface.encodeFunctionData("supply", [
-		asset,
-		amount,
-		onBehalfOf,
-		referralCode,
-	]);
-}
-
-async function getAavev3BorrowData(
-	asset,
-	amount,
-	interestRateMode,
-	onBehalfOf,
-	referralCode = 0
-) {
-	return aaveLendingPoolV3Interface.encodeFunctionData("borrow", [
-		asset,
-		amount,
-		interestRateMode,
-		referralCode,
-		onBehalfOf,
-	]);
-}
-
-async function aaveBorrow(
-	account,
-	asset,
-	amount,
-	interestRateMode,
-	onBehalfOf,
-	referralCode = 0
-) {
-	const data = getAavev3BorrowData(
-		asset,
-		amount,
-		interestRateMode,
-		onBehalfOf,
-		referralCode
-	);
-
-	return account.sendTransaction({ to: ADDRESSES.AAVE_LENDING_POOL, data });
-}
-
-async function aaveSupply(
-	account,
-	asset,
-	amount,
-	onBehalfOf,
-	referralCode = 0
-) {
-	const data = getAavev3SupplyData(asset, amount, onBehalfOf, referralCode);
-
-	await approve(account, asset, ADDRESSES.AAVE_LENDING_POOL, amount);
-
-	return account.sendTransaction({ to: ADDRESSES.AAVE_LENDING_POOL, data });
-}
-
-async function getAaveRepayData(asset, amount, interestRateMode, onBehalfOf) {
-	return aaveLendingPoolV3Interface.encodeFunctionData("repay", [
-		asset,
-		amount,
-		interestRateMode,
-		onBehalfOf,
-	]);
-}
-
-async function aaveRepay(account, asset, amount, interestRateMode, onBehalfOf) {
-	const data = getAaveRepayData(asset, amount, interestRateMode, onBehalfOf);
-
-	await approve(account, asset, ADDRESSES.AAVE_LENDING_POOL, amount);
-
-	return account.sendTransaction({
-		to: ADDRESSES.AAVE_LENDING_POOL,
+	await signer.sendTransaction({
+		to,
 		data,
-		gasLimit: 700000,
+		value: amount,
 	});
+
+	const balanceAfter = await getBalanceOf(dst, dstReceiver);
+
+	return balanceAfter.sub(balanceBefore);
+}
+
+function convertDurationToBlocks(duration, blockTime = 12) {
+	const value = duration.match(/\d+/)[0];
+
+	switch (true) {
+		case duration.includes("min"):
+			return Math.floor((value * 60) / blockTime);
+		case duration.includes("hour"):
+			return Math.floor((value * 60 * 60) / blockTime);
+		case duration.includes("day"):
+			return Math.floor((value * 60 * 60 * 24) / blockTime);
+		case duration.includes("week"):
+			return Math.floor((value * 60 * 60 * 24 * 7) / blockTime);
+		case duration.includes("month"):
+			return Math.floor((value * 60 * 60 * 24 * 30) / blockTime);
+		default: {
+			return Math.floor(value / blockTime);
+		}
+	}
 }
 
 module.exports = {
+	convertDurationToBlocks,
 	generateUniV2SwapData,
 	getBalanceOf,
 	approve,
 	getApproveData,
-	sushiSwap,
-	getAavev3SupplyData,
-	getAavev3BorrowData,
-	aaveBorrow,
-	aaveSupply,
-	getAaveRepayData,
-	aaveRepay,
+	swap,
 	addLiquidityETH,
 	mint,
 };

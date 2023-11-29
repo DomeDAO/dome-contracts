@@ -6,9 +6,18 @@ import {DomeInfo, BeneficiaryInfo} from "./DomeCore.sol";
 import {Buffer} from "./Buffer.sol";
 import {RewardToken} from "./RewardToken.sol";
 
+struct GovernanceSettings {
+	uint256 votingDelay; /* in blocks */
+	uint256 votingPeriod; /* in blocks */
+	uint256 proposalThreshold; /* in blocks */
+}
+
 interface IGovernanceFactory {
 	function createGovernance(
-		address token
+		address token,
+		uint256 votingDelay,
+		uint256 votingPeriod,
+		uint256 proposalThreshold
 	) external returns (address governanceAddress);
 }
 
@@ -128,6 +137,7 @@ contract DomeProtocol is Ownable {
 	function createDome(
 		DomeInfo memory domeInfo,
 		BeneficiaryInfo[] memory beneficiariesInfo,
+		GovernanceSettings memory governanceSettings,
 		uint16 _depositorYieldPercent,
 		address _yieldProtocol
 	) external payable payedEnough returns (address domeAddress) {
@@ -149,7 +159,12 @@ contract DomeProtocol is Ownable {
 
 				address governanceAddress = IGovernanceFactory(
 					GOVERNANCE_FACTORY
-				).createGovernance(wrappedVoting);
+				).createGovernance(
+						wrappedVoting,
+						governanceSettings.votingDelay,
+						governanceSettings.votingPeriod,
+						governanceSettings.proposalThreshold
+					);
 
 				domeGovernance[domeAddress] = governanceAddress;
 			}
