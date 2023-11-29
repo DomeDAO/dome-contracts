@@ -136,7 +136,7 @@ async function swap(signer, src, dst, amount, dstReceiver = signer.address) {
 	return balanceAfter.sub(balanceBefore);
 }
 
-function convertDurationToBlocks(duration, blockTime = 12) {
+function convertDurationToBlocks(duration, blockTime = 2) {
 	const value = duration.match(/\d+/)[0];
 
 	switch (true) {
