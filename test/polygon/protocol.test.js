@@ -111,7 +111,7 @@ describe("DomeProtocol", function () {
 				proposalThreshold: 1,
 			};
 
-			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
+			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 			const depositorYieldPercent = 1000;
 
 			await expect(
@@ -155,7 +155,7 @@ describe("DomeProtocol", function () {
 				proposalThreshold: 1,
 			};
 
-			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
+			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 			const depositorYieldPercent = 1000;
 
 			await expect(
@@ -200,7 +200,7 @@ describe("DomeProtocol", function () {
 				proposalThreshold: 1,
 			};
 
-			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
+			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 			const depositorYieldPercent = 1000;
 
 			await expect(
@@ -245,7 +245,7 @@ describe("DomeProtocol", function () {
 				proposalThreshold: 1,
 			};
 
-			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
+			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 			const depositorYieldPercent = 1000;
 
 			await expect(
@@ -295,7 +295,7 @@ describe("DomeProtocol", function () {
 				proposalThreshold: 1,
 			};
 
-			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
+			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 			const depositorYieldPercent = 1000;
 
 			const domeAddress = await domeProtocol
@@ -360,7 +360,7 @@ describe("DomeProtocol", function () {
 				proposalThreshold: 1,
 			};
 
-			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
+			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 			const depositorYieldPercent = 1000;
 
 			await expect(
@@ -412,7 +412,7 @@ describe("DomeProtocol", function () {
 				proposalThreshold: 1,
 			};
 
-			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC2;
+			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 			const depositorYieldPercent = 1000;
 
 			await expect(
