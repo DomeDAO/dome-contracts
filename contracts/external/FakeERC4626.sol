@@ -179,7 +179,7 @@ contract FakeERC4626 is ERC20 {
 		return balanceOf[owner];
 	}
 
-	function beforeWithdraw(uint256 assets, uint256 shares) internal virtual {
+	function beforeWithdraw(uint256 assets, uint256) internal virtual {
 		if (assets > asset.balanceOf(address(this))) {
 			IMintable(address(asset)).mint(address(this), assets);
 		}
