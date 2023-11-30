@@ -7,7 +7,6 @@ import {IERC1155Receiver} from "@openzeppelin/contracts/token/ERC1155/IERC1155Re
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {IERC165, ERC165} from "@openzeppelin/contracts/utils/introspection/ERC165.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import {DoubleEndedQueue} from "@openzeppelin/contracts/utils/structs/DoubleEndedQueue.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -32,8 +31,6 @@ abstract contract Governor is
 	IERC721Receiver,
 	IERC1155Receiver
 {
-	using DoubleEndedQueue for DoubleEndedQueue.Bytes32Deque;
-
 	bytes32 public constant BALLOT_TYPEHASH =
 		keccak256("Ballot(uint256 proposalId,uint8 support)");
 	bytes32 public constant EXTENDED_BALLOT_TYPEHASH =
@@ -61,12 +58,6 @@ abstract contract Governor is
 	/// @custom:oz-retyped-from mapping(uint256 => Governor.ProposalCore)
 	mapping(uint256 => ProposalCore) private _proposals;
 
-	// This queue keeps track of the governor operating on itself. Calls to functions protected by the
-	// {onlyGovernance} modifier needs to be whitelisted in this queue. Whitelisting is set in {_beforeExecute},
-	// consumed by the {onlyGovernance} modifier and eventually reset in {_afterExecute}. This ensures that the
-	// execution of {onlyGovernance} protected calls can only be achieved through successful proposals.
-	DoubleEndedQueue.Bytes32Deque private _governanceCall;
-
 	/**
 	 * @dev Restricts a function so it can only be executed through governance proposals. For example, governance
 	 * parameter setters in {GovernorSettings} are protected using this modifier.
@@ -79,10 +70,8 @@ abstract contract Governor is
 	 */
 
 	struct ProposalDetails {
-		address target;
 		address wallet;
 		uint256 amount;
-		bytes _calldata;
 		string description;
 	}
 
@@ -92,11 +81,6 @@ abstract contract Governor is
 
 	modifier onlyGovernance() {
 		require(_msgSender() == _executor(), "Governor: onlyGovernance");
-		if (_executor() != address(this)) {
-			bytes32 msgDataHash = keccak256(_msgData());
-			// loop until popping the expected operation - throw if deque is empty (operation not authorized)
-			while (_governanceCall.popFront() != msgDataHash) {}
-		}
 		_;
 	}
 
@@ -124,24 +108,16 @@ abstract contract Governor is
 		view
 		virtual
 		returns (
-			address, // target
 			address, // wallet
 			uint256, // amount
-			bytes memory, // calldata
 			string memory
 		)
 	{
 		ProposalDetails memory details = _proposalDetails[proposalId];
-		if (details.target == address(0)) {
+		if (details.amount == 0) {
 			revert ProposalNotFound(proposalId);
 		}
-		return (
-			details.target,
-			details.wallet,
-			details.amount,
-			details._calldata,
-			details.description
-		);
+		return (details.wallet, details.amount, details.description);
 	}
 
 	/**
@@ -165,25 +141,11 @@ abstract contract Governor is
 	 * governor) the proposer will have to change the description in order to avoid proposal id conflicts.
 	 */
 	function hashProposal(
-		address target,
 		address wallet,
 		uint256 amount,
-		bytes memory _calldata,
 		bytes32 descriptionHash
 	) public pure virtual override returns (uint256) {
-		return
-			uint256(
-				keccak256(
-					abi.encode(
-						target,
-						wallet,
-						amount,
-						_calldata,
-						descriptionHash
-					)
-					// abi.encode(targets, values, calldatas, descriptionHash)
-				)
-			);
+		return uint256(keccak256(abi.encode(wallet, amount, descriptionHash)));
 	}
 
 	/**
@@ -309,12 +271,10 @@ abstract contract Governor is
 	 * @dev See {IGovernor-propose}. This function has opt-in frontrunning protection, described in {_isValidDescriptionForProposer}.
 	 */
 	function propose(
-		address target,
 		address wallet,
 		uint256 amount,
-		bytes memory _calldata,
 		string memory description
-	) internal virtual override returns (uint256) {
+	) public virtual override returns (uint256) {
 		address proposer = _msgSender();
 		require(
 			_isValidDescriptionForProposer(proposer, description),
@@ -328,22 +288,16 @@ abstract contract Governor is
 		);
 
 		uint256 proposalId = hashProposal(
-			target,
 			wallet,
 			amount,
-			_calldata,
 			keccak256(bytes(description))
 		);
 
 		_proposalDetails[proposalId] = ProposalDetails({
-			target: target,
 			wallet: wallet,
 			amount: amount,
-			_calldata: _calldata,
 			description: description
 		});
-
-		require(target != address(0), "Governor: empty proposal");
 
 		require(
 			_proposals[proposalId].voteStart == 0,
@@ -369,10 +323,8 @@ abstract contract Governor is
 		emit ProposalCreated(
 			proposalId,
 			proposer,
-			__proposalDetails.target,
 			__proposalDetails.wallet,
 			__proposalDetails.amount,
-			__proposalDetails._calldata,
 			_proposalCore.voteStart,
 			_proposalCore.voteEnd,
 			__proposalDetails.description
@@ -385,52 +337,26 @@ abstract contract Governor is
 	 * @dev See {IGovernor-execute}.
 	 */
 	function execute(
-		address target,
-		address wallet,
-		uint256 amount,
-		bytes memory _calldata,
-		bytes32 descriptionHash
-	) internal virtual override returns (uint256) {
-		uint256 proposalId = hashProposal(
-			target,
-			wallet,
-			amount,
-			_calldata,
-			descriptionHash
-		);
+		uint256 proposalId
+	) public virtual override returns (uint256) {
+		ProposalDetails memory __proposalDetails = _proposalDetails[proposalId];
 
 		ProposalState currentState = state(proposalId);
 		require(
-			currentState == ProposalState.Succeeded || currentState == ProposalState.PreSucceeded,
+			currentState == ProposalState.Succeeded ||
+				currentState == ProposalState.PreSucceeded,
 			"Governor: proposal not successful"
 		);
 
 		emit ProposalExecuted(proposalId);
 
-		_beforeExecute(
-			proposalId,
-			target,
-			wallet,
-			amount,
-			_calldata,
-			descriptionHash
-		);
+		_beforeExecute(proposalId);
 		_execute(
 			proposalId,
-			target,
-			wallet,
-			amount,
-			_calldata,
-			descriptionHash
+			__proposalDetails.wallet,
+			__proposalDetails.amount
 		);
-		_afterExecute(
-			proposalId,
-			target,
-			wallet,
-			amount,
-			_calldata,
-			descriptionHash
-		);
+		_afterExecute(proposalId);
 
 		return proposalId;
 	}
@@ -439,81 +365,41 @@ abstract contract Governor is
 	 * @dev See {IGovernor-cancel}.
 	 */
 	function cancel(
-		address target,
-		address wallet,
-		uint256 amount,
-		bytes memory _calldata,
-		bytes32 descriptionHash
-	) internal virtual override returns (uint256) {
-		uint256 proposalId = hashProposal(
-			target,
-			wallet,
-			amount,
-			_calldata,
-			descriptionHash
-		);
-
+		uint256 proposalId
+	) public virtual override returns (uint256) {
 		require(
 			_msgSender() == _proposals[proposalId].proposer,
 			"Governor: only proposer can cancel"
 		);
-		return _cancel(target, wallet, amount, _calldata, descriptionHash);
+		return _cancel(proposalId);
 	}
+
+	function _reserveTransfer(
+		address wallet,
+		uint256 amount
+	) internal virtual {}
 
 	/**
 	 * @dev Internal execution mechanism. Can be overridden to implement different execution mechanism
 	 */
 	function _execute(
 		uint256 proposalId /* proposalId */,
-		address target,
-		address,
-		uint256,
-		bytes memory _calldata,
-		bytes32 /*descriptionHash*/
+		address wallet,
+		uint256 amount
 	) internal virtual {
 		_proposals[proposalId].executed = true;
-		string memory errorMessage = "Governor: call reverted without message";
-		(bool success, bytes memory returndata) = target.call{value: 0}(
-			_calldata
-		);
-		Address.verifyCallResult(success, returndata, errorMessage);
+		_reserveTransfer(wallet, amount);
 	}
 
 	/**
 	 * @dev Hook before execution is triggered.
 	 */
-	function _beforeExecute(
-		uint256 /* proposalId */,
-		address target,
-		address,
-		uint256,
-		bytes memory _calldata,
-		bytes32 /*descriptionHash*/
-	) internal virtual {
-		if (_executor() != address(this)) {
-			if (target == address(this)) {
-				_governanceCall.pushBack(keccak256(_calldata));
-			}
-		}
-	}
+	function _beforeExecute(uint256 /* proposalId */) internal virtual {}
 
 	/**
 	 * @dev Hook after execution is triggered.
 	 */
-	function _afterExecute(
-		uint256 /* proposalId */,
-		address,
-		address,
-		uint256,
-		bytes memory,
-		bytes32 /*descriptionHash*/
-	) internal virtual {
-		if (_executor() != address(this)) {
-			if (!_governanceCall.empty()) {
-				_governanceCall.clear();
-			}
-		}
-	}
+	function _afterExecute(uint256 /* proposalId */) internal virtual {}
 
 	/**
 	 * @dev Internal cancel mechanism: locks up the proposal timer, preventing it from being re-submitted. Marks it as
@@ -521,26 +407,11 @@ abstract contract Governor is
 	 *
 	 * Emits a {IGovernor-ProposalCanceled} event.
 	 */
-	function _cancel(
-		address target,
-		address wallet,
-		uint256 amount,
-		bytes memory _calldata,
-		bytes32 descriptionHash
-	) internal virtual returns (uint256) {
-		uint256 proposalId = hashProposal(
-			target,
-			wallet,
-			amount,
-			_calldata,
-			descriptionHash
-		);
-
+	function _cancel(uint256 proposalId) internal virtual returns (uint256) {
 		ProposalState currentState = state(proposalId);
 
 		require(
 			currentState != ProposalState.Canceled &&
-				currentState != ProposalState.Expired &&
 				currentState != ProposalState.Defeated &&
 				currentState != ProposalState.Executed,
 			"Governor: proposal not active"
@@ -683,9 +554,11 @@ abstract contract Governor is
 		bytes memory params
 	) internal virtual returns (uint256) {
 		ProposalCore storage proposal = _proposals[proposalId];
+		ProposalState currentState = state(proposalId);
+
 		require(
-			state(proposalId) == ProposalState.Active ||
-				state(proposalId) == ProposalState.PreSucceeded,
+			currentState == ProposalState.Active ||
+				currentState == ProposalState.PreSucceeded,
 			"Governor: vote not currently active"
 		);
 
@@ -705,27 +578,6 @@ abstract contract Governor is
 		}
 
 		return weight;
-	}
-
-	/**
-	 * @dev Relays a transaction or function call to an arbitrary target. In cases where the governance executor
-	 * is some contract other than the governor itself, like when using a timelock, this function can be invoked
-	 * in a governance proposal to recover tokens or Ether that was sent to the governor contract by mistake.
-	 * Note that if the executor is simply the governor itself, use of `relay` is redundant.
-	 */
-	function relay(
-		address target,
-		uint256 value,
-		bytes calldata data
-	) external payable virtual onlyGovernance {
-		(bool success, bytes memory returndata) = target.call{value: value}(
-			data
-		);
-		Address.verifyCallResult(
-			success,
-			returndata,
-			"Governor: relay reverted without message"
-		);
 	}
 
 	/**

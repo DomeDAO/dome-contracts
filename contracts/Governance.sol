@@ -115,10 +115,14 @@ contract DomeGovernor is Governor, GovernorVotes {
 	function _voteSucceeded(
 		uint256 proposalId
 	) internal view virtual override returns (bool) {
+		if (!activeProposalVotes.contains(proposalId)) {
+			return false;
+		}
+
 		uint256 votes = activeProposalVotes.get(proposalId);
 		(, uint256 highestVoteCount) = _getHighestVotedProposal();
 
-		(, , uint256 amount, , ) = proposalDetails(proposalId);
+		(, uint256 amount, ) = proposalDetails(proposalId);
 
 		address bufferAddress = IDome(DOME_ADDRESS).BUFFER();
 		uint256 reserveAmount = IBuffer(bufferAddress).domeReserves(
@@ -177,7 +181,6 @@ contract DomeGovernor is Governor, GovernorVotes {
 			if (
 				currentState == ProposalState.Canceled ||
 				currentState == ProposalState.Defeated ||
-				currentState == ProposalState.Expired ||
 				currentState == ProposalState.Executed
 			) {
 				activeProposalVotes.remove(_proposalId);
@@ -187,10 +190,10 @@ contract DomeGovernor is Governor, GovernorVotes {
 		return activeProposalVotes.length();
 	}
 
-	function reserveTransfer(
+	function _reserveTransfer(
 		address wallet,
 		uint256 amount
-	) public onlyGovernance {
+	) internal override {
 		address asset = IDome(DOME_ADDRESS).asset();
 		address bufferAddress = IDome(DOME_ADDRESS).BUFFER();
 
@@ -207,16 +210,9 @@ contract DomeGovernor is Governor, GovernorVotes {
 	function propose(
 		address wallet,
 		uint256 amount,
-		bytes memory _calldata,
 		string memory description
-	) public returns (uint256) {
-		uint256 proposalId = super.propose(
-			address(this),
-			wallet,
-			amount,
-			_calldata,
-			description
-		);
+	) public override returns (uint256) {
+		uint256 proposalId = super.propose(wallet, amount, description);
 
 		activeProposalVotes.set(proposalId, 0);
 
@@ -224,74 +220,29 @@ contract DomeGovernor is Governor, GovernorVotes {
 	}
 
 	function execute(
-		address wallet,
-		uint256 amount,
-		bytes memory _calldata,
-		bytes32 descriptionHash
-	) public payable returns (uint256 proposalId) {
-		return
-			super.execute(
-				address(this),
-				wallet,
-				amount,
-				_calldata,
-				descriptionHash
-			);
+		uint256 _proposalId
+	) public override returns (uint256 proposalId) {
+		return super.execute(_proposalId);
 	}
 
 	function cancel(
-		address wallet,
-		uint256 amount,
-		bytes memory _calldata,
-		bytes32 descriptionHash
-	) public payable returns (uint256 proposalId) {
-		return
-			super.cancel(
-				address(this),
-				wallet,
-				amount,
-				_calldata,
-				descriptionHash
-			);
+		uint256 _proposalId
+	) public override returns (uint256 proposalId) {
+		return super.cancel(_proposalId);
 	}
 
-	function triggerProposal() public payable returns (uint256 proposalId) {
+	function triggerProposal() public returns (uint256 proposalId) {
 		(uint256 _proposalId, ) = _getHighestVotedProposal();
+		if (!activeProposalVotes.contains(_proposalId)) {
+			revert ProposalNotFound(_proposalId);
+		}
 
-		(
-			,
-			address wallet,
-			uint256 amount,
-			bytes memory _calldata,
-			string memory description
-		) = proposalDetails(_proposalId);
-
-		return
-			this.execute(
-				wallet,
-				amount,
-				_calldata,
-				keccak256(bytes(description))
-			);
+		return this.execute(_proposalId);
 	}
 
-	function _afterExecute(
-		uint256 proposalId,
-		address target,
-		address wallet,
-		uint256 amount,
-		bytes memory _calldata,
-		bytes32 descriptionHash
-	) internal override {
+	function _afterExecute(uint256 proposalId) internal override {
 		_removeInactiveProposals();
 
-		super._afterExecute(
-			proposalId,
-			target,
-			wallet,
-			amount,
-			_calldata,
-			descriptionHash
-		);
+		super._afterExecute(proposalId);
 	}
 }
