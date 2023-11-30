@@ -247,15 +247,15 @@ This is required for further `Dome` deployments:
 With the `DomeProtocol` contract deployed, you can now proceed to deploy the `Dome` contract.
 
 1. Deploy `Dome` with the following required constructor parameters, you should modify them inside `scripts/deployDome.js` file:
-   - `DomeInfo` (CID, TokenName, TokenSymbol)
+   - `DomeInfo` (CID, TokenName, TokenSymbol)<br>
      <img src="assets/dome-info.png" width="400"/>
-   - `BeneficiariesInfo` (CID, wallet address, percent up to 10000, representing 100%)
+   - `BeneficiariesInfo` (CID, wallet address, percent up to 10000, representing 100%)<br>
      <img src="assets/beneficiary-info.png" width="400"/>
-   - `YieldProtocol` (default is set to Polygon Mainnet Aave USDC protocol)
+   - `YieldProtocol` (default is set to Polygon Mainnet Aave USDC protocol)<br>
      <img src="assets/yield-protocol.png" width="400"/>
-   - `DepositorYieldPercent` (up to 10000, representing 100%)
+   - `DepositorYieldPercent` (up to 10000, representing 100%)<br>
      <img src="assets/depositor-yield-percent.png" width="400"/>
-   - `GovernanceSettings` (use only if you have buffer set as beneficiary)
+   - `GovernanceSettings` (use only if you have buffer set as beneficiary)<br>
      <img src="assets/governance-settings.png" width="400"/>
    - The `Dome` contract owner is the `Dome` deployer. (The `DEPLOY_PRIV_KEY` wallet)
 
