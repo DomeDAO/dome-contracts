@@ -15,7 +15,6 @@ abstract contract IGovernor is IERC165, IERC6372 {
 		Canceled,
 		Defeated,
 		Succeeded,
-		Expired,
 		Executed,
 		PreSucceeded
 	}
@@ -26,10 +25,8 @@ abstract contract IGovernor is IERC165, IERC6372 {
 	event ProposalCreated(
 		uint256 proposalId,
 		address proposer,
-		address target,
 		address wallet,
 		uint256 amount,
-		bytes _calldata,
 		uint256 voteStart,
 		uint256 voteEnd,
 		string description
@@ -120,10 +117,8 @@ abstract contract IGovernor is IERC165, IERC6372 {
 	 * @dev Hashing function used to (re)build the proposal id from the proposal details..
 	 */
 	function hashProposal(
-		address target,
 		address wallet,
 		uint256 amount,
-		bytes memory _calldata,
 		bytes32 descriptionHash
 	) public pure virtual returns (uint256);
 
@@ -200,12 +195,10 @@ abstract contract IGovernor is IERC165, IERC6372 {
 	 * Emits a {ProposalCreated} event.
 	 */
 	function propose(
-		address target,
 		address wallet,
 		uint256 amount,
-		bytes memory _calldata,
 		string memory description
-	) internal virtual returns (uint256 proposalId);
+	) public virtual returns (uint256 proposalId);
 
 	/**
 	 * @dev Execute a successful proposal. This requires the quorum to be reached, the vote to be successful, and the
@@ -216,12 +209,8 @@ abstract contract IGovernor is IERC165, IERC6372 {
 	 * Note: some module can modify the requirements for execution, for example by adding an additional timelock.
 	 */
 	function execute(
-		address target,
-		address wallet,
-		uint256 amount,
-		bytes memory _calldata,
-		bytes32 descriptionHash
-	) internal virtual returns (uint256 proposalId);
+		uint256 _proposalId
+	) public virtual returns (uint256 proposalId);
 
 	/**
 	 * @dev Cancel a proposal. A proposal is cancellable by the proposer, but only while it is Pending state, i.e.
@@ -230,12 +219,8 @@ abstract contract IGovernor is IERC165, IERC6372 {
 	 * Emits a {ProposalCanceled} event.
 	 */
 	function cancel(
-		address target,
-		address wallet,
-		uint256 amount,
-		bytes memory _calldata,
-		bytes32 descriptionHash
-	) internal virtual returns (uint256 proposalId);
+		uint256 _proposalId
+	) public virtual returns (uint256 proposalId);
 
 	/**
 	 * @dev Cast a vote
