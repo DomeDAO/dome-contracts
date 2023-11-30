@@ -138,9 +138,8 @@ describe("Governance", function () {
 			CANCELED: 2,
 			DEFEATED: 3,
 			SUCCEEDED: 4,
-			EXPIRED: 5,
-			EXECUTED: 6,
-			PRESUCCEEDED: 7,
+			EXECUTED: 5,
+			PRESUCCEEDED: 6,
 		};
 
 		return {
@@ -201,23 +200,12 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
-			const reserveTransferCalldata =
-				governanceContract.interface.encodeFunctionData("reserveTransfer", [
-					walletAddress,
-					transferAmount,
-				]);
-
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			await expect(
 				governanceContract
 					.connect(anotherAccount)
-					.propose(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						description
-					)
+					.propose(walletAddress, transferAmount, description)
 			).to.be.revertedWith("Governor: proposer votes below proposal threshold");
 		});
 
@@ -389,12 +377,6 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
-			const reserveTransferCalldata =
-				governanceContract.interface.encodeFunctionData("reserveTransfer", [
-					walletAddress,
-					transferAmount,
-				]);
-
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			const sharesAmount = await domeInstance.callStatic.balanceOf(
@@ -424,12 +406,7 @@ describe("Governance", function () {
 			await expect(
 				governanceContract
 					.connect(otherAccount)
-					.propose(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						description
-					)
+					.propose(walletAddress, transferAmount, description)
 			).to.be.fulfilled;
 		});
 
@@ -477,12 +454,6 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
-			const reserveTransferCalldata =
-				governanceContract.interface.encodeFunctionData("reserveTransfer", [
-					walletAddress,
-					transferAmount,
-				]);
-
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			const sharesAmount = await domeInstance.callStatic.balanceOf(
@@ -509,28 +480,20 @@ describe("Governance", function () {
 				votingContract.connect(otherAccount).delegate(otherAccount.address)
 			).to.be.fulfilled;
 
+			// Need to mine one block, to callStatic won't fail due to pastVotingBalance
+			await mine(1);
+			const proposalId = await governanceContract
+				.connect(otherAccount)
+				.callStatic.propose(walletAddress, transferAmount, description);
+
 			await expect(
 				governanceContract
 					.connect(otherAccount)
-					.propose(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						description
-					)
+					.propose(walletAddress, transferAmount, description)
 			).to.be.fulfilled;
 
-			const descriptionHash = ethers.utils.id(description);
-
 			await expect(
-				governanceContract
-					.connect(anotherAccount)
-					.cancel(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						descriptionHash
-					)
+				governanceContract.connect(anotherAccount).cancel(proposalId)
 			).to.be.revertedWith("Governor: only proposer can cancel");
 		});
 
@@ -578,12 +541,6 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
-			const reserveTransferCalldata =
-				governanceContract.interface.encodeFunctionData("reserveTransfer", [
-					walletAddress,
-					transferAmount,
-				]);
-
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			const sharesAmount = await domeInstance.callStatic.balanceOf(
@@ -610,29 +567,20 @@ describe("Governance", function () {
 				votingContract.connect(otherAccount).delegate(otherAccount.address)
 			).to.be.fulfilled;
 
-			await expect(
-				governanceContract
-					.connect(otherAccount)
-					.propose(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						description
-					)
-			).to.be.fulfilled;
-
-			const descriptionHash = ethers.utils.id(description);
+			// Need to mine one block, to callStatic won't fail due to pastVotingBalance
+			await mine(1);
+			const proposalId = await governanceContract
+				.connect(otherAccount)
+				.callStatic.propose(walletAddress, transferAmount, description);
 
 			await expect(
 				governanceContract
 					.connect(otherAccount)
-					.cancel(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						descriptionHash
-					)
+					.propose(walletAddress, transferAmount, description)
 			).to.be.fulfilled;
+
+			await expect(governanceContract.connect(otherAccount).cancel(proposalId))
+				.to.be.fulfilled;
 		});
 
 		it("Should revert the creator to cancel proposal if the proposal is expired", async function () {
@@ -681,12 +629,6 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
-			const reserveTransferCalldata =
-				governanceContract.interface.encodeFunctionData("reserveTransfer", [
-					walletAddress,
-					transferAmount,
-				]);
-
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			const sharesAmount = await domeInstance.callStatic.balanceOf(
@@ -717,22 +659,12 @@ describe("Governance", function () {
 			await mine(1);
 			const proposalId = await governanceContract
 				.connect(otherAccount)
-				.callStatic.propose(
-					walletAddress,
-					transferAmount,
-					reserveTransferCalldata,
-					description
-				);
+				.callStatic.propose(walletAddress, transferAmount, description);
 
 			await expect(
 				governanceContract
 					.connect(otherAccount)
-					.propose(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						description
-					)
+					.propose(walletAddress, transferAmount, description)
 			).to.be.fulfilled;
 
 			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
@@ -743,21 +675,12 @@ describe("Governance", function () {
 				governanceSettings.votingDelay + governanceSettings.votingPeriod + 1
 			);
 
-			const descriptionHash = ethers.utils.id(description);
-
 			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
 				PROPOSAL_STATE.DEFEATED
 			);
 
 			await expect(
-				governanceContract
-					.connect(otherAccount)
-					.cancel(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						descriptionHash
-					)
+				governanceContract.connect(otherAccount).cancel(proposalId)
 			).to.be.revertedWith("Governor: proposal not active");
 
 			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
@@ -810,12 +733,6 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
-			const reserveTransferCalldata =
-				governanceContract.interface.encodeFunctionData("reserveTransfer", [
-					walletAddress,
-					transferAmount,
-				]);
-
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			const sharesAmount = await domeInstance.callStatic.balanceOf(
@@ -846,40 +763,20 @@ describe("Governance", function () {
 			await mine(1);
 			const proposalId = await governanceContract
 				.connect(otherAccount)
-				.callStatic.propose(
-					walletAddress,
-					transferAmount,
-					reserveTransferCalldata,
-					description
-				);
+				.callStatic.propose(walletAddress, transferAmount, description);
 
 			await expect(
 				governanceContract
 					.connect(otherAccount)
-					.propose(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						description
-					)
+					.propose(walletAddress, transferAmount, description)
 			).to.be.fulfilled;
-
-			const descriptionHash = ethers.utils.id(description);
 
 			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
 				PROPOSAL_STATE.PENDING
 			);
 
-			await expect(
-				governanceContract
-					.connect(otherAccount)
-					.cancel(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						descriptionHash
-					)
-			).to.be.fulfilled;
+			await expect(governanceContract.connect(otherAccount).cancel(proposalId))
+				.to.be.fulfilled;
 
 			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
 				PROPOSAL_STATE.CANCELED
@@ -1055,34 +952,18 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
-			const reserveTransferCalldata =
-				governanceContract.interface.encodeFunctionData("reserveTransfer", [
-					walletAddress,
-					transferAmount,
-				]);
-
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			// Need to mine one block, to callStatic won't fail due to pastVotingBalance
 			await mine(1);
 			const proposalId = await governanceContract
 				.connect(otherAccount)
-				.callStatic.propose(
-					walletAddress,
-					transferAmount,
-					reserveTransferCalldata,
-					description
-				);
+				.callStatic.propose(walletAddress, transferAmount, description);
 
 			await expect(
 				governanceContract
 					.connect(otherAccount)
-					.propose(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						description
-					)
+					.propose(walletAddress, transferAmount, description)
 			).to.be.fulfilled;
 
 			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
@@ -1192,34 +1073,18 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
-			const reserveTransferCalldata =
-				governanceContract.interface.encodeFunctionData("reserveTransfer", [
-					walletAddress,
-					transferAmount,
-				]);
-
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			// Need to mine one block, to callStatic won't fail due to pastVotingBalance
 			await mine(1);
 			const proposalId = await governanceContract
 				.connect(otherAccount)
-				.callStatic.propose(
-					walletAddress,
-					transferAmount,
-					reserveTransferCalldata,
-					description
-				);
+				.callStatic.propose(walletAddress, transferAmount, description);
 
 			await expect(
 				governanceContract
 					.connect(otherAccount)
-					.propose(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						description
-					)
+					.propose(walletAddress, transferAmount, description)
 			).to.be.fulfilled;
 
 			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
@@ -1337,34 +1202,18 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
-			const reserveTransferCalldata =
-				governanceContract.interface.encodeFunctionData("reserveTransfer", [
-					walletAddress,
-					transferAmount,
-				]);
-
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			// Need to mine one block, to callStatic won't fail due to pastVotingBalance
 			await mine(1);
 			const proposalId = await governanceContract
 				.connect(otherAccount)
-				.callStatic.propose(
-					walletAddress,
-					transferAmount,
-					reserveTransferCalldata,
-					description
-				);
+				.callStatic.propose(walletAddress, transferAmount, description);
 
 			await expect(
 				governanceContract
 					.connect(otherAccount)
-					.propose(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						description
-					)
+					.propose(walletAddress, transferAmount, description)
 			).to.be.fulfilled;
 
 			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
@@ -1455,34 +1304,18 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
-			const reserveTransferCalldata =
-				governanceContract.interface.encodeFunctionData("reserveTransfer", [
-					walletAddress,
-					transferAmount,
-				]);
-
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			// Need to mine one block, to callStatic won't fail due to pastVotingBalance
 			await mine(1);
 			const proposalId = await governanceContract
 				.connect(anotherAccount)
-				.callStatic.propose(
-					walletAddress,
-					transferAmount,
-					reserveTransferCalldata,
-					description
-				);
+				.callStatic.propose(walletAddress, transferAmount, description);
 
 			await expect(
 				governanceContract
 					.connect(anotherAccount)
-					.propose(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						description
-					)
+					.propose(walletAddress, transferAmount, description)
 			).to.be.fulfilled;
 
 			await mine(governanceSettings.votingDelay + 1);
@@ -1497,17 +1330,8 @@ describe("Governance", function () {
 				PROPOSAL_STATE.SUCCEEDED
 			);
 
-			const descriptionHash = ethers.utils.id(description);
-
 			await expect(
-				governanceContract
-					.connect(anotherAccount)
-					.execute(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						descriptionHash
-					)
+				governanceContract.connect(anotherAccount).execute(proposalId)
 			).to.changeTokenBalance(assetContract, walletAddress, transferAmount);
 
 			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
@@ -1647,12 +1471,6 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
-			const reserveTransferCalldata =
-				governanceContract.interface.encodeFunctionData("reserveTransfer", [
-					walletAddress,
-					transferAmount,
-				]);
-
 			const firstDescription = "Proposal#1 Transfer funds to XXXX";
 			const secondDescription = "Proposal#2 Transfer funds to XXXX";
 
@@ -1661,42 +1479,22 @@ describe("Governance", function () {
 
 			const firstProposalId = await governanceContract
 				.connect(anotherAccount)
-				.callStatic.propose(
-					walletAddress,
-					transferAmount,
-					reserveTransferCalldata,
-					firstDescription
-				);
+				.callStatic.propose(walletAddress, transferAmount, firstDescription);
 
 			const secondProposalId = await governanceContract
 				.connect(anotherAccount)
-				.callStatic.propose(
-					walletAddress,
-					transferAmount,
-					reserveTransferCalldata,
-					secondDescription
-				);
+				.callStatic.propose(walletAddress, transferAmount, secondDescription);
 
 			await expect(
 				governanceContract
 					.connect(randomAccount)
-					.propose(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						firstDescription
-					)
+					.propose(walletAddress, transferAmount, firstDescription)
 			).to.be.fulfilled;
 
 			await expect(
 				governanceContract
 					.connect(randomAccount)
-					.propose(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						secondDescription
-					)
+					.propose(walletAddress, transferAmount, secondDescription)
 			).to.be.fulfilled;
 
 			await mine(governanceSettings.votingDelay + 1);
@@ -1719,18 +1517,8 @@ describe("Governance", function () {
 				await governanceContract.callStatic.state(secondProposalId)
 			).to.be.equal(PROPOSAL_STATE.SUCCEEDED, "secondState");
 
-			const firstDescriptionHash = ethers.utils.id(firstDescription);
-			const secondDescriptionHash = ethers.utils.id(secondDescription);
-
 			await expect(
-				governanceContract
-					.connect(otherAccount)
-					.execute(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						firstDescriptionHash
-					)
+				governanceContract.connect(otherAccount).execute(firstProposalId)
 			).to.be.revertedWith("Governor: proposal not successful");
 
 			expect(
@@ -1738,14 +1526,7 @@ describe("Governance", function () {
 			).to.be.equal(PROPOSAL_STATE.DEFEATED);
 
 			await expect(
-				governanceContract
-					.connect(otherAccount)
-					.execute(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						secondDescriptionHash
-					)
+				governanceContract.connect(otherAccount).execute(secondProposalId)
 			).to.changeTokenBalance(assetContract, walletAddress, transferAmount);
 
 			expect(
@@ -1885,12 +1666,6 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
-			const reserveTransferCalldata =
-				governanceContract.interface.encodeFunctionData("reserveTransfer", [
-					walletAddress,
-					transferAmount,
-				]);
-
 			const firstDescription = "Proposal#1 Transfer funds to XXXX";
 			const secondDescription = "Proposal#2 Transfer funds to XXXX";
 
@@ -1899,42 +1674,22 @@ describe("Governance", function () {
 
 			const firstProposalId = await governanceContract
 				.connect(anotherAccount)
-				.callStatic.propose(
-					walletAddress,
-					transferAmount,
-					reserveTransferCalldata,
-					firstDescription
-				);
+				.callStatic.propose(walletAddress, transferAmount, firstDescription);
 
 			const secondProposalId = await governanceContract
 				.connect(randomAccount)
-				.callStatic.propose(
-					walletAddress,
-					transferAmount,
-					reserveTransferCalldata,
-					secondDescription
-				);
+				.callStatic.propose(walletAddress, transferAmount, secondDescription);
 
 			await expect(
 				governanceContract
 					.connect(anotherAccount)
-					.propose(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						firstDescription
-					)
+					.propose(walletAddress, transferAmount, firstDescription)
 			).to.be.fulfilled;
 
 			await expect(
 				governanceContract
 					.connect(randomAccount)
-					.propose(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						secondDescription
-					)
+					.propose(walletAddress, transferAmount, secondDescription)
 			).to.be.fulfilled;
 
 			await mine(governanceSettings.votingDelay + 1);
@@ -1958,18 +1713,8 @@ describe("Governance", function () {
 				"Second proposal is not PRE_SUCCEEDED"
 			);
 
-			const firstDescriptionHash = ethers.utils.id(firstDescription);
-			const secondDescriptionHash = ethers.utils.id(secondDescription);
-
 			await expect(
-				governanceContract
-					.connect(otherAccount)
-					.execute(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						firstDescriptionHash
-					)
+				governanceContract.connect(otherAccount).execute(firstProposalId)
 			).to.revertedWith("Governor: proposal not successful");
 
 			expect(
@@ -1985,14 +1730,7 @@ describe("Governance", function () {
 			).to.changeTokenBalance(assetContract, walletAddress, transferAmount);
 
 			await expect(
-				governanceContract
-					.connect(otherAccount)
-					.execute(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						secondDescriptionHash
-					)
+				governanceContract.connect(otherAccount).execute(secondProposalId)
 			).to.be.rejected;
 
 			expect(
@@ -2136,12 +1874,6 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve.div(2);
 
-			const reserveTransferCalldata =
-				governanceContract.interface.encodeFunctionData("reserveTransfer", [
-					walletAddress,
-					transferAmount,
-				]);
-
 			const firstDescription = "Proposal#1 Transfer funds to XXXX";
 			const secondDescription = "Proposal#2 Transfer funds to XXXX";
 
@@ -2150,42 +1882,22 @@ describe("Governance", function () {
 
 			const firstProposalId = await governanceContract
 				.connect(anotherAccount)
-				.callStatic.propose(
-					walletAddress,
-					transferAmount,
-					reserveTransferCalldata,
-					firstDescription
-				);
+				.callStatic.propose(walletAddress, transferAmount, firstDescription);
 
 			const secondProposalId = await governanceContract
 				.connect(randomAccount)
-				.callStatic.propose(
-					walletAddress,
-					transferAmount,
-					reserveTransferCalldata,
-					secondDescription
-				);
+				.callStatic.propose(walletAddress, transferAmount, secondDescription);
 
 			await expect(
 				governanceContract
 					.connect(anotherAccount)
-					.propose(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						firstDescription
-					)
+					.propose(walletAddress, transferAmount, firstDescription)
 			).to.be.fulfilled;
 
 			await expect(
 				governanceContract
 					.connect(randomAccount)
-					.propose(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						secondDescription
-					)
+					.propose(walletAddress, transferAmount, secondDescription)
 			).to.be.fulfilled;
 
 			await mine(governanceSettings.votingDelay + 1);
@@ -2209,18 +1921,8 @@ describe("Governance", function () {
 				"Second proposal is not PRE_SUCCEEDED"
 			);
 
-			const firstDescriptionHash = ethers.utils.id(firstDescription);
-			const secondDescriptionHash = ethers.utils.id(secondDescription);
-
 			await expect(
-				governanceContract
-					.connect(otherAccount)
-					.execute(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						firstDescriptionHash
-					)
+				governanceContract.connect(otherAccount).execute(firstProposalId)
 			).to.revertedWith("Governor: proposal not successful");
 
 			expect(
@@ -2236,14 +1938,7 @@ describe("Governance", function () {
 			).to.changeTokenBalance(assetContract, walletAddress, transferAmount);
 
 			await expect(
-				governanceContract
-					.connect(otherAccount)
-					.execute(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						secondDescriptionHash
-					)
+				governanceContract.connect(otherAccount).execute(secondProposalId)
 			).to.be.rejectedWith("Governor: proposal not successful");
 
 			expect(
@@ -2255,14 +1950,7 @@ describe("Governance", function () {
 			).to.be.equal(PROPOSAL_STATE.PRESUCCEEDED);
 
 			await expect(
-				governanceContract
-					.connect(otherAccount)
-					.execute(
-						walletAddress,
-						transferAmount,
-						reserveTransferCalldata,
-						firstDescriptionHash
-					)
+				governanceContract.connect(otherAccount).execute(firstProposalId)
 			).to.changeTokenBalance(assetContract, walletAddress, transferAmount);
 
 			await expect(governanceContract.connect(randomAccount).triggerProposal())
