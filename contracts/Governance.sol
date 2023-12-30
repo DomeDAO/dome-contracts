@@ -210,9 +210,10 @@ contract DomeGovernor is Governor, GovernorVotes {
 	function propose(
 		address wallet,
 		uint256 amount,
+		string memory title,
 		string memory description
 	) public override returns (uint256) {
-		uint256 proposalId = super.propose(wallet, amount, description);
+		uint256 proposalId = super.propose(wallet, amount, title, description);
 
 		activeProposalVotes.set(proposalId, 0);
 

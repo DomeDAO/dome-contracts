@@ -200,12 +200,13 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
+			const title = "Proposal#1";
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			await expect(
 				governanceContract
 					.connect(anotherAccount)
-					.propose(walletAddress, transferAmount, description)
+					.propose(walletAddress, transferAmount, title, description)
 			).to.be.revertedWith("Governor: proposer votes below proposal threshold");
 		});
 
@@ -377,6 +378,7 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
+			const title = "Proposal#1";
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			const sharesAmount = await domeInstance.callStatic.balanceOf(
@@ -406,7 +408,7 @@ describe("Governance", function () {
 			await expect(
 				governanceContract
 					.connect(otherAccount)
-					.propose(walletAddress, transferAmount, description)
+					.propose(walletAddress, transferAmount, title, description)
 			).to.be.fulfilled;
 		});
 
@@ -454,6 +456,7 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
+			const title = "Proposal#1";
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			const sharesAmount = await domeInstance.callStatic.balanceOf(
@@ -484,12 +487,12 @@ describe("Governance", function () {
 			await mine(1);
 			const proposalId = await governanceContract
 				.connect(otherAccount)
-				.callStatic.propose(walletAddress, transferAmount, description);
+				.callStatic.propose(walletAddress, transferAmount, title, description);
 
 			await expect(
 				governanceContract
 					.connect(otherAccount)
-					.propose(walletAddress, transferAmount, description)
+					.propose(walletAddress, transferAmount, title, description)
 			).to.be.fulfilled;
 
 			await expect(
@@ -541,6 +544,7 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
+			const title = "Proposal#1";
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			const sharesAmount = await domeInstance.callStatic.balanceOf(
@@ -571,12 +575,12 @@ describe("Governance", function () {
 			await mine(1);
 			const proposalId = await governanceContract
 				.connect(otherAccount)
-				.callStatic.propose(walletAddress, transferAmount, description);
+				.callStatic.propose(walletAddress, transferAmount, title, description);
 
 			await expect(
 				governanceContract
 					.connect(otherAccount)
-					.propose(walletAddress, transferAmount, description)
+					.propose(walletAddress, transferAmount, title, description)
 			).to.be.fulfilled;
 
 			await expect(governanceContract.connect(otherAccount).cancel(proposalId))
@@ -629,6 +633,7 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
+			const title = "Proposal#1";
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			const sharesAmount = await domeInstance.callStatic.balanceOf(
@@ -659,12 +664,12 @@ describe("Governance", function () {
 			await mine(1);
 			const proposalId = await governanceContract
 				.connect(otherAccount)
-				.callStatic.propose(walletAddress, transferAmount, description);
+				.callStatic.propose(walletAddress, transferAmount, title, description);
 
 			await expect(
 				governanceContract
 					.connect(otherAccount)
-					.propose(walletAddress, transferAmount, description)
+					.propose(walletAddress, transferAmount, title, description)
 			).to.be.fulfilled;
 
 			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
@@ -733,6 +738,7 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
+			const title = "Proposal#1";
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			const sharesAmount = await domeInstance.callStatic.balanceOf(
@@ -763,12 +769,12 @@ describe("Governance", function () {
 			await mine(1);
 			const proposalId = await governanceContract
 				.connect(otherAccount)
-				.callStatic.propose(walletAddress, transferAmount, description);
+				.callStatic.propose(walletAddress, transferAmount, title, description);
 
 			await expect(
 				governanceContract
 					.connect(otherAccount)
-					.propose(walletAddress, transferAmount, description)
+					.propose(walletAddress, transferAmount, title, description)
 			).to.be.fulfilled;
 
 			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
@@ -952,18 +958,19 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
+			const title = "Proposal#1";
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			// Need to mine one block, to callStatic won't fail due to pastVotingBalance
 			await mine(1);
 			const proposalId = await governanceContract
 				.connect(otherAccount)
-				.callStatic.propose(walletAddress, transferAmount, description);
+				.callStatic.propose(walletAddress, transferAmount, title, description);
 
 			await expect(
 				governanceContract
 					.connect(otherAccount)
-					.propose(walletAddress, transferAmount, description)
+					.propose(walletAddress, transferAmount, title, description)
 			).to.be.fulfilled;
 
 			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
@@ -1073,18 +1080,19 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
+			const title = "Proposal#1";
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			// Need to mine one block, to callStatic won't fail due to pastVotingBalance
 			await mine(1);
 			const proposalId = await governanceContract
 				.connect(otherAccount)
-				.callStatic.propose(walletAddress, transferAmount, description);
+				.callStatic.propose(walletAddress, transferAmount, title, description);
 
 			await expect(
 				governanceContract
 					.connect(otherAccount)
-					.propose(walletAddress, transferAmount, description)
+					.propose(walletAddress, transferAmount, title, description)
 			).to.be.fulfilled;
 
 			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
@@ -1202,18 +1210,19 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
+			const title = "Proposal#1";
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			// Need to mine one block, to callStatic won't fail due to pastVotingBalance
 			await mine(1);
 			const proposalId = await governanceContract
 				.connect(otherAccount)
-				.callStatic.propose(walletAddress, transferAmount, description);
+				.callStatic.propose(walletAddress, transferAmount, title, description);
 
 			await expect(
 				governanceContract
 					.connect(otherAccount)
-					.propose(walletAddress, transferAmount, description)
+					.propose(walletAddress, transferAmount, title, description)
 			).to.be.fulfilled;
 
 			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
@@ -1304,18 +1313,19 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
+			const title = "Proposal#1";
 			const description = "Proposal#1 Transfer funds to XXXX";
 
 			// Need to mine one block, to callStatic won't fail due to pastVotingBalance
 			await mine(1);
 			const proposalId = await governanceContract
 				.connect(anotherAccount)
-				.callStatic.propose(walletAddress, transferAmount, description);
+				.callStatic.propose(walletAddress, transferAmount, title, description);
 
 			await expect(
 				governanceContract
 					.connect(anotherAccount)
-					.propose(walletAddress, transferAmount, description)
+					.propose(walletAddress, transferAmount, title, description)
 			).to.be.fulfilled;
 
 			await mine(governanceSettings.votingDelay + 1);
@@ -1471,7 +1481,10 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
+			const firstTitle = "Proposal#1";
 			const firstDescription = "Proposal#1 Transfer funds to XXXX";
+
+			const secondTitle = "Proposal#2";
 			const secondDescription = "Proposal#2 Transfer funds to XXXX";
 
 			// Need to mine one block, to callStatic won't fail due to pastVotingBalance
@@ -1479,22 +1492,37 @@ describe("Governance", function () {
 
 			const firstProposalId = await governanceContract
 				.connect(anotherAccount)
-				.callStatic.propose(walletAddress, transferAmount, firstDescription);
+				.callStatic.propose(
+					walletAddress,
+					transferAmount,
+					firstTitle,
+					firstDescription
+				);
 
 			const secondProposalId = await governanceContract
 				.connect(anotherAccount)
-				.callStatic.propose(walletAddress, transferAmount, secondDescription);
+				.callStatic.propose(
+					walletAddress,
+					transferAmount,
+					secondTitle,
+					secondDescription
+				);
 
 			await expect(
 				governanceContract
 					.connect(randomAccount)
-					.propose(walletAddress, transferAmount, firstDescription)
+					.propose(walletAddress, transferAmount, firstTitle, firstDescription)
 			).to.be.fulfilled;
 
 			await expect(
 				governanceContract
 					.connect(randomAccount)
-					.propose(walletAddress, transferAmount, secondDescription)
+					.propose(
+						walletAddress,
+						transferAmount,
+						secondTitle,
+						secondDescription
+					)
 			).to.be.fulfilled;
 
 			await mine(governanceSettings.votingDelay + 1);
@@ -1666,7 +1694,10 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve;
 
+			const firstTitle = "Proposal#1";
 			const firstDescription = "Proposal#1 Transfer funds to XXXX";
+
+			const secondTitle = "Proposal#2";
 			const secondDescription = "Proposal#2 Transfer funds to XXXX";
 
 			// Need to mine one block, to callStatic won't fail due to pastVotingBalance
@@ -1674,22 +1705,37 @@ describe("Governance", function () {
 
 			const firstProposalId = await governanceContract
 				.connect(anotherAccount)
-				.callStatic.propose(walletAddress, transferAmount, firstDescription);
+				.callStatic.propose(
+					walletAddress,
+					transferAmount,
+					firstTitle,
+					firstDescription
+				);
 
 			const secondProposalId = await governanceContract
 				.connect(randomAccount)
-				.callStatic.propose(walletAddress, transferAmount, secondDescription);
+				.callStatic.propose(
+					walletAddress,
+					transferAmount,
+					secondTitle,
+					secondDescription
+				);
 
 			await expect(
 				governanceContract
 					.connect(anotherAccount)
-					.propose(walletAddress, transferAmount, firstDescription)
+					.propose(walletAddress, transferAmount, firstTitle, firstDescription)
 			).to.be.fulfilled;
 
 			await expect(
 				governanceContract
 					.connect(randomAccount)
-					.propose(walletAddress, transferAmount, secondDescription)
+					.propose(
+						walletAddress,
+						transferAmount,
+						secondTitle,
+						secondDescription
+					)
 			).to.be.fulfilled;
 
 			await mine(governanceSettings.votingDelay + 1);
@@ -1874,7 +1920,10 @@ describe("Governance", function () {
 
 			const transferAmount = domeReserve.div(2);
 
+			const firstTitle = "Proposal#1";
 			const firstDescription = "Proposal#1 Transfer funds to XXXX";
+
+			const secondTitle = "Proposal#2";
 			const secondDescription = "Proposal#2 Transfer funds to XXXX";
 
 			// Need to mine one block, to callStatic won't fail due to pastVotingBalance
@@ -1882,22 +1931,37 @@ describe("Governance", function () {
 
 			const firstProposalId = await governanceContract
 				.connect(anotherAccount)
-				.callStatic.propose(walletAddress, transferAmount, firstDescription);
+				.callStatic.propose(
+					walletAddress,
+					transferAmount,
+					firstTitle,
+					firstDescription
+				);
 
 			const secondProposalId = await governanceContract
 				.connect(randomAccount)
-				.callStatic.propose(walletAddress, transferAmount, secondDescription);
+				.callStatic.propose(
+					walletAddress,
+					transferAmount,
+					secondTitle,
+					secondDescription
+				);
 
 			await expect(
 				governanceContract
 					.connect(anotherAccount)
-					.propose(walletAddress, transferAmount, firstDescription)
+					.propose(walletAddress, transferAmount, firstTitle, firstDescription)
 			).to.be.fulfilled;
 
 			await expect(
 				governanceContract
 					.connect(randomAccount)
-					.propose(walletAddress, transferAmount, secondDescription)
+					.propose(
+						walletAddress,
+						transferAmount,
+						secondTitle,
+						secondDescription
+					)
 			).to.be.fulfilled;
 
 			await mine(governanceSettings.votingDelay + 1);

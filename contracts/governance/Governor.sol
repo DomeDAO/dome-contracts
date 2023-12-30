@@ -72,6 +72,7 @@ abstract contract Governor is
 	struct ProposalDetails {
 		address wallet;
 		uint256 amount;
+		string title;
 		string description;
 	}
 
@@ -110,14 +111,20 @@ abstract contract Governor is
 		returns (
 			address, // wallet
 			uint256, // amount
-			string memory
+			string memory, // title
+			string memory // description
 		)
 	{
 		ProposalDetails memory details = _proposalDetails[proposalId];
 		if (details.amount == 0) {
 			revert ProposalNotFound(proposalId);
 		}
-		return (details.wallet, details.amount, details.description);
+		return (
+			details.wallet,
+			details.amount,
+			details.title,
+			details.description
+		);
 	}
 
 	/**
@@ -143,9 +150,15 @@ abstract contract Governor is
 	function hashProposal(
 		address wallet,
 		uint256 amount,
+		bytes32 titleHash,
 		bytes32 descriptionHash
 	) public pure virtual override returns (uint256) {
-		return uint256(keccak256(abi.encode(wallet, amount, descriptionHash)));
+		return
+			uint256(
+				keccak256(
+					abi.encode(wallet, amount, titleHash, descriptionHash)
+				)
+			);
 	}
 
 	/**
@@ -273,6 +286,7 @@ abstract contract Governor is
 	function propose(
 		address wallet,
 		uint256 amount,
+		string memory title,
 		string memory description
 	) public virtual override returns (uint256) {
 		address proposer = _msgSender();
@@ -290,12 +304,14 @@ abstract contract Governor is
 		uint256 proposalId = hashProposal(
 			wallet,
 			amount,
+			keccak256(bytes(title)),
 			keccak256(bytes(description))
 		);
 
 		_proposalDetails[proposalId] = ProposalDetails({
 			wallet: wallet,
 			amount: amount,
+			title: title,
 			description: description
 		});
 
@@ -318,16 +334,16 @@ abstract contract Governor is
 		});
 
 		ProposalCore memory _proposalCore = _proposals[proposalId];
-		ProposalDetails memory __proposalDetails = _proposalDetails[proposalId];
 
 		emit ProposalCreated(
 			proposalId,
 			proposer,
-			__proposalDetails.wallet,
-			__proposalDetails.amount,
+			wallet,
+			amount,
 			_proposalCore.voteStart,
 			_proposalCore.voteEnd,
-			__proposalDetails.description
+			title,
+			description
 		);
 
 		return proposalId;

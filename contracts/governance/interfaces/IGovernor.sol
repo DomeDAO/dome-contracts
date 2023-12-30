@@ -29,6 +29,7 @@ abstract contract IGovernor is IERC165, IERC6372 {
 		uint256 amount,
 		uint256 voteStart,
 		uint256 voteEnd,
+		string title,
 		string description
 	);
 
@@ -119,6 +120,7 @@ abstract contract IGovernor is IERC165, IERC6372 {
 	function hashProposal(
 		address wallet,
 		uint256 amount,
+		bytes32 titleHash,
 		bytes32 descriptionHash
 	) public pure virtual returns (uint256);
 
@@ -197,6 +199,7 @@ abstract contract IGovernor is IERC165, IERC6372 {
 	function propose(
 		address wallet,
 		uint256 amount,
+		string memory title,
 		string memory description
 	) public virtual returns (uint256 proposalId);
 
