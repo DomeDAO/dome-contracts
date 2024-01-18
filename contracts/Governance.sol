@@ -122,7 +122,7 @@ contract DomeGovernor is Governor, GovernorVotes {
 		uint256 votes = activeProposalVotes.get(proposalId);
 		(, uint256 highestVoteCount) = _getHighestVotedProposal();
 
-		(, uint256 amount, ) = proposalDetails(proposalId);
+		(, uint256 amount, , ) = proposalDetails(proposalId);
 
 		address bufferAddress = IDome(DOME_ADDRESS).BUFFER();
 		uint256 reserveAmount = IBuffer(bufferAddress).domeReserves(
