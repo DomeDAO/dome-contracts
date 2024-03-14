@@ -3,7 +3,7 @@ const { ethers } = require("hardhat");
 const readline = require("readline");
 const { POLYGON } = require("../test/constants");
 const { getDomeEnvVars } = require("../config");
-const { writeDeploy } = require("./utils");
+const { writeDeploy, getGasPrice } = require("./utils");
 const { convertDurationToBlocks } = require("../test/utils");
 const { DOME_PROTOCOL_ADDRESS } = getDomeEnvVars();
 
@@ -24,15 +24,15 @@ async function main() {
 	const bufferAddress = await domeProtocol.callStatic.BUFFER();
 
 	const domeInfo = {
-		CID: "<DOME_CID>",
-		tokenName: "<DOME_TOKEN_NAME>",
-		tokenSymbol: "<DOME_TOKEN_SYMBOL>",
+		CID: "FIRST_DOME",
+		tokenName: "Dome First Token",
+		tokenSymbol: "DFT",
 	};
 
 	const bufferBeneficiary = {
 		beneficiaryCID: "BUFFER",
 		wallet: bufferAddress,
-		percent: 10000,
+		percent: 10000, // 10000= 100.00
 	};
 
 	// Percentage of beneficiaries should sum up to 10.000, or the deployment will be failed
@@ -47,7 +47,7 @@ async function main() {
 		proposalThreshold: 1,
 	};
 
-	const yieldProtocol = POLYGON.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
+	const yieldProtocol = POLYGON.MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 	const depositorYieldPercent = process.env.DEPOSITOR_YIELD_PERCENTAGE || 0;
 
 	console.log(`Deploying Dome with the following parameters:`);
@@ -89,9 +89,11 @@ async function main() {
 			value: domeCreationFee,
 		});
 
-	await domeProtocol
+	const gasPrice = await getGasPrice(10);
+	console.log("GAS PRICE: ", gasPrice);
+	const tx = await domeProtocol
 		.connect(deployer)
-		.createDome(...domeCreationArguments, { value: domeCreationFee });
+		.createDome(...domeCreationArguments, { value: domeCreationFee, gasPrice });
 
 	console.log(`Dome was deployed at: ${domeAddress}`);
 
@@ -116,9 +118,8 @@ async function main() {
 		},
 	};
 
-	const governanceAddress =
-		await domeProtocol.callStatic.domeGovernance(domeAddress);
-
+	const governanceAddress = await getGovernanceAddress(domeProtocol);
+	console.log("GOVERNANCE ADDRESS: ", governanceAddress);
 	if (governanceAddress !== ethers.constants.AddressZero) {
 		const governance = await ethers.getContractAt(
 			"DomeGovernor",
@@ -148,7 +149,26 @@ async function main() {
 
 	const network = await deployer.provider.getNetwork();
 
+	console.log(deployment);
 	writeDeploy(network.name, deployment);
+}
+
+async function getGovernanceAddress(domeProtocol) {
+	let attempts = 5;
+
+	for (let i = 0; i < attempts; i++) {
+		const address = await domeProtocol.callStatic.domeGovernance(domeAddress);
+
+		if (address !== ethers.constants.AddressZero) {
+			return address;
+		}
+
+		console.log("PROVIDER RETURN ZERO ADDRESS FOR GOVERNANCE, TRYING AGAIN IN 5s...")
+		console.log(`Attempts: ${i}/${attempts}`)
+		await new Promise(resolve => setTimeout(resolve, 5000));
+	}
+
+	return ethers.constants.AddressZero;
 }
 
 main().catch((error) => {

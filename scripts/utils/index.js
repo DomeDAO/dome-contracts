@@ -1,5 +1,12 @@
 const fs = require("fs");
 
+async function getGasPrice(increaseGasByPercent = 5) {
+	const gasPrice = await ethers.provider.getGasPrice();
+	const updatedGasPrice = gasPrice.add(gasPrice.mul(increaseGasByPercent).div(100));
+
+	return updatedGasPrice;
+}
+
 function writeDeploy(chain, json) {
 	if (!fs.existsSync("./metadata")) {
 		fs.mkdirSync("./metadata");
@@ -23,8 +30,7 @@ function writeDeploy(chain, json) {
 		.replace(/\..+/, "");
 
 	fs.writeFileSync(
-		`./metadata/latest-${chain}-${
-			isDome ? "dome" : "protocol"
+		`./metadata/latest-${chain}-${isDome ? "dome" : "protocol"
 		}-${timestamp}.json`,
 		JSON.stringify(json)
 	);
@@ -72,4 +78,5 @@ module.exports = {
 	writeDeploy,
 	getLatestDomeDeploy,
 	getLatestProtocolDeploy,
+	getGasPrice
 };
