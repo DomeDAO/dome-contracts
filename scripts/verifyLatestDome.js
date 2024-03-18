@@ -8,7 +8,7 @@ async function main() {
 	for (const key of Object.keys(deployment)) {
 		await run("verify:verify", {
 			address: deployment[key].address,
-			constructorArguments: deployment.constructorArguments,
+			constructorArguments: deployment[key].constructorArguments,
 		});
 	}
 }

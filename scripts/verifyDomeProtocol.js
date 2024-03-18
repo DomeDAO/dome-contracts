@@ -17,9 +17,13 @@ async function main() {
 		DOME_PROTOCOL_ADDRESS
 	);
 
+	console.log("Verifying DomeProtocol...");
+
+	console.log("DomeProtocolAddress: ", domeProtocol.address);
 	const domeFactoryAddress = await domeProtocol.callStatic.DOME_FACTORY();
 	const governanceFactoryAddress =
 		await domeProtocol.callStatic.GOVERNANCE_FACTORY();
+	console.log(governanceFactoryAddress)
 	const wrappedVotingFactoryAddress =
 		await domeProtocol.callStatic.WRAPPEDVOTING_FACTORY();
 	const priceTrackerAddress = await domeProtocol.callStatic.PRICE_TRACKER();
@@ -54,8 +58,8 @@ async function main() {
 		constructorArguments: [],
 	});
 
-	const PRICE_TRACKER_ROUTER = POLYGON.ADDRESSES.SUSHI_ROUTER_02;
-	const PRICE_TRACKER_TOKEN = POLYGON.ADDRESSES.USDC;
+	const PRICE_TRACKER_ROUTER = POLYGON.MAINNET.ADDRESSES.SUSHI_ROUTER_02;
+	const PRICE_TRACKER_TOKEN = POLYGON.MAINNET.ADDRESSES.USDC;
 
 	const priceTrackerConstructorArguments = [
 		PRICE_TRACKER_ROUTER,

@@ -38,9 +38,14 @@ function getProtocolVerifyEnvVars() {
 	]);
 }
 
+function getAPIKey() {
+	return getEnvVars(["POLYGON_API_KEY"]);
+}
+
 module.exports = {
 	getEnvVars,
 	getProtocolEnvVars,
 	getDomeEnvVars,
 	getProtocolVerifyEnvVars,
+	getAPIKey,
 };
