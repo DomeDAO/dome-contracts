@@ -129,7 +129,7 @@ abstract contract DomeBase {
 			emit SystemFeeClaimed(totalFeePortion);
 		}
 
-		return updatedAmount;
+		return amount;
 	}
 
 	// Prevents locked funs on the contract side
