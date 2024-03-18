@@ -1,5 +1,7 @@
 {
-	"editor.codeActionsOnSave": { "source.fixAll": true },
+	"editor.codeActionsOnSave": {
+		"source.fixAll": "explicit"
+	},
 	"editor.formatOnSave": true,
 	"editor.rulers": [80, 120],
 	"javascript.validate.enable": false,

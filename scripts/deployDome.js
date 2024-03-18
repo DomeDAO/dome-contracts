@@ -118,7 +118,10 @@ async function main() {
 		},
 	};
 
-	const governanceAddress = await getGovernanceAddress(domeProtocol);
+	console.log(deployment.DOME);
+
+	const governanceAddress = await getGovernanceAddress(domeProtocol, domeAddress);
+
 	console.log("GOVERNANCE ADDRESS: ", governanceAddress);
 	if (governanceAddress !== ethers.constants.AddressZero) {
 		const governance = await ethers.getContractAt(
@@ -153,7 +156,7 @@ async function main() {
 	writeDeploy(network.name, deployment);
 }
 
-async function getGovernanceAddress(domeProtocol) {
+async function getGovernanceAddress(domeProtocol, domeAddress) {
 	let attempts = 5;
 
 	for (let i = 0; i < attempts; i++) {
