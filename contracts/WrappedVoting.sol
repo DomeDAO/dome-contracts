@@ -6,14 +6,27 @@ import {ERC20Votes} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Vo
 import {ERC20, IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ERC20Wrapper} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Wrapper.sol";
 
+interface IGovernance {
+	function updateVotes(address account) external;
+}
+
+interface IDomeProtocol {
+	function domeGovernance(address dome) external view returns (address);
+}
+
 contract DomeWrappedVoting is ERC20, ERC20Permit, ERC20Votes, ERC20Wrapper {
+	address immutable DOME_PROTOCOL;
+
 	constructor(
-		address wrappedToken
+		address wrappedToken,
+		address creator
 	)
 		ERC20("DomeVoting", "DV")
 		ERC20Permit("DomeVoting")
 		ERC20Wrapper(IERC20(wrappedToken))
-	{}
+	{
+		DOME_PROTOCOL = creator;
+	}
 
 	function decimals()
 		public
@@ -30,7 +43,7 @@ contract DomeWrappedVoting is ERC20, ERC20Permit, ERC20Votes, ERC20Wrapper {
 		}
 	}
 
-	function DOME_ADDRESS() external view returns (address) {
+	function DOME_ADDRESS() public view returns (address) {
 		return address(underlying());
 	}
 
@@ -53,6 +66,14 @@ contract DomeWrappedVoting is ERC20, ERC20Permit, ERC20Votes, ERC20Wrapper {
 		address account,
 		uint256 amount
 	) internal override(ERC20, ERC20Votes) {
+		address governanceAddress = IDomeProtocol(DOME_PROTOCOL).domeGovernance(
+			DOME_ADDRESS()
+		);
+
+		address _delegatee = delegates(account);
+		if (getVotes(_delegatee) > 0 && _delegatee != address(0)) {
+			IGovernance(governanceAddress).updateVotes(_delegatee);
+		}
 		super._burn(account, amount);
 	}
 }
