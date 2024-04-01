@@ -151,6 +151,9 @@ contract DomeGovernor is Governor, GovernorVotes {
 			uint256 diff = proposalVote.votesOf[account] - weight;
 			proposalVote.votesOf[account] -= diff;
 			proposalVote.forVotes -= diff;
+		} else if (proposalVote.votesOf[account] == weight) {
+			proposalVote.votesOf[account] = 0;
+			proposalVote.forVotes -= weight;
 		} else {
 			uint256 diff = weight - proposalVote.votesOf[account];
 			proposalVote.votesOf[account] += diff;
