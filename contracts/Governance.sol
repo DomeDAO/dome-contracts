@@ -31,13 +31,14 @@ interface IWrappedVoting {
 struct ProposalVote {
 	uint256 forVotes;
 	mapping(address => bool) hasVoted;
+	mapping(address => uint256) votesOf;
 }
 
 contract DomeGovernor is Governor, GovernorVotes {
 	using EnumerableMap for EnumerableMap.UintToUintMap;
 
 	EnumerableMap.UintToUintMap internal activeProposalVotes;
-	mapping(uint256 => ProposalVote) private _proposalVotes;
+	mapping(uint256 => ProposalVote) internal _proposalVotes;
 	address public immutable DOME_ADDRESS;
 
 	uint256 private _votingDelay;
@@ -145,14 +146,56 @@ contract DomeGovernor is Governor, GovernorVotes {
 	) internal virtual override {
 		ProposalVote storage proposalVote = _proposalVotes[proposalId];
 
-		require(
-			!proposalVote.hasVoted[account],
-			"GovernorVotingSimple: vote already cast"
-		);
 		proposalVote.hasVoted[account] = true;
+		if (proposalVote.votesOf[account] > weight) {
+			uint256 diff = proposalVote.votesOf[account] - weight;
+			proposalVote.votesOf[account] -= diff;
+			proposalVote.forVotes -= diff;
+		} else {
+			uint256 diff = weight - proposalVote.votesOf[account];
+			proposalVote.votesOf[account] += diff;
+			proposalVote.forVotes += diff;
+		}
 
-		proposalVote.forVotes += weight;
 		activeProposalVotes.set(proposalId, proposalVote.forVotes);
+	}
+
+	function updateVotes(address account) public {
+		require(
+			msg.sender == address(token),
+			"Only wrapped token contract is authorized"
+		);
+
+		for (uint i = 0; i < _votedProposals[account].length; i++) {
+			uint256 proposalId = _votedProposals[account][i];
+			if (
+				hasVoted(proposalId, account) && _isProposalActive(proposalId)
+			) {
+				uint256 weight = _getVotes(
+					account,
+					block.number,
+					_defaultParams()
+				);
+				_countVote(proposalId, account, weight, _defaultParams());
+
+				if (_defaultParams().length == 0) {
+					emit VoteCast(
+						account,
+						proposalId,
+						weight,
+						"Update vote balance"
+					);
+				} else {
+					emit VoteCastWithParams(
+						account,
+						proposalId,
+						weight,
+						"Update vote balance",
+						_defaultParams()
+					);
+				}
+			}
+		}
 	}
 
 	function _getHighestVotedProposal()
@@ -239,6 +282,12 @@ contract DomeGovernor is Governor, GovernorVotes {
 		}
 
 		return this.execute(_proposalId);
+	}
+
+	function _isProposalActive(
+		uint256 proposalId
+	) internal view override returns (bool) {
+		return activeProposalVotes.contains(proposalId);
 	}
 
 	function _afterExecute(uint256 proposalId) internal override {
