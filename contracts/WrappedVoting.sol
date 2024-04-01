@@ -70,10 +70,10 @@ contract DomeWrappedVoting is ERC20, ERC20Permit, ERC20Votes, ERC20Wrapper {
 			DOME_ADDRESS()
 		);
 
+		super._burn(account, amount);
 		address _delegatee = delegates(account);
-		if (getVotes(_delegatee) > 0 && _delegatee != address(0)) {
+		if (amount > 0 && _delegatee != address(0)) {
 			IGovernance(governanceAddress).updateVotes(_delegatee);
 		}
-		super._burn(account, amount);
 	}
 }
