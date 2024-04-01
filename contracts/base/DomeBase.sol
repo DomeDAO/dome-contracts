@@ -125,8 +125,9 @@ abstract contract DomeBase {
 			}
 
 			updatedAmount = amount - totalFeePortion;
-
 			emit SystemFeeClaimed(totalFeePortion);
+
+			return updatedAmount;
 		}
 
 		return amount;
