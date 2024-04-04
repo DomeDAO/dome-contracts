@@ -39,6 +39,8 @@ contract DomeGovernor is Governor, GovernorVotes {
 
 	EnumerableMap.UintToUintMap internal activeProposalVotes;
 	mapping(uint256 => ProposalVote) internal _proposalVotes;
+	uint256[] public proposals;
+
 	address public immutable DOME_ADDRESS;
 
 	uint256 private _votingDelay;
@@ -253,6 +255,24 @@ contract DomeGovernor is Governor, GovernorVotes {
 		emit ReserveTransfered(reserveAmount);
 	}
 
+	function getProposals() external view returns (uint256[][] memory) {
+		uint256[][] memory result = new uint256[][](proposals.length);
+
+		for (uint i = 0; i < proposals.length; i++) {
+			uint256[] memory proposalResult = new uint256[](3);
+			ProposalState currentState = state(proposals[i]);
+			uint256 proposalVotes_ = _proposalVotes[proposals[i]].forVotes;
+
+			proposalResult[0] = proposals[i];
+			proposalResult[1] = uint8(currentState);
+			proposalResult[2] = proposalVotes_;
+
+			result[i] = proposalResult;
+		}
+
+		return result;
+	}
+
 	function propose(
 		address wallet,
 		uint256 amount,
@@ -262,6 +282,7 @@ contract DomeGovernor is Governor, GovernorVotes {
 		uint256 proposalId = super.propose(wallet, amount, title, description);
 
 		activeProposalVotes.set(proposalId, 0);
+		proposals.push(proposalId);
 
 		return proposalId;
 	}
