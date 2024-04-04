@@ -2029,5 +2029,463 @@ describe("Governance", function () {
 				await governanceContract.callStatic.state(firstProposalId)
 			).to.be.equal(PROPOSAL_STATE.EXECUTED);
 		});
+
+		it("Should allow stakeholder to vote for active proposal with new votes", async function () {
+			const {
+				assetContract,
+				domeInstance,
+				otherAccount,
+				bufferContract,
+				governanceContract,
+				PROPOSAL_STATE,
+				votingContract,
+				governanceSettings,
+			} = await loadFixture(deployDome);
+
+			const swapAmount = ethers.utils.parseEther("50");
+			const assetsReceived = await swap(
+				otherAccount,
+				MAINNET.ADDRESSES.WMATIC,
+				assetContract.address,
+				swapAmount
+			);
+
+			await approve(
+				otherAccount,
+				assetContract.address,
+				domeInstance.address,
+				assetsReceived
+			);
+
+			await expect(
+				domeInstance
+					.connect(otherAccount)
+					.deposit(assetsReceived, otherAccount.address)
+			).to.be.fulfilled;
+
+			const ONE_DAY = 60 * 60 * 24;
+			await time.increase(ONE_DAY * 60);
+
+			await domeInstance.connect(otherAccount).claimYieldAndDistribute();
+
+			expect(await votingContract.getVotes(otherAccount.address)).to.be.eq(0);
+
+			const sharesAmount = await domeInstance.balanceOf(otherAccount.address);
+
+			await approve(
+				otherAccount,
+				domeInstance.address,
+				votingContract.address,
+				sharesAmount
+			);
+
+			const otherAccountDepositAmountFirstHalf = sharesAmount.div(2);
+			const otherAccountDepositAmountSecondHalf = sharesAmount.sub(
+				otherAccountDepositAmountFirstHalf
+			);
+
+			await expect(
+				votingContract
+					.connect(otherAccount)
+					.depositFor(otherAccount.address, otherAccountDepositAmountFirstHalf)
+			).to.changeTokenBalance(
+				domeInstance,
+				otherAccount.address,
+				otherAccountDepositAmountFirstHalf.mul(-1)
+			);
+
+			await expect(
+				votingContract.connect(otherAccount).delegate(otherAccount.address)
+			).to.be.fulfilled;
+
+			expect(await votingContract.getVotes(otherAccount.address)).to.be.eq(
+				otherAccountDepositAmountFirstHalf
+			);
+
+			const walletAddress = ethers.Wallet.createRandom().address;
+			const domeReserve = await bufferContract.callStatic.domeReserves(
+				domeInstance.address
+			);
+
+			const transferAmount = domeReserve;
+
+			const title = "Proposal#1";
+			const description = "Proposal#1 Transfer funds to XXXX";
+
+			// Need to mine one block, to callStatic won't fail due to pastVotingBalance
+			await mine(1);
+			const proposalId = await governanceContract
+				.connect(otherAccount)
+				.callStatic.propose(walletAddress, transferAmount, title, description);
+
+			await expect(
+				governanceContract
+					.connect(otherAccount)
+					.propose(walletAddress, transferAmount, title, description)
+			).to.be.fulfilled;
+
+			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
+				PROPOSAL_STATE.PENDING
+			);
+
+			await mine(governanceSettings.votingDelay + 1);
+			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
+				PROPOSAL_STATE.ACTIVE
+			);
+
+			await expect(
+				governanceContract.connect(otherAccount).castVote(proposalId)
+			).to.be.fulfilled;
+
+			const proposalVotesFirstHalf =
+				await governanceContract.callStatic.proposalVotes(proposalId);
+
+			await expect(
+				votingContract
+					.connect(otherAccount)
+					.depositFor(otherAccount.address, otherAccountDepositAmountSecondHalf)
+			).to.changeTokenBalance(
+				domeInstance,
+				otherAccount.address,
+				otherAccountDepositAmountSecondHalf.mul(-1)
+			);
+
+			await expect(
+				votingContract.connect(otherAccount).delegate(otherAccount.address)
+			).to.be.fulfilled;
+
+			await expect(
+				governanceContract.connect(otherAccount).castVote(proposalId)
+			).to.be.fulfilled;
+
+			const proposalVotesSecondHalf =
+				await governanceContract.callStatic.proposalVotes(proposalId);
+
+			expect(await votingContract.getVotes(otherAccount.address)).to.be.eq(
+				otherAccountDepositAmountFirstHalf.add(
+					otherAccountDepositAmountSecondHalf
+				)
+			);
+
+			await expect(
+				votingContract
+					.connect(otherAccount)
+					.withdrawTo(otherAccount.address, proposalVotesFirstHalf)
+			).to.be.fulfilled;
+
+			expect(
+				await governanceContract.callStatic.proposalVotes(proposalId)
+			).to.be.eq(proposalVotesSecondHalf.sub(proposalVotesFirstHalf));
+		});
+
+		it("Should allow stakeholder to vote for active proposal with new votes and withdraw them all", async function () {
+			const {
+				assetContract,
+				domeInstance,
+				otherAccount,
+				bufferContract,
+				governanceContract,
+				PROPOSAL_STATE,
+				votingContract,
+				governanceSettings,
+			} = await loadFixture(deployDome);
+
+			const swapAmount = ethers.utils.parseEther("50");
+			const assetsReceived = await swap(
+				otherAccount,
+				MAINNET.ADDRESSES.WMATIC,
+				assetContract.address,
+				swapAmount
+			);
+
+			await approve(
+				otherAccount,
+				assetContract.address,
+				domeInstance.address,
+				assetsReceived
+			);
+
+			await expect(
+				domeInstance
+					.connect(otherAccount)
+					.deposit(assetsReceived, otherAccount.address)
+			).to.be.fulfilled;
+
+			const ONE_DAY = 60 * 60 * 24;
+			await time.increase(ONE_DAY * 60);
+
+			await domeInstance.connect(otherAccount).claimYieldAndDistribute();
+
+			expect(await votingContract.getVotes(otherAccount.address)).to.be.eq(0);
+
+			const sharesAmount = await domeInstance.balanceOf(otherAccount.address);
+
+			await approve(
+				otherAccount,
+				domeInstance.address,
+				votingContract.address,
+				sharesAmount
+			);
+
+			const otherAccountDepositAmountFirstHalf = sharesAmount.div(2);
+			const otherAccountDepositAmountSecondHalf = sharesAmount.sub(
+				otherAccountDepositAmountFirstHalf
+			);
+
+			await expect(
+				votingContract
+					.connect(otherAccount)
+					.depositFor(otherAccount.address, otherAccountDepositAmountFirstHalf)
+			).to.changeTokenBalance(
+				domeInstance,
+				otherAccount.address,
+				otherAccountDepositAmountFirstHalf.mul(-1)
+			);
+
+			await expect(
+				votingContract.connect(otherAccount).delegate(otherAccount.address)
+			).to.be.fulfilled;
+
+			expect(await votingContract.getVotes(otherAccount.address)).to.be.eq(
+				otherAccountDepositAmountFirstHalf
+			);
+
+			const walletAddress = ethers.Wallet.createRandom().address;
+			const domeReserve = await bufferContract.callStatic.domeReserves(
+				domeInstance.address
+			);
+
+			const transferAmount = domeReserve;
+
+			const title = "Proposal#1";
+			const description = "Proposal#1 Transfer funds to XXXX";
+
+			// Need to mine one block, to callStatic won't fail due to pastVotingBalance
+			await mine(1);
+			const proposalId = await governanceContract
+				.connect(otherAccount)
+				.callStatic.propose(walletAddress, transferAmount, title, description);
+
+			await expect(
+				governanceContract
+					.connect(otherAccount)
+					.propose(walletAddress, transferAmount, title, description)
+			).to.be.fulfilled;
+
+			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
+				PROPOSAL_STATE.PENDING
+			);
+
+			await mine(governanceSettings.votingDelay + 1);
+			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
+				PROPOSAL_STATE.ACTIVE
+			);
+
+			await expect(
+				governanceContract.connect(otherAccount).castVote(proposalId)
+			).to.be.fulfilled;
+
+			await expect(
+				votingContract
+					.connect(otherAccount)
+					.depositFor(otherAccount.address, otherAccountDepositAmountSecondHalf)
+			).to.changeTokenBalance(
+				domeInstance,
+				otherAccount.address,
+				otherAccountDepositAmountSecondHalf.mul(-1)
+			);
+
+			await expect(
+				votingContract.connect(otherAccount).delegate(otherAccount.address)
+			).to.be.fulfilled;
+
+			await expect(
+				governanceContract.connect(otherAccount).castVote(proposalId)
+			).to.be.fulfilled;
+
+			const proposalVotesSecondHalf =
+				await governanceContract.callStatic.proposalVotes(proposalId);
+
+			expect(await votingContract.getVotes(otherAccount.address)).to.be.eq(
+				otherAccountDepositAmountFirstHalf.add(
+					otherAccountDepositAmountSecondHalf
+				)
+			);
+
+			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
+				PROPOSAL_STATE.PRESUCCEEDED
+			);
+
+			await expect(
+				votingContract
+					.connect(otherAccount)
+					.withdrawTo(otherAccount.address, proposalVotesSecondHalf)
+			).to.be.fulfilled;
+
+			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
+				PROPOSAL_STATE.ACTIVE
+			);
+
+			expect(
+				await governanceContract.callStatic.proposalVotes(proposalId)
+			).to.be.eq(0);
+		});
+
+		it("Should allow stakeholder to vote for active proposal with new votes and withdraw them all after trigger", async function () {
+			const {
+				assetContract,
+				domeInstance,
+				otherAccount,
+				bufferContract,
+				governanceContract,
+				PROPOSAL_STATE,
+				votingContract,
+				governanceSettings,
+			} = await loadFixture(deployDome);
+
+			const swapAmount = ethers.utils.parseEther("50");
+			const assetsReceived = await swap(
+				otherAccount,
+				MAINNET.ADDRESSES.WMATIC,
+				assetContract.address,
+				swapAmount
+			);
+
+			await approve(
+				otherAccount,
+				assetContract.address,
+				domeInstance.address,
+				assetsReceived
+			);
+
+			await expect(
+				domeInstance
+					.connect(otherAccount)
+					.deposit(assetsReceived, otherAccount.address)
+			).to.be.fulfilled;
+
+			const ONE_DAY = 60 * 60 * 24;
+			await time.increase(ONE_DAY * 60);
+
+			await domeInstance.connect(otherAccount).claimYieldAndDistribute();
+
+			expect(await votingContract.getVotes(otherAccount.address)).to.be.eq(0);
+
+			const sharesAmount = await domeInstance.balanceOf(otherAccount.address);
+
+			await approve(
+				otherAccount,
+				domeInstance.address,
+				votingContract.address,
+				sharesAmount
+			);
+
+			const otherAccountDepositAmountFirstHalf = sharesAmount.div(2);
+			const otherAccountDepositAmountSecondHalf = sharesAmount.sub(
+				otherAccountDepositAmountFirstHalf
+			);
+
+			await expect(
+				votingContract
+					.connect(otherAccount)
+					.depositFor(otherAccount.address, otherAccountDepositAmountFirstHalf)
+			).to.changeTokenBalance(
+				domeInstance,
+				otherAccount.address,
+				otherAccountDepositAmountFirstHalf.mul(-1)
+			);
+
+			await expect(
+				votingContract.connect(otherAccount).delegate(otherAccount.address)
+			).to.be.fulfilled;
+
+			expect(await votingContract.getVotes(otherAccount.address)).to.be.eq(
+				otherAccountDepositAmountFirstHalf
+			);
+
+			const walletAddress = ethers.Wallet.createRandom().address;
+			const domeReserve = await bufferContract.callStatic.domeReserves(
+				domeInstance.address
+			);
+
+			const transferAmount = domeReserve;
+
+			const title = "Proposal#1";
+			const description = "Proposal#1 Transfer funds to XXXX";
+
+			// Need to mine one block, to callStatic won't fail due to pastVotingBalance
+			await mine(1);
+			const proposalId = await governanceContract
+				.connect(otherAccount)
+				.callStatic.propose(walletAddress, transferAmount, title, description);
+
+			await expect(
+				governanceContract
+					.connect(otherAccount)
+					.propose(walletAddress, transferAmount, title, description)
+			).to.be.fulfilled;
+
+			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
+				PROPOSAL_STATE.PENDING
+			);
+
+			await mine(governanceSettings.votingDelay + 1);
+			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
+				PROPOSAL_STATE.ACTIVE
+			);
+
+			await expect(
+				governanceContract.connect(otherAccount).castVote(proposalId)
+			).to.be.fulfilled;
+
+			await expect(
+				votingContract
+					.connect(otherAccount)
+					.depositFor(otherAccount.address, otherAccountDepositAmountSecondHalf)
+			).to.changeTokenBalance(
+				domeInstance,
+				otherAccount.address,
+				otherAccountDepositAmountSecondHalf.mul(-1)
+			);
+
+			await expect(
+				votingContract.connect(otherAccount).delegate(otherAccount.address)
+			).to.be.fulfilled;
+
+			await expect(
+				governanceContract.connect(otherAccount).castVote(proposalId)
+			).to.be.fulfilled;
+
+			const proposalVotesSecondHalf =
+				await governanceContract.callStatic.proposalVotes(proposalId);
+
+			expect(await votingContract.getVotes(otherAccount.address)).to.be.eq(
+				otherAccountDepositAmountFirstHalf.add(
+					otherAccountDepositAmountSecondHalf
+				)
+			);
+
+			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
+				PROPOSAL_STATE.PRESUCCEEDED
+			);
+
+			await expect(
+				governanceContract.connect(otherAccount).triggerProposal()
+			).to.changeTokenBalance(assetContract, walletAddress, transferAmount);
+
+			await expect(
+				votingContract
+					.connect(otherAccount)
+					.withdrawTo(otherAccount.address, proposalVotesSecondHalf)
+			).to.be.fulfilled;
+
+			expect(await governanceContract.callStatic.state(proposalId)).to.be.equal(
+				PROPOSAL_STATE.EXECUTED
+			);
+
+			expect(
+				await governanceContract.callStatic.proposalVotes(proposalId)
+			).to.be.eq(proposalVotesSecondHalf);
+		});
 	});
 });

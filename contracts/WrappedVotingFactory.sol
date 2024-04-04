@@ -9,7 +9,7 @@ contract WrappedVotingFactory {
 	function createWrapper(
 		address token
 	) external returns (address wrappedVoting) {
-		wrappedVoting = address(new DomeWrappedVoting(token));
+		wrappedVoting = address(new DomeWrappedVoting(token, msg.sender));
 
 		emit WrappedVotingCreated(token, wrappedVoting);
 	}

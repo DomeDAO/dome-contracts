@@ -57,6 +57,7 @@ abstract contract Governor is
 
 	/// @custom:oz-retyped-from mapping(uint256 => Governor.ProposalCore)
 	mapping(uint256 => ProposalCore) private _proposals;
+	mapping(address => uint256[]) internal _votedProposals;
 
 	/**
 	 * @dev Restricts a function so it can only be executed through governance proposals. For example, governance
@@ -257,6 +258,10 @@ abstract contract Governor is
 		uint256 timepoint,
 		bytes memory params
 	) internal view virtual returns (uint256);
+
+	function _isProposalActive(
+		uint256 proposalId
+	) internal view virtual returns (bool);
 
 	/**
 	 * @dev Register a vote for `proposalId` by `account` with a given `support`, voting `weight` and voting `params`.
@@ -557,6 +562,18 @@ abstract contract Governor is
 		return _castVote(proposalId, account, reason, _defaultParams());
 	}
 
+	function _arrayContains(
+		uint256[] memory array,
+		uint256 value
+	) internal pure returns (bool) {
+		for (uint256 i = 0; i < array.length; i++) {
+			if (array[i] == value) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	/**
 	 * @dev Internal vote casting mechanism: Check that the vote is pending, that it has not been cast yet, retrieve
 	 * voting weight using {IGovernor-getVotes} and call the {_countVote} internal function.
@@ -578,8 +595,14 @@ abstract contract Governor is
 			"Governor: vote not currently active"
 		);
 
-		uint256 weight = _getVotes(account, proposal.voteStart, params);
+		uint256 weight = _getVotes(account, proposal.voteEnd, params);
 		_countVote(proposalId, account, weight, params);
+
+		uint256[] storage votedProposals = _votedProposals[account];
+
+		if (!_arrayContains(votedProposals, proposalId)) {
+			votedProposals.push(proposalId);
+		}
 
 		if (params.length == 0) {
 			emit VoteCast(account, proposalId, weight, reason);
