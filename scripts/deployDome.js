@@ -137,7 +137,7 @@ async function main() {
 			governanceSettings.proposalThreshold,
 		];
 
-		const wrappedConstructorArguments = [domeAddress];
+		const wrappedConstructorArguments = [domeAddress, domeProtocol.address];
 
 		deployment.GOVERNANCE = {
 			address: governanceAddress,
