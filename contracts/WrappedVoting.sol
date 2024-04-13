@@ -28,6 +28,9 @@ contract DomeWrappedVoting is ERC20, ERC20Permit, ERC20Votes, ERC20Wrapper {
 		DOME_PROTOCOL = creator;
 	}
 
+	/**
+	 * @dev Returns the decimals places of the token.
+	 */
 	function decimals()
 		public
 		view
@@ -43,6 +46,9 @@ contract DomeWrappedVoting is ERC20, ERC20Permit, ERC20Votes, ERC20Wrapper {
 		}
 	}
 
+	/**
+	 * @dev Returns Dome address linked to the voting
+	 */
 	function DOME_ADDRESS() public view returns (address) {
 		return address(underlying());
 	}
@@ -62,6 +68,12 @@ contract DomeWrappedVoting is ERC20, ERC20Permit, ERC20Votes, ERC20Wrapper {
 		super._mint(to, amount);
 	}
 
+	/**
+	 * Burns voting tokens and returns stake tokens
+	 * @notice Contains logic which updates proposal votes after burn
+	 * @param account account of holder
+	 * @param amount amount to burn
+	 */
 	function _burn(
 		address account,
 		uint256 amount

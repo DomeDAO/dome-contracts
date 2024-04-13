@@ -139,7 +139,9 @@ contract DomeGovernor is Governor, GovernorVotes {
 
 	/**
 	 * @dev See {Governor-_countVote}. In this module, the support follows the `VoteType` enum (from Governor Bravo).
+	 * @notice Consists of some additional logic to keep track of voted balances of accounts per proposal
 	 */
+	
 	function _countVote(
 		uint256 proposalId,
 		address account,
@@ -165,6 +167,9 @@ contract DomeGovernor is Governor, GovernorVotes {
 		activeProposalVotes.set(proposalId, proposalVote.forVotes);
 	}
 
+
+	/// @notice Updates votes for a voter with its current votes amount
+	/// @param account voter's account address
 	function updateVotes(address account) public {
 		require(
 			msg.sender == address(token),
@@ -203,6 +208,9 @@ contract DomeGovernor is Governor, GovernorVotes {
 		}
 	}
 
+	/// @notice Returns higest voted proposals data
+	/// @return proposalId id of the highest voted proposal
+	/// @return highestVote its votes amount
 	function _getHighestVotedProposal()
 		internal
 		view
@@ -220,6 +228,8 @@ contract DomeGovernor is Governor, GovernorVotes {
 		}
 	}
 
+	/// @notice Removes inactive pools from the list
+	/// @return mapLength new length of active proposals list
 	function _removeInactiveProposals() internal returns (uint256 mapLength) {
 		for (uint i = 0; i < activeProposalVotes.length(); i++) {
 			(uint256 _proposalId, ) = activeProposalVotes.at(i);
@@ -238,6 +248,9 @@ contract DomeGovernor is Governor, GovernorVotes {
 		return activeProposalVotes.length();
 	}
 
+	/// @notice Internal function used to transfer reserve funds
+	/// @param wallet to wallet address
+	/// @param amount with asset amount
 	function _reserveTransfer(
 		address wallet,
 		uint256 amount
@@ -255,6 +268,7 @@ contract DomeGovernor is Governor, GovernorVotes {
 		emit ReserveTransfered(reserveAmount);
 	}
 
+	/// @notice Returns the list of all proposals with their votes and state
 	function getProposals() external view returns (uint256[][] memory) {
 		uint256[][] memory result = new uint256[][](proposals.length);
 
@@ -273,6 +287,12 @@ contract DomeGovernor is Governor, GovernorVotes {
 		return result;
 	}
 
+	/// @notice Create a new proposal
+	/// @param wallet receiver of the funs
+	/// @param amount asset amount for the proposal
+	/// @param title title of the proposal
+	/// @param description description of the proposal
+	/// @return proposalId created proposalId
 	function propose(
 		address wallet,
 		uint256 amount,
@@ -287,18 +307,26 @@ contract DomeGovernor is Governor, GovernorVotes {
 		return proposalId;
 	}
 
+	/// @notice Executes the succeded proposal
+	/// @param proposalId id of the proposal
+	/// @return proposalId executed proposalId
 	function execute(
 		uint256 _proposalId
 	) public override returns (uint256 proposalId) {
 		return super.execute(_proposalId);
 	}
 
+	/// @notice Canceles creates proposal
+	/// @param proposalId id of the proposal
+	/// @return proposalId
 	function cancel(
 		uint256 _proposalId
 	) public override returns (uint256 proposalId) {
 		return super.cancel(_proposalId);
 	}
 
+	/// @notice Triggers proposal at any time if its succeeded and executes
+	/// @return proposalId executed proposalId
 	function triggerProposal() public returns (uint256 proposalId) {
 		(uint256 _proposalId, ) = _getHighestVotedProposal();
 		if (!activeProposalVotes.contains(_proposalId)) {
@@ -308,6 +336,9 @@ contract DomeGovernor is Governor, GovernorVotes {
 		return this.execute(_proposalId);
 	}
 
+	/// @notice Returns proposal's acitve state wether its active or not
+	/// @param proposalId id of the proposal
+	/// @return boolean,
 	function _isProposalActive(
 		uint256 proposalId
 	) internal view override returns (bool) {
