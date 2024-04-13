@@ -6,6 +6,13 @@ import {DomeGovernor, IVotes} from "./Governance.sol";
 contract GovernanceFactory {
 	event GovernanceCreated(address token, address governance);
 
+	/**
+	 * Creates governance for dome
+	 * @param token governance woting token
+	 * @param votingDelay proposal voting delay
+	 * @param votingPeriod proposal voting period
+	 * @param proposalThreshold proposal voting threshold
+	 */
 	function createGovernance(
 		address token,
 		uint256 votingDelay,

@@ -11,6 +11,16 @@ contract DomeFactory {
 		string CID
 	);
 
+	/**
+	 * Initializes dome
+	 * @param domeInfo dome creation info
+	 * @param beneficiariesInfo beneficiaries array with shares
+	 * @param systemOwner system owner's address
+	 * @param domeProtocol dome protocol address
+	 * @param _yieldProtocol yield generation protocol address for dome
+	 * @param systemOwnerPercentage percentage of system owners fee
+	 * @param _depositorYieldPercent percent of generated yield which stays with investor
+	 */
 	function initialize(
 		DomeInfo memory domeInfo,
 		BeneficiaryInfo[] memory beneficiariesInfo,

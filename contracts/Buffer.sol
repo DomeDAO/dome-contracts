@@ -35,17 +35,32 @@ contract Buffer is Ownable {
 		_;
 	}
 
+	/**
+	 * Checks wether the provided address is a dome or not
+	 * @param _address address of contract
+	 */
 	function _isDome(address _address) private view returns (bool) {
 		return
 			IDomeProtocol(DOME_PROTOCOL).domeCreators(_address) != address(0);
 	}
 
+	/**
+	 * Adds reserv to dome's balance
+	 * @param amount reserve to add in dome's asset
+	 */
 	function addReserve(uint256 amount) external onlyDomes {
 		domeReserves[msg.sender] += amount;
 
 		emit ReserveIn(msg.sender, amount);
 	}
 
+	/**
+	 * Transfers funds to the wallet after successfull proposal execution
+	 * @param dome dome address
+	 * @param token underlying asset
+	 * @param wallet receiver address
+	 * @param amount amount to transfer
+	 */
 	function submitTransfer(
 		address dome,
 		address token,

@@ -1,3 +1,77 @@
+# Contract Layout
+
+## Dome Protocol Smart Contract
+
+**Description:**
+
+[The Dome Protocol Smart Contract](./contracts/DomeProtocol.sol) enables the creation of dome structures with predefined governance settings, beneficiaries, and yield generation mechanisms.
+
+**Features:**
+
+- **Dome Creation:** Users can create dome structures by providing dome information, beneficiary details, governance settings, and yield generation parameters. Domes serve as decentralized entities with predefined rules and functionalities.
+
+- **Governance Integration:** The protocol integrates with governance mechanisms, allowing dome structures to be governed by predefined rules and decision-making processes. Governance settings include parameters such as voting delay, voting period, and proposal threshold.
+
+- **Yield Generation:** Domes generate yield from deposited assets, and users can specify the percentage of generated yield allocated to depositors as rewards.
+
+- **Reward Token Minting:** The protocol supports the minting of reward tokens, which represent users' share of generated yield. Reward tokens can be minted for users based on their contributions to dome structures.
+
+- **Fee Management:** The protocol includes mechanisms for managing system owner percentages and dome creation fees, providing flexibility for protocol governance and sustainability.
+
+**Interfaces:**
+
+- **Ownable:** Implements ownership functionalities, allowing certain operations to be restricted to contract owners.
+- **IGovernanceFactory:** Interface for creating governance contracts for dome structures.
+- **IWrappedVotingFactory:** Interface for creating wrapped voting contracts for dome governance.
+- **IDomeFactory:** Interface for initializing dome structures with specified parameters.
+- **IPriceTracker:** Interface for converting asset amounts to USDC equivalents for reward token minting.
+- **IRewardToken:** Interface for minting reward tokens for dome participants.
+
+## DomeCore Smart Contract
+
+**Description:**
+
+[The Dome smart contract](./contracts/DomeCore.sol) facilitates the creation of dome structures where users can deposit assets, mint shares, and earn rewards. The contract supports various functionalities including depositing, withdrawing, claiming rewards, and donating assets.
+
+**Features:**
+
+- **Deposit and Mint:** Users can deposit assets into the dome and mint shares, allowing them to participate in the dome's activities.
+- **Withdraw and Redeem:** Users can withdraw assets from the dome and redeem their shares to retrieve their deposited assets.
+- **Yield Generation:** The dome generates yield from deposited assets, which can be claimed by users as rewards.
+- **Beneficiary Distribution:** Generated yield and donated assets are distributed among predefined beneficiaries according to specified percentages.
+- **Rewards Distribution:** Rewards are distributed to users based on their share of deposited assets and additional system fees.
+
+**Interfaces:**
+
+- **IERC20:** Implements the ERC20 standard for fungible tokens.
+- **IERC4626:** Integrates additional ERC4626 functionality for ERC20 tokens.
+- **IBuffer:** Interface for the buffer contract used for asset management and distribution.
+- **IDomeProtocol:** Interface for the dome protocol contract.
+
+## DomeGovernor Smart Contract
+
+**Description:**
+
+[The DomeGovernor smart contract](./contracts/Governance.sol) is a decentralized governance protocol. It serves as a governance mechanism for the Dome protocol, allowing token holders to propose and vote on changes to the protocol. The contract integrates with the Dome protocol and supports various governance functionalities including proposal creation, voting, execution and cancellation.
+
+**Features:**
+
+- **Proposal Creation:** Token holders can create proposals to suggest changes or actions within the Dome protocol. Proposals include details such as the recipient wallet, asset amount, title, and description.
+
+- **Voting:** Token holders can vote on proposed actions using their voting power, which is determined by the number of tokens they hold. The contract supports weighted voting based on token holdings.
+
+- **Execution and Cancellation:** Successfully voted proposals can be executed to implement the proposed actions. Proposals can also be canceled if deemed necessary by the token holders.
+
+- **Reserve Fund Management:** The contract includes functionality to transfer reserve funds from the Dome protocol to designated wallets, enabling efficient fund management.
+
+**Interfaces:**
+
+- **IDome:** Interface for the Dome protocol contract, providing access to protocol-related functionalities.
+
+- **IBuffer:** Interface for the buffer contract used for asset management within the Dome protocol.
+
+- **IWrappedVoting:** Interface for the wrapped voting contract, facilitating interaction between the DomeGovernor and voting mechanisms.
+
 # DomeProtocol
 
 ```mermaid

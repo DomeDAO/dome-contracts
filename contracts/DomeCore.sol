@@ -93,6 +93,9 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		_approveToken(yieldProtocol.asset(), _yieldProtocol, type(uint256).max);
 	}
 
+	/**
+	 * @dev Returns the decimals places of the token.
+	 */
 	function decimals()
 		public
 		view
@@ -102,22 +105,37 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		return IERC20Metadata(yieldProtocol.asset()).decimals();
 	}
 
+	/**
+	 * @dev Returns BUFFER address linked to the dome
+	 */
 	function BUFFER() public view returns (address) {
 		return IDomeProtocol(DOME_PROTOCOL).BUFFER();
 	}
 
+	/**
+	 * @dev Returns Dome creator address
+	 */
 	function domeOwner() public view returns (address) {
 		return IDomeProtocol(DOME_PROTOCOL).domeCreators(address(this));
 	}
 
+	/**
+	 * @dev Returns underlying asset address
+	 */
 	function asset() public view returns (address) {
 		return yieldProtocol.asset();
 	}
 
+	/**
+	 * @dev Returns total shares owned by the dome
+	 */
 	function totalShares() public view returns (uint256) {
 		return _getBalance(address(yieldProtocol));
 	}
 
+	/**
+	 * @dev Pauses reward token issuance
+	 */
 	function pauseRewards() external {
 		if (msg.sender != domeOwner() && msg.sender != systemOwner) {
 			revert Unauthorized();
@@ -126,6 +144,9 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		rewardsPaused = true;
 	}
 
+	/**
+	 * @dev Unpauses reward token issuance
+	 */
 	function unpauseRewards() external {
 		if (msg.sender != domeOwner() && msg.sender != systemOwner) {
 			revert Unauthorized();
@@ -134,6 +155,11 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		rewardsPaused = false;
 	}
 
+	/**
+	 * Deposits assets and enteres dome
+	 * @param assets asset amount to deposit
+	 * @param receiver receiver address of shares
+	 */
 	function deposit(
 		uint256 assets,
 		address receiver
@@ -146,6 +172,11 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		return shares;
 	}
 
+	/**
+	 * Mintes shares and enteres dome
+	 * @param shares shares amount to receive
+	 * @param receiver share receiver address
+	 */
 	function mint(
 		uint256 shares,
 		address receiver
@@ -159,6 +190,13 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		return assets;
 	}
 
+	/**
+	 * Internal deposit handler
+	 * @param caller caller address
+	 * @param receiver shares receiver
+	 * @param assets assets amount
+	 * @param shares shares amount
+	 */
 	function _deposit(
 		address caller,
 		address receiver,
@@ -182,6 +220,12 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		emit Deposit(caller, receiver, assets, yieldSharesReceived);
 	}
 
+	/**
+	 * Withdraw assets and exit dome
+	 * @param assets assets to withdraw
+	 * @param receiver assets receiver
+	 * @param owner owner of the assets
+	 */
 	function withdraw(
 		uint256 assets,
 		address receiver,
@@ -194,6 +238,12 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		return shares;
 	}
 
+	/**
+	 * Redeem shares and exit dome
+	 * @param shares shares amount to redeem
+	 * @param receiver shares receiver
+	 * @param owner owner of the shares
+	 */
 	function redeem(
 		uint256 shares,
 		address receiver,
@@ -206,6 +256,13 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		return assets;
 	}
 
+	/**
+	 * Internal withdraw handler
+	 * @param caller caller address
+	 * @param receiver receiver address
+	 * @param assets assets amount
+	 * @param shares shares amount
+	 */
 	function _withdraw(
 		address caller,
 		address receiver,
@@ -248,6 +305,12 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		return updatedAssetAmount + yield;
 	}
 
+	/**
+	 * Decreases share spending allowance
+	 * @param owner shares owner address
+	 * @param spender shares spender address
+	 * @param amount amount of tokens
+	 */
 	function _decreaseAllowance(
 		address owner,
 		address spender,
@@ -265,6 +328,11 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		}
 	}
 
+	/**
+	 * Retuns available yield asset amounts
+	 * @return assets available generated assets
+	 * @return shares available generated sharse
+	 */
 	function availableYield()
 		public
 		view
@@ -298,6 +366,10 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		return (netYield, shares);
 	}
 
+	/**
+	 * Distributes provided assets among beneficiares
+	 * @param amount amount to distribute
+	 */
 	function _distribute(uint256 amount) internal {
 		for (uint256 i; i < beneficiaries.length; i++) {
 			uint256 distributeAmount = (amount * beneficiaries[i].percent) /
@@ -317,6 +389,9 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		}
 	}
 
+	/**
+	 * Claims generated yield and distributes amoung beneficiares
+	 */
 	function claimYieldAndDistribute() external {
 		(uint256 assets, uint256 shares) = availableYield();
 
@@ -327,6 +402,10 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		emit YieldClaimed(address(yieldProtocol), assets);
 	}
 
+	/**
+	 * Preview assets withdrawal
+	 * @param assets withdraw assets amount
+	 */
 	function previewWithdraw(
 		uint256 assets
 	) public view returns (uint256 shares) {
@@ -337,12 +416,20 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		return yieldProtocol.previewWithdraw(assets);
 	}
 
+	/**
+	 * Returns max redeem amount for owner
+	 * @param owner share owner address
+	 */
 	function maxRedeem(
 		address owner
 	) external view returns (uint256 maxShares) {
 		return balanceOf(owner);
 	}
 
+	/**
+	 * Returns max withdrawal amount for owner
+	 * @param owner share owner address
+	 */
 	function maxWithdraw(
 		address owner
 	) external view returns (uint256 maxAssets) {
@@ -357,6 +444,10 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		return updatedAssets + yield;
 	}
 
+	/**
+	 * Preview assets redeem
+	 * @param assets redeem shares amount
+	 */
 	function previewRedeem(
 		uint256 shares
 	) public view returns (uint256 assets) {
@@ -369,6 +460,13 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		return updatedAssets + yield;
 	}
 
+	/**
+	 * Internal function for withdrawal calculation for owner
+	 * @param owner shares owner address
+	 * @param assets amount of assets
+	 * @return assets amount
+	 * @return yield yield portion of owner
+	 */
 	function _assetsWithdrawForOwner(
 		address owner,
 		uint256 assets
@@ -388,6 +486,10 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		return (assets, 0);
 	}
 
+	/**
+	 * Returns generated yield amount for staker
+	 * @param owner shares owner address
+	 */
 	function generatedYieldOf(address owner) public view returns (uint256) {
 		uint256 totalAssetsFromShares = yieldProtocol.previewRedeem(
 			balanceOf(owner)
@@ -396,6 +498,9 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		return totalAssetsFromShares - _assets[owner];
 	}
 
+	/**
+	 * Claims reward tokens
+	 */
 	function claim() external returns (uint256) {
 		if (rewardsPaused) {
 			revert InActive();
@@ -420,6 +525,11 @@ contract Dome is ERC20, IERC4626, DomeBase {
 			);
 	}
 
+	/**
+	 * Donates ERC20-compatible tokens
+	 * @param token address of token
+	 * @param amount amount to donate
+	 */
 	function donate(address token, uint256 amount) external payable {
 		if (token == address(this)) {
 			burn(amount);
@@ -431,6 +541,11 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		emit Donate(msg.sender, token, amount);
 	}
 
+	/**
+	 * Internal donation handler, donation will be distributed among beneficiaries
+	 * @param token address of token
+	 * @param amount amount to donate
+	 */
 	function _donate(address token, uint256 amount) internal {
 		uint256 bufferPercent;
 		for (uint256 i; i < beneficiaries.length; i++) {
@@ -471,6 +586,10 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		}
 	}
 
+	/**
+	 * Burns share tokens, and distributes underlying assets among beneficiaries
+	 * @param shares shares amount to burn
+	 */
 	function burn(uint shares) public {
 		uint256 assets = previewRedeem(shares);
 

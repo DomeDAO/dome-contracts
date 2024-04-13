@@ -7,9 +7,9 @@ import {Buffer} from "./Buffer.sol";
 import {RewardToken} from "./RewardToken.sol";
 
 struct GovernanceSettings {
-	uint256 votingDelay; /* in blocks */
-	uint256 votingPeriod; /* in blocks */
-	uint256 proposalThreshold; /* in blocks */
+	uint256 votingDelay /* in blocks */;
+	uint256 votingPeriod /* in blocks */;
+	uint256 proposalThreshold /* in blocks */;
 }
 
 interface IGovernanceFactory {
@@ -112,10 +112,20 @@ contract DomeProtocol is Ownable {
 		_;
 	}
 
+	/**
+	 * Ownable function, updates buffer address
+	 * @param _buffer address of the buffer
+	 */
 	function updateBuffer(address _buffer) external onlyOwner {
 		BUFFER = _buffer;
 	}
 
+	/**
+	 * Ownable function, updates factory addresses
+	 * @param _domeFactory dome factory address
+	 * @param _wrappedvotingFactory wrapped voting factory address
+	 * @param _governanceFactory governance factory address
+	 */
 	function updateFactories(
 		address _domeFactory,
 		address _wrappedvotingFactory,
@@ -134,6 +144,14 @@ contract DomeProtocol is Ownable {
 		}
 	}
 
+	/**
+	 * Creates dome
+	 * @param domeInfo dome creation info
+	 * @param beneficiariesInfo beneficiaries array with shares
+	 * @param governanceSettings governance settings for dome
+	 * @param _depositorYieldPercent percent of generated yield which stays with investor
+	 * @param _yieldProtocol yield generation protocol address for dome
+	 */
 	function createDome(
 		DomeInfo memory domeInfo,
 		BeneficiaryInfo[] memory beneficiariesInfo,
@@ -176,6 +194,12 @@ contract DomeProtocol is Ownable {
 		emit DomeCreated(msg.sender, domeAddress, _yieldProtocol, domeInfo.CID);
 	}
 
+	/**
+	 * Mints reward tokens for an account
+	 * @param asset underling asset
+	 * @param to receiver address
+	 * @param amount mint amount
+	 */
 	function mintRewardTokens(
 		address asset,
 		address to,
@@ -195,10 +219,18 @@ contract DomeProtocol is Ownable {
 		return convertedAmount;
 	}
 
+	/**
+	 * Updates price tracker address
+	 * @param _priceTracker price tracker address
+	 */
 	function changePriceTracker(address _priceTracker) external onlyOwner {
 		PRICE_TRACKER = _priceTracker;
 	}
 
+	/**
+	 * Changes system owner percentage
+	 * @param percentage percentage of dome procols system owner
+	 */
 	function changeSystemOwnerPercentage(uint16 percentage) external onlyOwner {
 		if (percentage > 2500) {
 			revert InvalidFeePercent();
@@ -207,10 +239,18 @@ contract DomeProtocol is Ownable {
 		systemOwnerPercentage = percentage;
 	}
 
+	/**
+	 * Changes dome creation fee
+	 * @param value dome creation fee in wei
+	 */
 	function changeDomeCreationFee(uint256 value) external onlyOwner {
 		domeCreationFee = value;
 	}
 
+	/**
+	 * Withdraws any ethereum locked in the contract
+	 * @param recipient recepient of the funds
+	 */
 	function withdraw(address recipient) external onlyOwner {
 		(bool success, ) = recipient.call{value: address(this).balance}("");
 
