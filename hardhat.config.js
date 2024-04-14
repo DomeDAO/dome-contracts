@@ -10,6 +10,7 @@ const {
 	DEPLOY_PRIV_KEY,
 	GOERLI_RPC_URL,
 	MUMBAI_RPC_URL,
+	AMOY_RPC_URL,
 } = process.env;
 
 module.exports = {
@@ -53,8 +54,8 @@ module.exports = {
 			url: GOERLI_RPC_URL || "",
 			accounts: DEPLOY_PRIV_KEY ? [DEPLOY_PRIV_KEY] : [],
 		},
-		mumbai: {
-			url: MUMBAI_RPC_URL || "",
+		amoy: {
+			url: AMOY_RPC_URL || "",
 			accounts: DEPLOY_PRIV_KEY ? [DEPLOY_PRIV_KEY] : [],
 		},
 		node_network: {
@@ -70,6 +71,7 @@ module.exports = {
 	},
 	etherscan: {
 		apiKey: {
+			polygonAmoy: POLYGON_API_KEY || "",
 			polygonMumbai: POLYGON_API_KEY || "",
 			polygon: POLYGON_API_KEY || "",
 			mainnet: MAINNET_API_KEY || "",

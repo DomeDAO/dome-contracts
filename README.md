@@ -305,9 +305,9 @@ To deploy the protocol, you will need to add the following `environment variable
 `POLYGON_RPC_URL`
 `MAINNET_RPC_URL`
 `GOERLI_RPC_URL`
-`MUMBAI_RPC_URL`
+`AMOY_RPC_URL`
 
-You can find the RPC URL's on: https://chainlist.org/
+You can find the RPC URL's on: https://chainlist.org/ || Use the RPC from Alchemy
 
 To deploy a `dome instance`, you will need to add the deployed `DomeProtocol's` address to your .env file:
 
@@ -389,7 +389,7 @@ Before deploying the contracts, ensure the following prerequisites are met:
    - `SYSTEM_OWNER` (public wallet address)
    - `DEPLOY_PRIV_KEY` (Extract it from Metamask or you wallet )
 
-3. Once you're ready to deploy the protocol, you should decide which network to use. We have predefined network entries, which you can use to deploy to a remote network such as `mainnet`, `polygon` or their testnets: `goerli`, `mumbai`. For these networks, the corresponding environment variables should be set: `POLYGON_RPC_URL`, `MAINNET_RPC_URL`,`GOERLI_RPC_URL`, `MUMBAI_RPC_URL`.
+3. Once you're ready to deploy the protocol, you should decide which network to use. We have predefined network entries, which you can use to deploy to a remote network such as `mainnet`, `polygon` or their testnets: `goerli`, `amoy`. For these networks, the corresponding environment variables should be set: `POLYGON_RPC_URL`, `MAINNET_RPC_URL`,`GOERLI_RPC_URL`, `AMOY_RPC_URL`.
 
 If you want to deploy somewhere else, you need to add a new network entry to `hardhat.config.js` file similarly to the others:
 
@@ -420,7 +420,7 @@ Also you can use predefined network deployment scripts:
 npm run deployProtocol:mainnet
 npm run deployProtocol:goerli
 npm run deployProtocol:polygon
-npm run deployProtocol:mumbai
+npm run deployProtocol:amoy
 npm run deployProtocol:hardhat
 ```
 
@@ -521,7 +521,7 @@ Also you can use predefined network deployment scripts:
 npm run deployDome:mainnet
 npm run deployDome:goerli
 npm run deployDome:polygon
-npm run deployDome:mumbai
+npm run deployDome:amoy
 npm run deployDome:hardhat
 ```
 
@@ -608,4 +608,10 @@ Or for you custom ones listed in `hardhat.config.js`
 
 ```
 npm run  verifyLatestDome -- --network <network>
+```
+
+## Deploy a testing environment
+
+```bash
+npm run deployTestingEnv amoy
 ```

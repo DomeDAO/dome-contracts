@@ -1,7 +1,10 @@
 require("dotenv").config();
+
+
+
 const { ethers, run } = require("hardhat");
 const {
-	POLYGON: { MUMBAI },
+	POLYGON: { AMOY },
 } = require("../test/constants");
 const {
 	addLiquidityETH,
@@ -10,6 +13,7 @@ const {
 } = require("../test/utils");
 const {
 	writeDeploy,
+	getGasPrice,
 	getLatestDomeDeploy,
 	getLatestProtocolDeploy,
 } = require("./utils");
@@ -48,10 +52,11 @@ async function deployProtocol(deployer) {
 		ethers.getContractFactory("FakeERC4626"),
 	]);
 
-	const UNISWAP_ROUTER = MUMBAI.ADDRESSES.SUSHI_ROUTER_02;
-	const UNDERLYING_ASSET = MUMBAI.ADDRESSES.USDC;
+	const UNISWAP_ROUTER = AMOY.ADDRESSES.SUSHI_ROUTER_02;
+	const UNDERLYING_ASSET = AMOY.ADDRESSES.USDC;
 
 	let nonce = await deployer.getTransactionCount();
+	let gasPrice = await getGasPrice(10);
 	const priceTrackerConstructorArguments = [UNISWAP_ROUTER, UNDERLYING_ASSET];
 	const [
 		domeFactory,
@@ -60,15 +65,11 @@ async function deployProtocol(deployer) {
 		priceTracker,
 		fakeERC4626,
 	] = await Promise.all([
-		DomeFactory.deploy({ nonce: nonce }),
-		GovernanceFactory.deploy({ nonce: ++nonce }),
-		WrappedVotingFactory.deploy({ nonce: ++nonce }),
-		PriceTrackerFactory.deploy(...priceTrackerConstructorArguments, {
-			nonce: ++nonce,
-		}),
-		FakeERC4626Factory.deploy(UNDERLYING_ASSET, "ERC4626 Faker", "fERC4626", {
-			nonce: ++nonce,
-		}),
+		DomeFactory.deploy({ gasPrice, nonce }),
+		GovernanceFactory.deploy({ gasPrice, nonce }),
+		WrappedVotingFactory.deploy({ gasPrice, nonce }),
+		PriceTrackerFactory.deploy(...priceTrackerConstructorArguments, { gasPrice, nonce }),
+		FakeERC4626Factory.deploy(UNDERLYING_ASSET, "ERC4626 Faker", "fERC4626", { gasPrice, nonce }),
 	]);
 
 	await mint(UNDERLYING_ASSET, deployer, ethers.utils.parseEther("2000"));
@@ -80,7 +81,7 @@ async function deployProtocol(deployer) {
 	);
 
 	const domeCreationFee = ethers.utils.parseEther("0");
-	const systemOwnerPercentage = 1000;
+	const systemOwnerPercentage = 0;
 
 	const protocolConstructorArguments = [
 		deployer.address,
@@ -171,7 +172,7 @@ async function deployDome(deployer, domeProtocol, yieldProtocol) {
 		proposalThreshold: 1,
 	};
 
-	const depositorYieldPercent = 1000;
+	const depositorYieldPercent = 0;
 
 	const domeCreationArguments = [
 		domeInfo,
