@@ -118,6 +118,139 @@ sequenceDiagram
     Note over U,D: Burns shares, transfers underlying to beneficiaries
 ```
 
+# Flow of steps
+
+## Staking
+
+First of all the user should approve Dome to be able to pull required assets.
+Let's say the Dome uses USDC as it's underlying asset, in that case USDC should be approved.
+
+If you want to know the address of the asset, that uses Dome to generate yield, you can call the `asset` function inside Dome instance, which will return the underlying asset's address.
+
+In the case of USDC it will be the USDC contract address.
+After that we should give allowance to Dome instance, so that it is able to pull the USDC.
+
+On asset contract should be called `approve` function which accepts 2 arguments:
+
+- `Spender` - in this case the spender should be the Dome instance
+- `Amount` - the amount of assets you willing to give allowance, it should be more or equal to the amount you will to stake.
+
+```mermaid
+sequenceDiagram
+    box rgb(33,66,99) ASSET CONTRACT
+    participant U as USER
+    participant A as ASSET Contract
+    end
+    U->> +A: approve
+    Note over U,A: Approves Dome to pull tokens
+    box rgb(0, 121, 107) DOME INSTANCE
+    participant AU as USER <br/> WITH APPROVE
+    participant D as DOME INSTANCE
+    end
+    AU->> D: deposit
+    activate D
+    D-->> AU: staked shares
+    deactivate D
+    Note over AU,D: Stakes ASSET tokens <br/> receives Share tokens in exchange
+```
+
+## Voting
+
+If a staker wants to participate in proposals votes, the staked assets should be wrapped in exchange for voting tokens with ratio 1:1.
+
+In that case we should call give the `Wrapped Voting contract` the `allowance` to `pull staked tokens` and to wrap them.
+
+On Dome instance contract should be called `approve` function which accepts 2 arguments:
+
+- `Spender` - in this case the wrapped voting contract address should be passed.
+- `Amount` - the amount of staked tokens you willing to wrap.
+
+After granting allowance to pull the tokens, the `depositFor` should be called on Wrapped Voting contract side, which will `pull the stake` tokens, then `wrap` them and give `wrapped voting tokens in exchange`.
+
+After receiving the wrapped tokens, the holder should `delegate` its voting power to someone, usually to themselves.
+
+```mermaid
+sequenceDiagram
+    box rgb(33,66,99) DOME INSTANCE
+    participant U as USER
+    participant D as DOME INSTANCE
+    end
+    U->> +D: approve
+    Note over U,D: Approves Wrapped voting contract to <br/> pull staked tokens
+
+    box rgb(0, 121, 107) WRAPPED VOTING CONTRACT
+    participant AU as USER <br/> WITH APPROVE
+    participant WV as WRAPPED VOTING
+    end
+    AU->> WV: depositFor
+    activate WV
+    WV-->> AU: wrapped voting
+    deactivate WV
+    Note over AU, WV: Pulls staking tokens and <br /> receives wrapped voting token <br/>in exchange.
+
+    box rgb(66, 66, 66) WRAPPED VOTING CONTRACT
+    participant UV as USER <br/> WITH VOTING TOKEN
+    participant WVC as WRAPPED VOTING
+    end
+    UV->> WVC: delegate
+    Note over UV, WVC: Delegates voting power.
+```
+
+## Unstake
+
+If a staker wants to exit the dome and get back its assets, then all `voting tokens` should be `unwrapped` if there is any.
+
+To check the voting balance, the `balanceOf` function on `Wrapped Voting contract` should be called, which will return the current wrapped tokens balance of the user, the function takes 1 argument:
+
+- `owner` - the address of the holder we want to check.
+
+If the balance is positive the we should proceed and unwrap section, if not skip it.
+
+### Unwrap
+
+The `withdrawTo` function should be called on Wrapped Voting contract side, which will `burn` the wrapped voting tokens, then `send back` the staked tokens with ratio 1:1, the function takes 1 argument:
+
+- `to` - the receiver of staked tokens
+
+```mermaid
+sequenceDiagram
+    box rgb(66, 66, 66) WRAPPED VOTING CONTRACT
+    participant UV as USER <br/> WITH VOTING TOKEN
+    participant WVC as WRAPPED VOTING
+    end
+    UV->> WVC: withdrawTo
+    Note over UV, WVC: Unwraps the staked token.
+```
+
+### Unstake
+
+After receiving the staked tokens, the holder now is able to unstake them and receive assets in exchange.
+The `withdraw` or `redeem` functions should be called in this case, they take 3 arguments.
+`withdraw` function takes `assets amount` as 1'th argument staker willing to withdraw, whereas the `redeem` function takes the `shares amount`.
+
+- `assets/shares amount` - the amount of assets(withdraw) or shares(redeem) the holder is willing to withdraw
+- `receiver` - receiver of the underlying assets (e.g. USDC)
+- `owner` - owner of the staked tokens (usually the holder of staked tokens)
+
+```mermaid
+sequenceDiagram
+    box rgb(33,66,99) DOME INSTANCE
+    participant U as USER
+    participant D as DOME INSTANCE
+    end
+    U->> +D: withdraw
+    activate D
+    D-->> U: underlying assets
+    deactivate D
+    Note over U,D: Sends back staked tokens,<br /> receives assets
+
+    U->> +D: redeem
+    activate D
+    D-->> U: underlying assets
+    deactivate D
+    Note over U,D: Sends back staked tokens,<br /> receives assets
+```
+
 ## Prerequisites
 
 Before you begin, ensure you have met the following requirements:
