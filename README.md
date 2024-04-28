@@ -613,5 +613,9 @@ npm run  verifyLatestDome -- --network <network>
 ## Deploy a testing environment
 
 ```bash
-npm run deployTestingEnv amoy
+npm run deployTestingEnv:amoy
 ```
+
+## Before merge
+Test deployement of Protocol and Dome
+Test deployTestingEnv script
