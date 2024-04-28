@@ -19,8 +19,8 @@ const {
 } = require("./utils");
 
 async function main() {
+	console.log("Starting deployment...");
 	const [deployer] = await ethers.getSigners();
-
 	const { fakeERC4626: yieldProtocol, domeProtocol } =
 		await deployProtocol(deployer);
 	await deployDome(deployer, domeProtocol, yieldProtocol.address);
@@ -37,49 +37,89 @@ async function main() {
 
 async function deployProtocol(deployer) {
 	const [
+		FakeERC20,
+		FakeERC4626
+	] = await Promise.all([
+		ethers.getContractFactory("FakeERC20"),
+		ethers.getContractFactory("FakeERC4626"),
+	]);
+
+	console.log("Deploying protocol...");
+	let nonce = await ethers.provider.getTransactionCount(deployer.address, "latest");
+	let gasPrice = await getGasPrice(10);
+
+	console.log("Deploying fake artefacts");
+	const fakeERC20 = await FakeERC20.deploy("Fake USDC", "fUSDC", { nonce: nonce++, gasPrice });
+	console.log(`FakeERC20 deployed at ${fakeERC20.address}`);
+	const fakeERC4626 = await FakeERC4626.deploy(fakeERC20.address, "Fake ERC4626", "fERC4626", { nonce: nonce++, gasPrice });
+	console.log(`FakeERC4626 deployed at ${fakeERC4626.address}`);
+
+	console.log("Deploying contracts...");
+	const [
 		DomeFactory,
 		GovernanceFactory,
 		WrappedVotingFactory,
 		PriceTrackerFactory,
 		DomeProtocol,
-		FakeERC4626Factory,
 	] = await Promise.all([
 		ethers.getContractFactory("DomeFactory"),
 		ethers.getContractFactory("GovernanceFactory"),
 		ethers.getContractFactory("WrappedVotingFactory"),
 		ethers.getContractFactory("PriceTracker"),
 		ethers.getContractFactory("DomeProtocol"),
-		ethers.getContractFactory("FakeERC4626"),
 	]);
 
 	const UNISWAP_ROUTER = AMOY.ADDRESSES.SUSHI_ROUTER_02;
-	const UNDERLYING_ASSET = AMOY.ADDRESSES.USDC;
+	const USDC = fakeERC20.address;
 
-	let nonce = await deployer.getTransactionCount();
-	let gasPrice = await getGasPrice(10);
-	const priceTrackerConstructorArguments = [UNISWAP_ROUTER, UNDERLYING_ASSET];
-	const [
-		domeFactory,
-		governanceFactory,
-		wrappedVotingFactory,
-		priceTracker,
-		fakeERC4626,
-	] = await Promise.all([
-		DomeFactory.deploy({ gasPrice, nonce }),
-		GovernanceFactory.deploy({ gasPrice, nonce }),
-		WrappedVotingFactory.deploy({ gasPrice, nonce }),
-		PriceTrackerFactory.deploy(...priceTrackerConstructorArguments, { gasPrice, nonce }),
-		FakeERC4626Factory.deploy(UNDERLYING_ASSET, "ERC4626 Faker", "fERC4626", { gasPrice, nonce }),
-	]);
+	const priceTrackerConstructorArguments = [UNISWAP_ROUTER, USDC];
 
-	await mint(UNDERLYING_ASSET, deployer, ethers.utils.parseEther("2000"));
-	await addLiquidityETH(
-		deployer,
-		UNDERLYING_ASSET,
-		ethers.utils.parseUnits("100", 6),
-		ethers.utils.parseEther("0.001")
+	console.log("You are going to deploy:\n");
+	console.log("- DomeFactory");
+	console.log("- GovernanceFactory");
+	console.log("- WrappedVotingFactory");
+	console.log(
 	);
 
+	console.log("Deploying contracts...");
+	const [domeFactory, governanceFactory, wrappedVotingFactory, priceTracker] =
+		await Promise.all([
+			DomeFactory.deploy({ nonce: nonce, gasPrice }),
+			GovernanceFactory.deploy({ nonce: ++nonce, gasPrice }),
+			WrappedVotingFactory.deploy({ nonce: ++nonce, gasPrice }),
+			PriceTrackerFactory.deploy(...priceTrackerConstructorArguments, {
+				nonce: ++nonce,
+				gasPrice
+			}),
+		]);
+	console.log("Successfully deployed factories...");
+
+	console.log("\nDeployment addresses: ");
+	console.log(`- DomeFactory: ${domeFactory.address}`);
+	console.log(`- GovernanceFactory: ${governanceFactory.address}`);
+	console.log(`- WrappedVotingFactory: ${wrappedVotingFactory.address}`);
+	console.log(`- PriceTracker: ${priceTracker.address}`);
+
+	await Promise.all([
+		domeFactory.deployed(),
+		governanceFactory.deployed(),
+		wrappedVotingFactory.deployed(),
+		priceTracker.deployed(),
+	]);
+
+	console.log("Successfully deployed contracts...");
+
+	console.log("Minting fake tokens...");
+	console.log("Minting 2000 fake tokens to deployer...");
+	await mint(fakeERC20.address, deployer.address, ethers.utils.parseEther("2000"), deployer);
+	console.log("Successfully minted fake tokens...");
+	console.log("Minting 2000 fake tokens to fakeERC4626...");
+	await mint(fakeERC20.address, fakeERC4626.address, ethers.utils.parseEther("2000"), deployer);
+	console.log("Successfully minted fake tokens...");
+
+
+	console.log("Deploying DomeProtocol...");
+	console.log("Parameters definition...");
 	const domeCreationFee = ethers.utils.parseEther("0");
 	const systemOwnerPercentage = 0;
 
@@ -93,11 +133,15 @@ async function deployProtocol(deployer) {
 		domeCreationFee,
 	];
 
-	const domeProtocol = await DomeProtocol.deploy(
-		...protocolConstructorArguments
+	console.log("Deploying DomeProtocol...");
+	const domeProtocol = await DomeProtocol.connect(deployer).deploy(
+		...protocolConstructorArguments,
+		{ gasPrice }
 	);
 
 	await domeProtocol.deployed();
+
+	console.log("Successfully deployed DomeProtocol...");
 
 	const bufferAddress = await domeProtocol.callStatic.BUFFER();
 	const rewardTokenAddress = await domeProtocol.REWARD_TOKEN();

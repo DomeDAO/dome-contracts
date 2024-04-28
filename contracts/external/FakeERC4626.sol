@@ -35,7 +35,7 @@ contract FakeERC4626 is ERC20 {
 		ERC20 _asset,
 		string memory _name,
 		string memory _symbol
-	) ERC20(_name, _symbol, _asset.decimals()) {
+	) ERC20(_name, _symbol, 12) {
 		asset = _asset;
 		_timestamp = block.timestamp;
 	}

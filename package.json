@@ -15,6 +15,7 @@
 		"deployProtocol:polygon": "hardhat run scripts/deployDomeProtocol.js --network polygon",
 		"deployProtocol:amoy": "hardhat run scripts/deployDomeProtocol.js --network amoy",
 		"deployProtocol:hardhat": "hardhat run scripts/deployDomeProtocol.js --network hardhat",
+		"deployTestingEnv:amoy": "hardhat run scripts/deployTestingEnv.js --network amoy",
 		"test": "hardhat test --network hardhat",
 		"verifyProtocol:mainnet": "hardhat run scripts/verifyDomeProtocol.js --network mainnet",
 		"verifyProtocol:goerli": "hardhat run scripts/verifyDomeProtocol.js --network goerli",

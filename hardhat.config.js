@@ -55,6 +55,7 @@ module.exports = {
 			accounts: DEPLOY_PRIV_KEY ? [DEPLOY_PRIV_KEY] : [],
 		},
 		amoy: {
+			chainId: 80002,
 			url: AMOY_RPC_URL || "",
 			accounts: DEPLOY_PRIV_KEY ? [DEPLOY_PRIV_KEY] : [],
 		},
@@ -76,6 +77,17 @@ module.exports = {
 			polygon: POLYGON_API_KEY || "",
 			mainnet: MAINNET_API_KEY || "",
 		},
+		customChains: [
+			{
+				network: "polygonAmoy",
+				chainId: 80002,
+				urls: {
+					apiURL:
+						"https://www.oklink.com/api/explorer/v1/contract/verify/async/api/polygonAmoy",
+					browserURL: "https://www.oklink.com/polygonAmoy",
+				},
+			}
+		]
 	},
 	typechain: {
 		outDir: "typechain",

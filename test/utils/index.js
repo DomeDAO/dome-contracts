@@ -31,13 +31,16 @@ const UNISWAP_LIKE_ROUTER_02 = {
 	80002: POLYGON.AMOY.ADDRESSES.SUSHI_ROUTER_02,
 };
 
-async function mint(token, account, amount) {
+async function mint(token, account, amount, signer) {
+	console.log("Minting", amount, "tokens to", account[0].address);
+	console.log("Token address", token);
 	const calldata = mintableInterface.encodeFunctionData("mint", [
-		account.address,
+		account,
 		amount,
 	]);
+	console.log(calldata);
 
-	const tx = await account.sendTransaction({
+	const tx = await signer.sendTransaction({
 		to: token,
 		data: calldata,
 	});
