@@ -1,5 +1,5 @@
 require("dotenv").config();
-const { ethers } = require("hardhat");
+const { ethers, run } = require("hardhat");
 const readline = require("readline");
 const { writeDeploy, getGasPrice } = require("./utils");
 
@@ -15,10 +15,7 @@ async function main() {
 		await ethers.getContractFactory("GovernanceFactory");
 
 	console.log("You are going to deploy:\n");
-	console.log("- DomeFactory");
 	console.log("- GovernanceFactory");
-	console.log("- WrappedVotingFactory");
-	console.log();
 
 	await new Promise((resolve) =>
 		rl.question("\nPress any key to proceed...", (ans) => {
@@ -52,6 +49,15 @@ async function main() {
 
 	const network = await deployer.provider.getNetwork();
 	writeDeploy(network.name, deployment, "GovernanceFactory");
+
+	console.log("Waiting 15s before verification");
+	await new Promise((resolve) => setTimeout(resolve, 15000));
+
+	console.log("Verifying");
+	await run("verify:verify", {
+		address: deployment.GOVERNANCE_FACTORY.address,
+		constructorArguments: deployment.GOVERNANCE_FACTORY.constructorArguments,
+	});
 }
 
 main().catch((error) => {
