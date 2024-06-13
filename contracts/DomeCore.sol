@@ -495,6 +495,10 @@ contract Dome is ERC20, IERC4626, DomeBase {
 			balanceOf(owner)
 		);
 
+		if (_assets[owner] > totalAssetsFromShares) {
+			return 0;
+		}
+
 		return totalAssetsFromShares - _assets[owner];
 	}
 
