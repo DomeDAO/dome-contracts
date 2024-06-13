@@ -4,6 +4,8 @@
 	"scripts": {
 		"build": "npx hardhat compile",
 		"deployDome": "hardhat run scripts/deployDome.js",
+		"deployGovernanceFactory": "hardhat run scripts/deployGovernanceFactory.js",
+		"deployGovernanceFactory:polygon": "hardhat run scripts/deployGovernanceFactory.js --network polygon",
 		"deployDome:mainnet": "hardhat run scripts/deployDome.js --network mainnet",
 		"deployDome:goerli": "hardhat run scripts/deployDome.js --network goerli",
 		"deployDome:polygon": "hardhat run scripts/deployDome.js --network polygon",
