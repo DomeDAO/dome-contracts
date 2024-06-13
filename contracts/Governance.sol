@@ -106,6 +106,16 @@ contract DomeGovernor is Governor, GovernorVotes {
 	}
 
 	/**
+	 * @dev Returns actual votes of account on specified proposal
+	 */
+	function proposalVotesOf(
+		uint256 proposalId,
+		address account
+	) public view returns (uint256) {
+		return _proposalVotes[proposalId].votesOf[account];
+	}
+
+	/**
 	 * @dev Accessor to the internal vote counts.
 	 */
 	function proposalVotes(
@@ -141,7 +151,6 @@ contract DomeGovernor is Governor, GovernorVotes {
 	 * @dev See {Governor-_countVote}. In this module, the support follows the `VoteType` enum (from Governor Bravo).
 	 * @notice Consists of some additional logic to keep track of voted balances of accounts per proposal
 	 */
-	
 	function _countVote(
 		uint256 proposalId,
 		address account,
@@ -150,14 +159,13 @@ contract DomeGovernor is Governor, GovernorVotes {
 	) internal virtual override {
 		ProposalVote storage proposalVote = _proposalVotes[proposalId];
 
+		require(proposalVote.votesOf[account] != weight, "Already voted");
+
 		proposalVote.hasVoted[account] = true;
 		if (proposalVote.votesOf[account] > weight) {
 			uint256 diff = proposalVote.votesOf[account] - weight;
 			proposalVote.votesOf[account] -= diff;
 			proposalVote.forVotes -= diff;
-		} else if (proposalVote.votesOf[account] == weight) {
-			proposalVote.votesOf[account] = 0;
-			proposalVote.forVotes -= weight;
 		} else {
 			uint256 diff = weight - proposalVote.votesOf[account];
 			proposalVote.votesOf[account] += diff;
@@ -166,7 +174,6 @@ contract DomeGovernor is Governor, GovernorVotes {
 
 		activeProposalVotes.set(proposalId, proposalVote.forVotes);
 	}
-
 
 	/// @notice Updates votes for a voter with its current votes amount
 	/// @param account voter's account address
