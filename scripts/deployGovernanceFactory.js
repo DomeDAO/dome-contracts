@@ -29,16 +29,16 @@ async function main() {
 		deployer.address,
 		"latest"
 	);
-	const governanceFactory = GovernanceFactory.deploy({
+	const governanceFactory = await GovernanceFactory.deploy({
 		nonce: nonce,
 		gasPrice,
 	});
+	await governanceFactory.deployed();
+
 	console.log("Successfully GovernanceFactory...");
 
 	console.log("\nDeployment addresses: ");
 	console.log(`- GovernanceFactory: ${governanceFactory.address}`);
-
-	await governanceFactory.deployed();
 
 	const deployment = {
 		GOVERNANCE_FACTORY: {
