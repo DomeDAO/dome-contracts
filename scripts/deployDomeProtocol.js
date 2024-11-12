@@ -108,6 +108,7 @@ async function main() {
 		priceTracker.address,
 		systemOwnerPercentage,
 		domeCreationFee,
+		USDC,
 	];
 
 	console.log("Deploying Dome protocol....");
