@@ -56,7 +56,8 @@ describe("Governance", function () {
 			wrappedVotingFactory.address,
 			priceTracker.address,
 			systemOwnerPercentage,
-			domeCreationFee
+			domeCreationFee,
+			USDC
 		);
 
 		const bufferAddress = await domeProtocol.callStatic.BUFFER();
@@ -2905,6 +2906,11 @@ describe("Governance", function () {
 					await governanceContract.callStatic.proposalVotes(proposalId)
 				).to.be.eq(proposalVotesBefore.add(sharesAmount));
 			}
+		});
+		it("Should allow to fill proposal", async function () {
+			const { governanceContract } = await loadFixture(deployDome);
+
+			await governanceContract.connect(otherAccount).fill(0);
 		});
 	});
 });

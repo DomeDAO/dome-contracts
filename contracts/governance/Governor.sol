@@ -6,6 +6,7 @@ import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Recei
 import {IERC1155Receiver} from "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {IERC165, ERC165} from "@openzeppelin/contracts/utils/introspection/ERC165.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
@@ -54,6 +55,7 @@ abstract contract Governor is
 	// solhint-enable var-name-mixedcase
 
 	string private _name;
+	IERC20 public immutable usdc;
 
 	/// @custom:oz-retyped-from mapping(uint256 => Governor.ProposalCore)
 	mapping(uint256 => ProposalCore) private _proposals;
@@ -89,8 +91,9 @@ abstract contract Governor is
 	/**
 	 * @dev Sets the value for {name} and {version}
 	 */
-	constructor(string memory name_) EIP712(name_, "1") {
+	constructor(string memory name_, address usdcAddress) EIP712(name_, "1") {
 		_name = name_;
+		usdc = IERC20(usdcAddress);
 	}
 
 	/**
@@ -381,6 +384,29 @@ abstract contract Governor is
 
 		return proposalId;
 	}
+
+	function fill(uint256 proposalId) public virtual returns (uint256) {
+		return _fill(proposalId);
+	}
+
+	function _fill(uint256 proposalId) internal virtual returns (uint256) {
+		ProposalDetails memory __proposalDetails = _proposalDetails[proposalId];
+
+		_proposals[proposalId].executed = true;
+		_transfer(
+			__proposalDetails.wallet,
+			__proposalDetails.amount
+		);
+		return proposalId;
+	}
+
+	function _transfer(address wallet, uint256 amount) internal virtual returns (uint256) {
+        require(
+            usdc.transferFrom(msg.sender, wallet, amount),
+            "Governor: USDC transfer failed"
+        );
+		return amount;
+    }
 
 	/**
 	 * @dev See {IGovernor-cancel}.

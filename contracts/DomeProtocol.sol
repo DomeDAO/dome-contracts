@@ -17,7 +17,8 @@ interface IGovernanceFactory {
 		address token,
 		uint256 votingDelay,
 		uint256 votingPeriod,
-		uint256 proposalThreshold
+		uint256 proposalThreshold,
+		address usdcAddress
 	) external returns (address governanceAddress);
 }
 
@@ -65,6 +66,7 @@ contract DomeProtocol is Ownable {
 	address public REWARD_TOKEN;
 	address public PRICE_TRACKER;
 	address private _owner;
+	address public USDC_ADDRESS;
 
 	error UnpaidFee();
 	error InvalidFeePercent();
@@ -85,7 +87,8 @@ contract DomeProtocol is Ownable {
 		address _wrappedvotingFactory,
 		address _priceTracker,
 		uint16 _systemOwnerPercentage,
-		uint256 _domeCreationFee
+		uint256 _domeCreationFee,
+		address _usdcAddress
 	) {
 		_transferOwnership(systemOwner);
 
@@ -103,6 +106,7 @@ contract DomeProtocol is Ownable {
 		DOME_FACTORY = _domeFactory;
 		WRAPPEDVOTING_FACTORY = _wrappedvotingFactory;
 		GOVERNANCE_FACTORY = _governanceFactory;
+		USDC_ADDRESS = _usdcAddress;
 	}
 
 	modifier payedEnough() {
@@ -181,7 +185,8 @@ contract DomeProtocol is Ownable {
 						wrappedVoting,
 						governanceSettings.votingDelay,
 						governanceSettings.votingPeriod,
-						governanceSettings.proposalThreshold
+						governanceSettings.proposalThreshold,
+						USDC_ADDRESS
 					);
 
 				domeGovernance[domeAddress] = governanceAddress;
