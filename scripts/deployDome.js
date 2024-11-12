@@ -24,9 +24,9 @@ async function main() {
 	const bufferAddress = await domeProtocol.callStatic.BUFFER();
 
 	const domeInfo = {
-		CID: "FIRST_DOME",
-		tokenName: "Dome First Token",
-		tokenSymbol: "DFT",
+		CID: "BetterWithDome",
+		tokenName: "BetterWithDome",
+		tokenSymbol: "BwD",
 	};
 
 	const bufferBeneficiary = {

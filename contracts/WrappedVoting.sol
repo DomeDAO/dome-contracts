@@ -21,8 +21,8 @@ contract DomeWrappedVoting is ERC20, ERC20Permit, ERC20Votes, ERC20Wrapper {
 		address wrappedToken,
 		address creator
 	)
-		ERC20("DomeVoting", "DV")
-		ERC20Permit("DomeVoting")
+		ERC20("BetterWithDomeVotingPower", "BWDVOTE")
+		ERC20Permit("BetterWithDomeVotingPower")
 		ERC20Wrapper(IERC20(wrappedToken))
 	{
 		DOME_PROTOCOL = creator;

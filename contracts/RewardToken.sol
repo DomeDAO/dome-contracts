@@ -10,7 +10,7 @@ contract RewardToken is ERC20 {
 
 	event RewardClaimed(address indexed account, uint256 amount);
 
-	constructor(address _domeProtocol) ERC20("RewardToken", "RT") {
+	constructor(address _domeProtocol) ERC20("DOME", "DOME") {
 		DOME_PROTOCOL = _domeProtocol;
 	}
 
