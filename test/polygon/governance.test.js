@@ -2908,9 +2908,86 @@ describe("Governance", function () {
 			}
 		});
 		it("Should allow to fill proposal", async function () {
-			const { governanceContract } = await loadFixture(deployDome);
+			const {
+				assetContract, // USDC contract
+				domeInstance,
+				otherAccount,
+				anotherAccount,
+				bufferContract,
+				governanceContract,
+				PROPOSAL_STATE,
+				votingContract,
+			} = await loadFixture(deployDome);
 
-			await governanceContract.connect(otherAccount).fill(0);
+			// Get USDC for otherAccount
+			const swapAmount = ethers.utils.parseEther("5000");
+			const assetsReceived = await swap(
+				otherAccount,
+				MAINNET.ADDRESSES.WMATIC,
+				assetContract.address,
+				swapAmount
+			);
+
+			// Create proposal
+			const walletAddress = anotherAccount.address;
+			const transferAmount = assetsReceived.div(2);
+			const assetsToDeposit = assetsReceived.div(3);
+			const title = "Proposal#1";
+			const description = "Proposal#1 Transfer funds to XXXX";
+
+			await approve(
+				otherAccount,
+				assetContract.address,
+				domeInstance.address,
+				assetsToDeposit
+			);
+			await domeInstance
+				.connect(otherAccount)
+				.deposit(assetsToDeposit, otherAccount.address);
+
+			const sharesAmount = await domeInstance.balanceOf(otherAccount.address);
+
+			await approve(
+				otherAccount,
+				domeInstance.address,
+				votingContract.address,
+				sharesAmount
+			);
+			await votingContract
+				.connect(otherAccount)
+				.depositFor(otherAccount.address, sharesAmount);
+			await votingContract.connect(otherAccount).delegate(otherAccount.address);
+
+			// Create proposal
+			const proposalId = await governanceContract
+				.connect(otherAccount)
+				.callStatic.propose(walletAddress, transferAmount, title, description);
+
+			await governanceContract
+				.connect(otherAccount)
+				.propose(walletAddress, transferAmount, title, description);
+
+			// Approve USDC transfer for filling proposal
+			await approve(
+				otherAccount,
+				assetContract.address,
+				governanceContract.address,
+				transferAmount
+			);
+
+			// Fill the proposal
+			await expect(
+				governanceContract.connect(otherAccount).fill(proposalId)
+			).to.changeTokenBalances(
+				assetContract,
+				[otherAccount.address, walletAddress],
+				[transferAmount.mul(-1), transferAmount]
+			);
+
+			// Verify proposal state is now succeeded
+			expect(await governanceContract.state(proposalId)).to.equal(
+				PROPOSAL_STATE.EXECUTED
+			);
 		});
 	});
 });
