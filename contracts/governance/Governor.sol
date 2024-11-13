@@ -401,12 +401,12 @@ abstract contract Governor is
 	}
 
 	function _transfer(address wallet, uint256 amount) internal virtual returns (uint256) {
-        require(
-            usdc.transferFrom(msg.sender, wallet, amount),
-            "Governor: USDC transfer failed"
-        );
+		require(
+	            usdc.transferFrom(msg.sender, wallet, amount),
+	            "Governor: USDC transfer failed"
+	        );
 		return amount;
-    }
+	}
 
 	/**
 	 * @dev See {IGovernor-cancel}.
