@@ -53,7 +53,8 @@ describe("AAVE Yield Protocol", function () {
 			wrappedVotingFactory.address,
 			priceTracker.address,
 			systemOwnerPercentage,
-			domeCreationFee
+			domeCreationFee,
+			USDC
 		);
 
 		const bufferAddress = await domeProtocol.callStatic.BUFFER();

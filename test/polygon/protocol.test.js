@@ -45,7 +45,8 @@ describe("DomeProtocol", function () {
 			wrappedVotingFactory.address,
 			priceTracker.address,
 			systemOwnerPercentage,
-			domeCreationFee
+			domeCreationFee,
+			USDC
 		);
 
 		return {

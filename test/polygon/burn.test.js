@@ -56,7 +56,8 @@ describe("Burning", function () {
 			wrappedVotingFactory.address,
 			priceTracker.address,
 			systemOwnerPercentage,
-			domeCreationFee
+			domeCreationFee,
+			USDC
 		);
 
 		const bufferAddress = await domeProtocol.callStatic.BUFFER();
@@ -182,7 +183,8 @@ describe("Burning", function () {
 			wrappedVotingFactory.address,
 			priceTracker.address,
 			systemOwnerPercentage,
-			domeCreationFee
+			domeCreationFee,
+			USDC
 		);
 
 		const bufferAddress = await domeProtocol.callStatic.BUFFER();

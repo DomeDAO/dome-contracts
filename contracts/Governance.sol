@@ -56,8 +56,9 @@ contract DomeGovernor is Governor, GovernorVotes {
 		IVotes _token,
 		uint256 votingDelay_,
 		uint256 votingPeriod_,
-		uint256 proposalThreshold_
-	) Governor("DomeGovernor") GovernorVotes(_token) {
+		uint256 proposalThreshold_,
+		address usdcAddress
+	) Governor("DomeGovernor", usdcAddress) GovernorVotes(_token) {
 		DOME_ADDRESS = IWrappedVoting(address(token)).DOME_ADDRESS();
 		_votingDelay = votingDelay_;
 		_votingPeriod = votingPeriod_;

@@ -131,6 +131,7 @@ async function deployProtocol(deployer) {
 		priceTracker.address,
 		systemOwnerPercentage,
 		domeCreationFee,
+		USDC,
 	];
 
 	console.log("Deploying DomeProtocol...");
