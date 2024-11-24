@@ -2907,7 +2907,7 @@ describe("Governance", function () {
 				).to.be.eq(proposalVotesBefore.add(sharesAmount));
 			}
 		});
-		it("Should allow to fill proposal", async function () {
+		it("Should allow to fill proposal if status is live", async function () {
 			const {
 				assetContract, // USDC contract
 				domeInstance,
@@ -2917,6 +2917,7 @@ describe("Governance", function () {
 				governanceContract,
 				PROPOSAL_STATE,
 				votingContract,
+				governanceSettings,
 			} = await loadFixture(deployDome);
 
 			// Get USDC for otherAccount
@@ -2966,6 +2967,17 @@ describe("Governance", function () {
 			await governanceContract
 				.connect(otherAccount)
 				.propose(walletAddress, transferAmount, title, description);
+
+			// Try to fill while proposal is still pending
+			await expect(
+				governanceContract.connect(otherAccount).fill(proposalId)
+			).to.be.revertedWith("Governor: proposal not active");
+
+			await mine(governanceSettings.votingDelay + 1);
+
+			await expect(
+				governanceContract.connect(otherAccount).fill(proposalId)
+			).to.be.revertedWith("ERC20: transfer amount exceeds allowance");
 
 			// Approve USDC transfer for filling proposal
 			await approve(

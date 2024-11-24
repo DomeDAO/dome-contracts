@@ -44,6 +44,11 @@ abstract contract IGovernor is IERC165, IERC6372 {
 	event ProposalExecuted(uint256 proposalId);
 
 	/**
+	 * @dev Emitted when a proposal is filled.
+	 */
+	event ProposalFilled(uint256 proposalId);
+
+	/**
 	 * @dev Emitted when a vote is cast without params.
 	 *
 	 * Note: `support` values should be seen as buckets. Their interpretation depends on the voting module used.
