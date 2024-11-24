@@ -392,19 +392,29 @@ abstract contract Governor is
 	function _fill(uint256 proposalId) internal virtual returns (uint256) {
 		ProposalDetails memory __proposalDetails = _proposalDetails[proposalId];
 
-		_proposals[proposalId].executed = true;
-		_transfer(
-			__proposalDetails.wallet,
-			__proposalDetails.amount
+		ProposalState currentState = state(proposalId);
+		require(
+			currentState == ProposalState.Succeeded ||
+				currentState == ProposalState.PreSucceeded ||
+				currentState == ProposalState.Active,
+			"Governor: proposal not active"
 		);
+
+		emit ProposalFilled(proposalId);
+
+		_proposals[proposalId].executed = true;
+		_transfer(__proposalDetails.wallet, __proposalDetails.amount);
 		return proposalId;
 	}
 
-	function _transfer(address wallet, uint256 amount) internal virtual returns (uint256) {
+	function _transfer(
+		address wallet,
+		uint256 amount
+	) internal virtual returns (uint256) {
 		require(
-	            usdc.transferFrom(msg.sender, wallet, amount),
-	            "Governor: USDC transfer failed"
-	        );
+			usdc.transferFrom(msg.sender, wallet, amount),
+			"Governor: USDC transfer failed"
+		);
 		return amount;
 	}
 
