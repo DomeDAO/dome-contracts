@@ -1,5 +1,7 @@
 require("dotenv").config();
 require("@nomicfoundation/hardhat-toolbox");
+require("@nomicfoundation/hardhat-ledger");
+
 
 const {
 	POLYGON_RPC_URL,
@@ -44,7 +46,9 @@ module.exports = {
 		polygon: {
 			chainId: 137,
 			url: POLYGON_RPC_URL || "",
-			accounts: DEPLOY_PRIV_KEY ? [DEPLOY_PRIV_KEY] : [],
+			ledgerAccounts: [
+				"0x9bDca32FAFbAcB2D937A2d3538C7b8ECA3e59946",
+			],
 		},
 		mainnet: {
 			url: MAINNET_RPC_URL || "",
