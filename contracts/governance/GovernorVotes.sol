@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.20;
 
 import {Governor, SafeCast} from "./Governor.sol";
 import {IERC5805, IVotes} from "@openzeppelin/contracts/interfaces/IERC5805.sol";
