@@ -34,6 +34,7 @@ describe("AAVE Yield Protocol", function () {
 
 		const UNISWAP_ROUTER = MAINNET.ADDRESSES.SUSHI_ROUTER_02;
 		const USDC = MAINNET.ADDRESSES.USDC;
+		const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 
 		const [domeFactory, governanceFactory, wrappedVotingFactory, priceTracker] =
 			await Promise.all([
@@ -56,6 +57,16 @@ describe("AAVE Yield Protocol", function () {
 			domeCreationFee,
 			USDC
 		);
+
+		const providerTypeAave = await domeProtocol.YIELD_PROVIDER_TYPE_AAVE();
+
+		await domeProtocol.configureYieldProviders([
+			{
+				provider: yieldProtocol,
+				providerType: providerTypeAave,
+				enabled: true,
+			},
+		]);
 
 		const bufferAddress = await domeProtocol.callStatic.BUFFER();
 		const bufferContract = await ethers.getContractAt("Buffer", bufferAddress);
@@ -86,7 +97,6 @@ describe("AAVE Yield Protocol", function () {
 			proposalThreshold: 1,
 		};
 
-		const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 		const depositorYieldPercent = 1000;
 
 		const domeAddress = await domeProtocol

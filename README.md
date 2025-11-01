@@ -135,6 +135,27 @@ On asset contract should be called `approve` function which accepts 2 arguments:
 - `Spender` - in this case the spender should be the Dome instance
 - `Amount` - the amount of assets you willing to give allowance, it should be more or equal to the amount you will to stake.
 
+### Yield Provider Configuration
+
+The protocol owner maintains an allow-list of yield providers through `configureYieldProviders`. Each dome records the provider type it was created with so downstream services can differentiate behaviour. Two provider families are officially supported today:
+
+- `AAVE` vaults, which match the original ERC-4626 flow used by the protocol.
+- `Hyperliquid` staking, which is being integrated now. **Hyperliquid positions are volatile; you can lose principal when funding rates or liquidation events move against the position.** Treat Hyperliquid domes as high-risk and communicate this to depositors.
+
+To activate a provider, register the target ERC-4626 contract and its provider type before calling `createDome`, for example:
+
+```
+await domeProtocol.configureYieldProviders([
+	{
+		provider: <vaultAddress>,
+		providerType: await domeProtocol.YIELD_PROVIDER_TYPE_HYPERLIQUID(),
+		enabled: true,
+	},
+]);
+```
+
+Disable a provider by setting `enabled` to `false`. Future Hyperliquid adapters should honour this flag to gate deployment environments safely.
+
 ```mermaid
 sequenceDiagram
     box rgb(33,66,99) ASSET CONTRACT
@@ -371,6 +392,8 @@ npm run test
 ```
 
 Don't forget to update [environment variables](#environment-variables) before testing, all tests are done on the polygon mainnet fork, so the `POLYGON_RPC_URL` should be set.
+
+> Automated assurance: a GitHub Actions workflow executes `npm run test` on every push or pull request targeting `master`. Failing tests block merges into `master`, while feature branches (for example, `hyperliquid-integration`) remain free to iterate without CI gating.
 
 ## Deployment
 
@@ -617,5 +640,6 @@ npm run deployTestingEnv:amoy
 ```
 
 ## Before merge
+
 Test deployement of Protocol and Dome
 Test deployTestingEnv script

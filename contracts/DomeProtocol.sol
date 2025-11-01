@@ -5,6 +5,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {DomeInfo, BeneficiaryInfo} from "./DomeCore.sol";
 import {Buffer} from "./Buffer.sol";
 import {RewardToken} from "./RewardToken.sol";
+import {YieldProviderType} from "./interfaces/YieldProviderTypes.sol";
 
 struct GovernanceSettings {
 	uint256 votingDelay /* in blocks */;
@@ -35,6 +36,7 @@ interface IDomeFactory {
 		address systemOwner,
 		address buffer,
 		address _yieldProtocol,
+		YieldProviderType _yieldProviderType,
 		uint16 systemOwnerPercentage,
 		uint16 _depositorYieldPercent
 	) external returns (address);
@@ -51,13 +53,31 @@ interface IRewardToken {
 	function mint(address to, uint256 amount) external;
 }
 
+struct YieldProviderConfig {
+	address provider;
+	YieldProviderType providerType;
+	bool enabled;
+}
+
+struct YieldProviderInfo {
+	YieldProviderType providerType;
+	bool enabled;
+}
+
 contract DomeProtocol is Ownable {
+	uint8 public constant YIELD_PROVIDER_TYPE_UNKNOWN = uint8(YieldProviderType.UNKNOWN);
+	uint8 public constant YIELD_PROVIDER_TYPE_AAVE = uint8(YieldProviderType.AAVE);
+	uint8 public constant YIELD_PROVIDER_TYPE_HYPERLIQUID = uint8(
+		YieldProviderType.HYPERLIQUID
+	);
 	uint16 public systemOwnerPercentage;
 	uint256 public domeCreationFee;
 
 	mapping(address => address) public domeCreators;
 	mapping(address => address) public domeGovernance;
 	mapping(address => address[]) public creatorDomes;
+	mapping(address => YieldProviderInfo) public yieldProviders;
+	mapping(address => YieldProviderType) public domeYieldProviders;
 
 	address public BUFFER;
 	address public GOVERNANCE_FACTORY;
@@ -72,12 +92,20 @@ contract DomeProtocol is Ownable {
 	error InvalidFeePercent();
 	error TransferFailed();
 	error Unauthorized();
+	error UnsupportedYieldProvider(address provider);
+	error InvalidYieldProviderConfig();
 
 	event DomeCreated(
 		address indexed creator,
 		address domeAddress,
 		address yieldProtocol,
+		YieldProviderType providerType,
 		string CID
+	);
+	event YieldProviderConfigured(
+		address indexed provider,
+		YieldProviderType providerType,
+		bool enabled
 	);
 
 	constructor(
@@ -148,6 +176,36 @@ contract DomeProtocol is Ownable {
 		}
 	}
 
+	function configureYieldProviders(
+		YieldProviderConfig[] calldata configs
+	) external onlyOwner {
+		if (configs.length == 0) {
+			revert InvalidYieldProviderConfig();
+		}
+
+		for (uint256 i = 0; i < configs.length; i++) {
+			YieldProviderConfig calldata config = configs[i];
+
+			if (
+				config.provider == address(0) ||
+				(config.enabled && config.providerType == YieldProviderType.UNKNOWN)
+			) {
+				revert InvalidYieldProviderConfig();
+			}
+
+			yieldProviders[config.provider] = YieldProviderInfo({
+				providerType: config.providerType,
+				enabled: config.enabled
+			});
+
+			emit YieldProviderConfigured(
+				config.provider,
+				yieldProviders[config.provider].providerType,
+				yieldProviders[config.provider].enabled
+			);
+		}
+	}
+
 	/**
 	 * Creates dome
 	 * @param domeInfo dome creation info
@@ -163,15 +221,24 @@ contract DomeProtocol is Ownable {
 		uint16 _depositorYieldPercent,
 		address _yieldProtocol
 	) external payable payedEnough returns (address domeAddress) {
+		YieldProviderInfo memory providerInfo = yieldProviders[_yieldProtocol];
+
+		if (!providerInfo.enabled) {
+			revert UnsupportedYieldProvider(_yieldProtocol);
+		}
+
 		domeAddress = IDomeFactory(DOME_FACTORY).initialize(
 			domeInfo,
 			beneficiariesInfo,
 			owner(),
 			address(this),
 			_yieldProtocol,
+			providerInfo.providerType,
 			systemOwnerPercentage,
 			_depositorYieldPercent
 		);
+
+		domeYieldProviders[domeAddress] = providerInfo.providerType;
 
 		for (uint8 i; i < beneficiariesInfo.length; i++) {
 			if (beneficiariesInfo[i].wallet == BUFFER) {
@@ -196,7 +263,13 @@ contract DomeProtocol is Ownable {
 		domeCreators[domeAddress] = msg.sender;
 		creatorDomes[msg.sender].push(domeAddress);
 
-		emit DomeCreated(msg.sender, domeAddress, _yieldProtocol, domeInfo.CID);
+		emit DomeCreated(
+			msg.sender,
+			domeAddress,
+			_yieldProtocol,
+			providerInfo.providerType,
+			domeInfo.CID
+		);
 	}
 
 	/**

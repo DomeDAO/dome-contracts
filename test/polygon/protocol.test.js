@@ -49,6 +49,16 @@ describe("DomeProtocol", function () {
 			USDC
 		);
 
+	const providerTypeAave = await domeProtocol.YIELD_PROVIDER_TYPE_AAVE();
+
+	await domeProtocol.configureYieldProviders([
+		{
+			provider: MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC,
+			providerType: providerTypeAave,
+			enabled: true,
+		},
+	]);
+
 		return {
 			domeProtocol,
 			domeCreationFee,
@@ -299,7 +309,9 @@ describe("DomeProtocol", function () {
 			const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 			const depositorYieldPercent = 1000;
 
-			const domeAddress = await domeProtocol
+		const providerType = await domeProtocol.YIELD_PROVIDER_TYPE_AAVE();
+
+		const domeAddress = await domeProtocol
 				.connect(otherAccount)
 				.callStatic.createDome(
 					domeInfo,
@@ -323,12 +335,13 @@ describe("DomeProtocol", function () {
 					)
 			)
 				.to.emit(domeProtocol, "DomeCreated")
-				.withArgs(
-					otherAccount.address,
-					domeAddress,
-					yieldProtocol,
-					domeInfo.CID
-				);
+			.withArgs(
+				otherAccount.address,
+				domeAddress,
+				yieldProtocol,
+				providerType,
+				domeInfo.CID
+			);
 		});
 	});
 
@@ -454,5 +467,164 @@ describe("DomeProtocol", function () {
 				newSystemOwnerPercentage
 			);
 		});
+
+	describe("Yield providers", function () {
+		it("Should revert when creating dome with unapproved provider", async function () {
+			const { domeProtocol, otherAccount, domeCreationFee } =
+				await loadFixture(deployDomeProtocol);
+
+			const domeInfo = {
+				CID: "<DOME_CID>",
+				tokenName: "<DOME_TOKEN_NAME>",
+				tokenSymbol: "<DOME_TOKEN_SYMBOL>",
+			};
+
+			const beneficiary = [
+				"beneficiary",
+				otherAccount.address,
+				10000,
+			];
+
+			const governanceSettings = {
+				votingDelay: convertDurationToBlocks("0 min"),
+				votingPeriod: convertDurationToBlocks("6 month"),
+				proposalThreshold: 1,
+			};
+
+			const unapprovedProvider = ethers.Wallet.createRandom().address;
+
+			await expect(
+				domeProtocol
+					.connect(otherAccount)
+					.createDome(
+						domeInfo,
+						[beneficiary],
+						governanceSettings,
+						1000,
+						unapprovedProvider,
+						{ value: domeCreationFee }
+					)
+			).to.be.revertedWithCustomError(
+				domeProtocol,
+				"UnsupportedYieldProvider"
+			).withArgs(unapprovedProvider);
+		});
+
+		it("Should configure hyperliquid provider and persist provider type", async function () {
+			const { domeProtocol, otherAccount, domeCreationFee } =
+				await loadFixture(deployDomeProtocol);
+
+			const domeInfo = {
+				CID: "<HL_DOME_CID>",
+				tokenName: "<HL_DOME_TOKEN_NAME>",
+				tokenSymbol: "<HL_DOME_TOKEN_SYMBOL>",
+			};
+
+			const beneficiary = [
+				"beneficiary",
+				otherAccount.address,
+				10000,
+			];
+
+			const governanceSettings = {
+				votingDelay: convertDurationToBlocks("0 min"),
+				votingPeriod: convertDurationToBlocks("6 month"),
+				proposalThreshold: 1,
+			};
+
+			const hyperliquidProvider =
+				MAINNET.YIELD_PROTOCOLS.HYPERLIQUID_POLYGON_USDC;
+			const providerType = await domeProtocol.YIELD_PROVIDER_TYPE_HYPERLIQUID();
+
+			await expect(
+				domeProtocol.configureYieldProviders([
+					{
+						provider: hyperliquidProvider,
+						providerType,
+						enabled: true,
+					},
+				])
+			)
+				.to.emit(domeProtocol, "YieldProviderConfigured")
+				.withArgs(hyperliquidProvider, providerType, true);
+
+			const domeAddress = await domeProtocol
+				.connect(otherAccount)
+				.callStatic.createDome(
+					domeInfo,
+					[beneficiary],
+					governanceSettings,
+					1000,
+					hyperliquidProvider,
+					{ value: domeCreationFee }
+				);
+
+			await expect(
+				domeProtocol
+					.connect(otherAccount)
+					.createDome(
+						domeInfo,
+						[beneficiary],
+						governanceSettings,
+						1000,
+						hyperliquidProvider,
+						{ value: domeCreationFee }
+					)
+			)
+				.to.emit(domeProtocol, "DomeCreated")
+				.withArgs(
+					otherAccount.address,
+					domeAddress,
+					hyperliquidProvider,
+					providerType,
+					domeInfo.CID
+				);
+
+			expect(await domeProtocol.domeYieldProviders(domeAddress)).to.be.equal(
+				providerType
+			);
+
+			const domeInstance = await ethers.getContractAt("Dome", domeAddress);
+			expect(await domeInstance.yieldProviderType()).to.be.equal(providerType);
+		});
+
+		it("Should restrict yield provider configuration to owner", async function () {
+			const { domeProtocol, otherAccount } =
+				await loadFixture(deployDomeProtocol);
+
+			const providerType = await domeProtocol.YIELD_PROVIDER_TYPE_HYPERLIQUID();
+
+			await expect(
+				domeProtocol
+					.connect(otherAccount)
+					.configureYieldProviders([
+						{
+							provider: MAINNET.YIELD_PROTOCOLS.HYPERLIQUID_POLYGON_USDC,
+							providerType,
+							enabled: true,
+						},
+					])
+			).to.be.revertedWith("Ownable: caller is not the owner");
+		});
+
+		it("Should reject enabling provider with unknown type", async function () {
+			const { domeProtocol } = await loadFixture(deployDomeProtocol);
+
+			const unknownType = await domeProtocol.YIELD_PROVIDER_TYPE_UNKNOWN();
+
+			await expect(
+				domeProtocol.configureYieldProviders([
+					{
+						provider: MAINNET.YIELD_PROTOCOLS.HYPERLIQUID_POLYGON_USDC,
+						providerType: unknownType,
+						enabled: true,
+					},
+				])
+			).to.be.revertedWithCustomError(
+				domeProtocol,
+				"InvalidYieldProviderConfig"
+			);
+		});
+	});
 	});
 });

@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 
 import {IERC4626, IERC20Metadata, ERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import {DomeBase, SafeERC20} from "./base/DomeBase.sol";
+import {YieldProviderType} from "./interfaces/YieldProviderTypes.sol";
 
 struct BeneficiaryInfo {
 	string beneficiaryCID;
@@ -38,6 +39,7 @@ contract Dome is ERC20, IERC4626, DomeBase {
 
 	address public immutable DOME_PROTOCOL;
 	IERC4626 public immutable yieldProtocol;
+	YieldProviderType public immutable yieldProviderType;
 
 	uint256 public totalAssets;
 	mapping(address => uint256) private _assets;
@@ -66,6 +68,7 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		DomeInfo memory domeInfo,
 		BeneficiaryInfo[] memory beneficiariesInfo,
 		address _yieldProtocol,
+		YieldProviderType _yieldProviderType,
 		address _systemOwner,
 		address _domeProtocol,
 		uint16 systemOwnerPercent,
@@ -77,6 +80,7 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		DOME_PROTOCOL = _domeProtocol;
 		DOME_CID = domeInfo.CID;
 		yieldProtocol = IERC4626(_yieldProtocol);
+		yieldProviderType = _yieldProviderType;
 
 		uint16 _totalPercent = 0;
 		for (uint8 i = 0; i < beneficiariesInfo.length; i++) {
