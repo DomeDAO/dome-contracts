@@ -11,9 +11,48 @@ const {
 	MAINNET_API_KEY,
 	DEPLOY_PRIV_KEY,
 	GOERLI_RPC_URL,
-	MUMBAI_RPC_URL,
 	AMOY_RPC_URL,
+	ARBITRUM_RPC_URL,
+	ARBITRUM_SEPOLIA_RPC_URL,
+	ARBITRUM_API_KEY,
+	ENABLE_HARDHAT_FORKING,
 } = process.env;
+
+const normalizePrivateKey = (key) => {
+    if (!key) {
+        return undefined;
+    }
+
+    const trimmed = key.trim();
+
+    if (trimmed.length === 0) {
+        return undefined;
+    }
+
+    const prefixed = trimmed.startsWith("0x") ? trimmed : `0x${trimmed}`;
+
+    return prefixed.length === 66 ? prefixed : undefined;
+};
+
+const deployerPrivateKey = normalizePrivateKey(DEPLOY_PRIV_KEY);
+const deployerAccounts = deployerPrivateKey ? [deployerPrivateKey] : undefined;
+
+const shouldForkPolygon =
+	ENABLE_HARDHAT_FORKING === "true" && Boolean(POLYGON_RPC_URL);
+
+const hardhatNetwork = {
+    accounts: {
+        count: 10,
+        accountsBalance: "1000000000000000000000000",
+    },
+    chainId: 137,
+};
+
+if (shouldForkPolygon) {
+	hardhatNetwork.forking = {
+		url: POLYGON_RPC_URL,
+	};
+}
 
 module.exports = {
 	defaultNetwork: "hardhat",
@@ -33,16 +72,7 @@ module.exports = {
 		},
 	},
 	networks: {
-		hardhat: {
-			accounts: {
-				count: 10,
-				accountsBalance: "1000000000000000000000000",
-			},
-			forking: {
-				url: POLYGON_RPC_URL || "",
-			},
-			chainId: 137,
-		},
+		hardhat: hardhatNetwork,
 		polygon: {
 			chainId: 137,
 			url: POLYGON_RPC_URL || "",
@@ -50,19 +80,29 @@ module.exports = {
 				"0x9bDca32FAFbAcB2D937A2d3538C7b8ECA3e59946",
 			],
 		},
-		mainnet: {
-			url: MAINNET_RPC_URL || "",
-			accounts: DEPLOY_PRIV_KEY ? [DEPLOY_PRIV_KEY] : [],
-		},
-		goerli: {
-			url: GOERLI_RPC_URL || "",
-			accounts: DEPLOY_PRIV_KEY ? [DEPLOY_PRIV_KEY] : [],
-		},
-		amoy: {
-			chainId: 80002,
-			url: AMOY_RPC_URL || "",
-			accounts: DEPLOY_PRIV_KEY ? [DEPLOY_PRIV_KEY] : [],
-		},
+        arbitrumOne: {
+            chainId: 42161,
+            url: ARBITRUM_RPC_URL || "",
+            ...(deployerAccounts ? { accounts: deployerAccounts } : {}),
+        },
+        mainnet: {
+            url: MAINNET_RPC_URL || "",
+            ...(deployerAccounts ? { accounts: deployerAccounts } : {}),
+        },
+        goerli: {
+            url: GOERLI_RPC_URL || "",
+            ...(deployerAccounts ? { accounts: deployerAccounts } : {}),
+        },
+        amoy: {
+            chainId: 80002,
+            url: AMOY_RPC_URL || "",
+            ...(deployerAccounts ? { accounts: deployerAccounts } : {}),
+        },
+        arbitrumSepolia: {
+            chainId: 421614,
+            url: ARBITRUM_SEPOLIA_RPC_URL || "",
+            ...(deployerAccounts ? { accounts: deployerAccounts } : {}),
+        },
 		node_network: {
 			url: "http://127.0.0.1:8545/",
 		},
@@ -77,9 +117,10 @@ module.exports = {
 	etherscan: {
 		apiKey: {
 			polygonAmoy: POLYGON_API_KEY || "",
-			polygonMumbai: POLYGON_API_KEY || "",
 			polygon: POLYGON_API_KEY || "",
 			mainnet: MAINNET_API_KEY || "",
+			arbitrumOne: ARBITRUM_API_KEY || "",
+			arbitrumSepolia: ARBITRUM_API_KEY || "",
 		},
 		customChains: [
 			{

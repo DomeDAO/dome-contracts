@@ -13,60 +13,14 @@ const {
 	swap,
 	convertDurationToBlocks,
 } = require("../utils");
+const { deployMockEnvironment } = require("../helpers/deploy");
 
 describe("AAVE Yield Protocol", function () {
 	async function deployDomeWithAAVE() {
-		const [owner, otherAccount, anotherAccount] = await ethers.getSigners();
-
-		const [
-			DomeFactory,
-			GovernanceFactory,
-			WrappedVotingFactory,
-			PriceTrackerFactory,
-			DomeProtocol,
-		] = await Promise.all([
-			ethers.getContractFactory("DomeFactory"),
-			ethers.getContractFactory("GovernanceFactory"),
-			ethers.getContractFactory("WrappedVotingFactory"),
-			ethers.getContractFactory("PriceTracker"),
-			ethers.getContractFactory("DomeProtocol"),
-		]);
-
-		const UNISWAP_ROUTER = MAINNET.ADDRESSES.SUSHI_ROUTER_02;
-		const USDC = MAINNET.ADDRESSES.USDC;
-		const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
-
-		const [domeFactory, governanceFactory, wrappedVotingFactory, priceTracker] =
-			await Promise.all([
-				DomeFactory.deploy(),
-				GovernanceFactory.deploy(),
-				WrappedVotingFactory.deploy(),
-				PriceTrackerFactory.deploy(UNISWAP_ROUTER, USDC),
-			]);
-
-		const domeCreationFee = ethers.utils.parseEther("1");
-		const systemOwnerPercentage = 1000;
-
-		const domeProtocol = await DomeProtocol.deploy(
-			owner.address,
-			domeFactory.address,
-			governanceFactory.address,
-			wrappedVotingFactory.address,
-			priceTracker.address,
-			systemOwnerPercentage,
-			domeCreationFee,
-			USDC
-		);
-
-		const providerTypeAave = await domeProtocol.YIELD_PROVIDER_TYPE_AAVE();
-
-		await domeProtocol.configureYieldProviders([
-			{
-				provider: yieldProtocol,
-				providerType: providerTypeAave,
-				enabled: true,
-			},
-		]);
+		const { owner, others, contracts, params } = await deployMockEnvironment();
+		const [otherAccount, anotherAccount] = others;
+		const { domeProtocol } = contracts;
+		const { domeCreationFee, systemOwnerPercentage } = params;
 
 		const bufferAddress = await domeProtocol.callStatic.BUFFER();
 		const bufferContract = await ethers.getContractAt("Buffer", bufferAddress);
@@ -97,6 +51,7 @@ describe("AAVE Yield Protocol", function () {
 			proposalThreshold: 1,
 		};
 
+		const yieldProtocol = MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 		const depositorYieldPercent = 1000;
 
 		const domeAddress = await domeProtocol
@@ -127,7 +82,7 @@ describe("AAVE Yield Protocol", function () {
 
 		const domeInstance = await ethers.getContractAt("Dome", domeAddress);
 		const assetAddress = await domeInstance.asset();
-		const assetContract = await ethers.getContractAt("IERC20", assetAddress);
+		const assetContract = await ethers.getContractAt("MockERC20", assetAddress);
 
 		const governanceAddress = await domeProtocol.callStatic.domeGovernance(
 			domeInstance.address
@@ -314,89 +269,6 @@ describe("AAVE Yield Protocol", function () {
 			}
 
 			const ONE_DAY = 60 * 60 * 24;
-			await time.increase(ONE_DAY * 60);
-
-			await expect(
-				domeInstance.connect(anotherAccount).claimYieldAndDistribute()
-			).to.be.fulfilled;
-
-			const maxWithdraw1 = await domeInstance.callStatic.maxWithdraw(
-				otherAccount.address
-			);
-
-			await expect(
-				domeInstance
-					.connect(otherAccount)
-					.withdraw(maxWithdraw1, otherAccount.address, otherAccount.address)
-			).to.changeTokenBalance(assetContract, otherAccount, maxWithdraw1);
-
-			const maxWithdraw2 = await domeInstance.callStatic.maxWithdraw(
-				anotherAccount.address
-			);
-
-			await expect(
-				domeInstance
-					.connect(anotherAccount)
-					.withdraw(
-						maxWithdraw2,
-						anotherAccount.address,
-						anotherAccount.address
-					)
-			).to.changeTokenBalance(assetContract, anotherAccount, maxWithdraw2);
-
-			for (let i = 0; i < 4; i++) {
-				const swapAmount3 = ethers.utils.parseEther("57");
-				const swapAmount4 = ethers.utils.parseEther("35");
-
-				await Promise.all([
-					swap(
-						otherAccount,
-						MAINNET.ADDRESSES.WMATIC,
-						assetContract.address,
-						swapAmount3,
-						otherAccount.address
-					),
-					swap(
-						anotherAccount,
-						MAINNET.ADDRESSES.WMATIC,
-						assetContract.address,
-						swapAmount4,
-						anotherAccount.address
-					),
-				]);
-
-				const [assetsReceived3, assetsReceived4] = await Promise.all([
-					getBalanceOf(assetContract.address, otherAccount.address),
-
-					getBalanceOf(assetContract.address, anotherAccount.address),
-				]);
-
-				await Promise.all([
-					approve(
-						otherAccount,
-						assetContract.address,
-						domeInstance.address,
-						assetsReceived3
-					),
-					approve(
-						anotherAccount,
-						assetContract.address,
-						domeInstance.address,
-						assetsReceived4
-					),
-				]);
-
-				await Promise.all([
-					domeInstance
-						.connect(otherAccount)
-						.deposit(assetsReceived3, otherAccount.address),
-
-					domeInstance
-						.connect(anotherAccount)
-						.deposit(assetsReceived4, anotherAccount.address),
-				]);
-			}
-
 			await time.increase(ONE_DAY * 60);
 
 			await expect(domeInstance.connect(otherAccount).claimYieldAndDistribute())

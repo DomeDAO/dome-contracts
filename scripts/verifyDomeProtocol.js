@@ -1,6 +1,6 @@
 const { ethers, run } = require("hardhat");
 const { getProtocolVerifyEnvVars, getEnvVars } = require("../config");
-const { POLYGON } = require("../test/constants");
+const { getNetworkConstants } = require("../test/constants");
 
 const {
 	DOME_CREATION_FEE,
@@ -9,33 +9,55 @@ const {
 	DOME_PROTOCOL_ADDRESS,
 } = getProtocolVerifyEnvVars();
 
-getEnvVars(["POLYGON_API_KEY"]);
+const EXPLORER_API_KEYS = {
+	137: "POLYGON_API_KEY",
+	80002: "POLYGON_API_KEY",
+	42161: "ARBITRUM_API_KEY",
+	421614: "ARBITRUM_API_KEY",
+};
 
 async function main() {
 	const domeProtocol = await ethers.getContractAt(
 		"DomeProtocol",
 		DOME_PROTOCOL_ADDRESS
 	);
+	const network = await ethers.provider.getNetwork();
+	const apiKeyEnv = EXPLORER_API_KEYS[network.chainId];
+
+	if (apiKeyEnv) {
+		getEnvVars([apiKeyEnv]);
+	}
+
+	const networkConfig = getNetworkConstants(network.chainId);
+
+	if (!networkConfig) {
+		throw new Error(`Unsupported network with chainId ${network.chainId}`);
+	}
+
+	const usdcAddress = networkConfig.ADDRESSES?.USDC;
+
+	if (!usdcAddress) {
+		throw new Error(
+			`Missing USDC address configuration for chainId ${network.chainId}`
+		);
+	}
 
 	console.log("Verifying DomeProtocol...");
-
 	console.log("DomeProtocolAddress: ", domeProtocol.address);
 	const domeFactoryAddress = await domeProtocol.callStatic.DOME_FACTORY();
 	const governanceFactoryAddress =
 		await domeProtocol.callStatic.GOVERNANCE_FACTORY();
-	console.log(governanceFactoryAddress)
 	const wrappedVotingFactoryAddress =
 		await domeProtocol.callStatic.WRAPPEDVOTING_FACTORY();
-	const priceTrackerAddress = await domeProtocol.callStatic.PRICE_TRACKER();
 
 	const domeProtocolConstructorArguments = [
 		SYSTEM_OWNER,
 		domeFactoryAddress,
 		governanceFactoryAddress,
 		wrappedVotingFactoryAddress,
-		priceTrackerAddress,
 		SYSTEM_OWNER_PERCENTAGE,
 		DOME_CREATION_FEE,
+		usdcAddress,
 	];
 
 	await run("verify:verify", {
@@ -57,22 +79,9 @@ async function main() {
 		address: wrappedVotingFactoryAddress,
 		constructorArguments: [],
 	});
-
-	const PRICE_TRACKER_ROUTER = POLYGON.MAINNET.ADDRESSES.SUSHI_ROUTER_02;
-	const PRICE_TRACKER_TOKEN = POLYGON.MAINNET.ADDRESSES.USDC;
-
-	const priceTrackerConstructorArguments = [
-		PRICE_TRACKER_ROUTER,
-		PRICE_TRACKER_TOKEN,
-	];
-
-	await run("verify:verify", {
-		address: priceTrackerAddress,
-		constructorArguments: priceTrackerConstructorArguments,
-	});
 }
 
 main().catch((error) => {
 	console.error(error);
-	process.exitCode(1);
+	process.exitCode = 1;
 });

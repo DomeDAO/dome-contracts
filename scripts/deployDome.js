@@ -1,11 +1,18 @@
 require("dotenv").config();
 const { ethers } = require("hardhat");
 const readline = require("readline");
-const { POLYGON } = require("../test/constants");
+const { getNetworkConstants } = require("../test/constants");
 const { getDomeEnvVars } = require("../config");
 const { writeDeploy, getGasPrice } = require("./utils");
 const { convertDurationToBlocks } = require("../test/utils");
 const { DOME_PROTOCOL_ADDRESS } = getDomeEnvVars();
+
+const YIELD_PROTOCOL_KEYS = {
+	137: "AAVE_POLYGON_USDC",
+	80002: "AAVE_POLYGON_USDC",
+	42161: "AAVE_ARBITRUM_USDC",
+	421614: "AAVE_ARBITRUM_USDC",
+};
 
 const rl = readline.createInterface({
 	input: process.stdin,
@@ -14,6 +21,28 @@ const rl = readline.createInterface({
 
 async function main() {
 	const [deployer] = await ethers.getSigners();
+	const network = await deployer.provider.getNetwork();
+	const networkConfig = getNetworkConstants(network.chainId);
+
+	if (!networkConfig) {
+		throw new Error(`Unsupported network with chainId ${network.chainId}`);
+	}
+
+	const yieldProtocolKey = YIELD_PROTOCOL_KEYS[network.chainId];
+
+	if (!yieldProtocolKey) {
+		throw new Error(
+			`Missing yield protocol mapping for chainId ${network.chainId}`
+		);
+	}
+
+	const yieldProtocol = networkConfig.YIELD_PROTOCOLS?.[yieldProtocolKey];
+
+	if (!yieldProtocol) {
+		throw new Error(
+			`Yield protocol ${yieldProtocolKey} is not configured for chainId ${network.chainId}`
+		);
+	}
 
 	const domeProtocol = await ethers.getContractAt(
 		"DomeProtocol",
@@ -47,7 +76,6 @@ async function main() {
 		proposalThreshold: 1,
 	};
 
-	const yieldProtocol = POLYGON.MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC;
 	const depositorYieldPercent = process.env.DEPOSITOR_YIELD_PERCENTAGE || 0;
 
 	console.log(`Deploying Dome with the following parameters:`);
@@ -61,6 +89,7 @@ async function main() {
 		`- Depositor yield percentage: ${depositorYieldPercent / 10000} %`
 	);
 	console.log(`- Dome Owner: ${deployer.address}`);
+	console.log(`- Network: ${network.name} (${network.chainId})`);
 	console.log(`----------Governance----------`);
 	console.log(`- Voting Delay: ${governanceSettings.votingDelay} `);
 	console.log(`- Voting Period: ${governanceSettings.votingPeriod} `);
@@ -149,8 +178,6 @@ async function main() {
 			constructorArguments: wrappedConstructorArguments,
 		};
 	}
-
-	const network = await deployer.provider.getNetwork();
 
 	console.log(deployment);
 	writeDeploy(network.name, deployment);

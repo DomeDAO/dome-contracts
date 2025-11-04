@@ -8,52 +8,14 @@ const {
 	time,
 } = require("@nomicfoundation/hardhat-network-helpers");
 const { approve, swap, convertDurationToBlocks } = require("../utils");
+const { deployMockEnvironment } = require("../helpers/deploy");
 
 describe("Rewards", function () {
 	async function deployDome() {
-		const [owner, otherAccount, anotherAccount, randomAccount] =
-			await ethers.getSigners();
-
-		const [
-			DomeFactory,
-			GovernanceFactory,
-			WrappedVotingFactory,
-			PriceTrackerFactory,
-			DomeProtocol,
-		] = await Promise.all([
-			ethers.getContractFactory("DomeFactory"),
-			ethers.getContractFactory("GovernanceFactory"),
-			ethers.getContractFactory("WrappedVotingFactory"),
-			ethers.getContractFactory("PriceTracker"),
-			ethers.getContractFactory("DomeProtocol"),
-		]);
-
-		const UNISWAP_ROUTER = MAINNET.ADDRESSES.SUSHI_ROUTER_02;
-		const USDC = MAINNET.ADDRESSES.USDC;
-
-		const [domeFactory, governanceFactory, wrappedVotingFactory, priceTracker] =
-			await Promise.all([
-				DomeFactory.deploy(),
-				GovernanceFactory.deploy(),
-				WrappedVotingFactory.deploy(),
-				PriceTrackerFactory.deploy(UNISWAP_ROUTER, USDC),
-			]);
-
-		const domeCreationFee = ethers.utils.parseEther("1");
-		const systemOwnerPercentage = 1000;
-
-		const systemOwner = owner;
-
-		const domeProtocol = await DomeProtocol.deploy(
-			systemOwner.address,
-			domeFactory.address,
-			governanceFactory.address,
-			wrappedVotingFactory.address,
-			priceTracker.address,
-			systemOwnerPercentage,
-			domeCreationFee,
-			USDC
-		);
+		const { owner, others, contracts, params } = await deployMockEnvironment();
+		const [otherAccount, anotherAccount, randomAccount] = others;
+		const { domeProtocol } = contracts;
+		const { domeCreationFee, systemOwnerPercentage } = params;
 
 		const bufferAddress = await domeProtocol.callStatic.BUFFER();
 
@@ -112,7 +74,7 @@ describe("Rewards", function () {
 		const domeInstance = await ethers.getContractAt("Dome", domeAddress);
 
 		const assetAddress = await domeInstance.asset();
-		const assetContract = await ethers.getContractAt("IERC20", assetAddress);
+		const assetContract = await ethers.getContractAt("MockERC20", assetAddress);
 
 		const rewardTokenAddress = await domeProtocol.REWARD_TOKEN();
 		const rewardTokenContract = await ethers.getContractAt(
@@ -121,14 +83,13 @@ describe("Rewards", function () {
 		);
 
 		return {
-			systemOwner,
-			priceTracker,
+			systemOwner: owner,
 			rewardTokenContract,
 			randomAccount,
 			domeCreator,
 			asset: assetAddress,
 			assetContract,
-			domeFactory,
+			domeFactory: contracts.domeFactory,
 			domeCreationFee,
 			systemOwnerPercentage,
 			owner,
@@ -183,7 +144,6 @@ describe("Rewards", function () {
 				otherAccount,
 				depositorYieldPercent,
 				systemOwnerPercentage,
-				priceTracker,
 				rewardTokenContract,
 				domeCreator,
 			} = await loadFixture(deployDome);
@@ -230,10 +190,7 @@ describe("Rewards", function () {
 				.sub(systemOwnerPortion)
 				.sub(depositorsYieldPortion);
 
-			const rewardAmount = await priceTracker.convertToUSDC(
-				assetContract.address,
-				rewardInAssetAmount
-			);
+			const rewardAmount = rewardInAssetAmount;
 
 			await domeInstance.connect(domeCreator).unpauseRewards();
 
@@ -249,7 +206,6 @@ describe("Rewards", function () {
 				otherAccount,
 				depositorYieldPercent,
 				systemOwnerPercentage,
-				priceTracker,
 				rewardTokenContract,
 				domeCreator,
 			} = await loadFixture(deployDome);
@@ -297,10 +253,7 @@ describe("Rewards", function () {
 				.sub(systemOwnerPortion)
 				.sub(depositorsYieldPortion);
 
-			const rewardAmount = await priceTracker.callStatic.convertToUSDC(
-				assetContract.address,
-				rewardInAssetAmount
-			);
+			const rewardAmount = rewardInAssetAmount;
 
 			await expect(
 				domeInstance.connect(otherAccount).claim()
@@ -318,7 +271,6 @@ describe("Rewards", function () {
 				otherAccount,
 				depositorYieldPercent,
 				systemOwnerPercentage,
-				priceTracker,
 				rewardTokenContract,
 				domeCreator,
 			} = await loadFixture(deployDome);
@@ -369,10 +321,7 @@ describe("Rewards", function () {
 					.sub(systemOwnerPortion)
 					.sub(depositorsYieldPortion);
 
-				const rewardAmount = await priceTracker.convertToUSDC(
-					assetContract.address,
-					rewardInAssetAmount
-				);
+				const rewardAmount = rewardInAssetAmount;
 
 				await expect(
 					domeInstance.connect(otherAccount).claim()
@@ -441,10 +390,7 @@ describe("Rewards", function () {
 				.sub(systemOwnerPortion)
 				.sub(depositorsYieldPortion);
 
-			const rewardAmount = await priceTracker.convertToUSDC(
-				assetContract.address,
-				rewardInAssetAmount
-			);
+			const rewardAmount = rewardInAssetAmount;
 
 			await expect(
 				domeInstance.connect(otherAccount).claim()
@@ -464,7 +410,6 @@ describe("Rewards", function () {
 				otherAccount,
 				depositorYieldPercent,
 				systemOwnerPercentage,
-				priceTracker,
 				rewardTokenContract,
 				domeCreator,
 			} = await loadFixture(deployDome);
@@ -510,10 +455,7 @@ describe("Rewards", function () {
 				.sub(systemOwnerPortion)
 				.sub(depositorsYieldPortion);
 
-			const rewardAmount = await priceTracker.convertToUSDC(
-				assetContract.address,
-				rewardInAssetAmount
-			);
+			const rewardAmount = rewardInAssetAmount;
 
 			await domeInstance.connect(domeCreator).unpauseRewards();
 

@@ -5,59 +5,19 @@ const { convertDurationToBlocks } = require("../utils");
 const {
 	POLYGON: { MAINNET },
 } = require("../constants");
+const { deployMockEnvironment } = require("../helpers/deploy");
 
 describe("DomeProtocol", function () {
 	async function deployDomeProtocol() {
-		const [owner, otherAccount] = await ethers.getSigners();
+		const { owner, others, contracts, params, mocks } =
+			await deployMockEnvironment();
+		const [otherAccount] = others;
+		const { domeProtocol } = contracts;
+		const { domeCreationFee, systemOwnerPercentage } = params;
 
-		const [
-			DomeFactory,
-			GovernanceFactory,
-			WrappedVotingFactory,
-			PriceTrackerFactory,
-			DomeProtocol,
-		] = await Promise.all([
-			ethers.getContractFactory("DomeFactory"),
-			ethers.getContractFactory("GovernanceFactory"),
-			ethers.getContractFactory("WrappedVotingFactory"),
-			ethers.getContractFactory("PriceTracker"),
-			ethers.getContractFactory("DomeProtocol"),
-		]);
-
-		const UNISWAP_ROUTER = MAINNET.ADDRESSES.SUSHI_ROUTER_02;
-		const USDC = MAINNET.ADDRESSES.USDC;
-
-		const [domeFactory, governanceFactory, wrappedVotingFactory, priceTracker] =
-			await Promise.all([
-				DomeFactory.deploy(),
-				GovernanceFactory.deploy(),
-				WrappedVotingFactory.deploy(),
-				PriceTrackerFactory.deploy(UNISWAP_ROUTER, USDC),
-			]);
-
-		const domeCreationFee = ethers.utils.parseEther("1");
-		const systemOwnerPercentage = 1000;
-
-		const domeProtocol = await DomeProtocol.deploy(
-			owner.address,
-			domeFactory.address,
-			governanceFactory.address,
-			wrappedVotingFactory.address,
-			priceTracker.address,
-			systemOwnerPercentage,
-			domeCreationFee,
-			USDC
-		);
-
-	const providerTypeAave = await domeProtocol.YIELD_PROVIDER_TYPE_AAVE();
-
-	await domeProtocol.configureYieldProviders([
-		{
-			provider: MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC,
-			providerType: providerTypeAave,
-			enabled: true,
-		},
-	]);
+		MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC = mocks.aaveProvider.address;
+		MAINNET.YIELD_PROTOCOLS.HYPERLIQUID_POLYGON_USDC =
+			mocks.hyperliquidProvider.address;
 
 		return {
 			domeProtocol,
@@ -65,7 +25,8 @@ describe("DomeProtocol", function () {
 			systemOwnerPercentage,
 			owner,
 			otherAccount,
-			priceTracker,
+			aaveProvider: mocks.aaveProvider,
+			hyperliquidProvider: mocks.hyperliquidProvider,
 		};
 	}
 
@@ -445,12 +406,14 @@ describe("DomeProtocol", function () {
 				[domeCreationFee.mul(-1), domeCreationFee]
 			);
 
-			await expect(
-				domeProtocol.connect(owner).withdraw(owner.address)
-			).to.changeEtherBalances(
-				[domeProtocol.address, owner.address],
-				[domeCreationFee.mul(-1), domeCreationFee]
-			);
+		const recipient = ethers.Wallet.createRandom().address;
+
+		await expect(
+			domeProtocol.connect(owner).withdraw(recipient)
+		).to.changeEtherBalances(
+			[domeProtocol.address, recipient],
+			[domeCreationFee.mul(-1), domeCreationFee]
+		);
 		});
 
 		it("Should allow contract owner to change system owner percentage", async function () {
@@ -532,8 +495,15 @@ describe("DomeProtocol", function () {
 				proposalThreshold: 1,
 			};
 
-			const hyperliquidProvider =
-				MAINNET.YIELD_PROTOCOLS.HYPERLIQUID_POLYGON_USDC;
+		const MockERC4626 = await ethers.getContractFactory("MockERC4626");
+		const mockHyperliquidProvider = await MockERC4626.deploy(
+			MAINNET.ADDRESSES.USDC,
+			"Mock Hyperliquid Vault",
+			"mhUSDC"
+		);
+		await mockHyperliquidProvider.deployed();
+
+		const hyperliquidProvider = mockHyperliquidProvider.address;
 			const providerType = await domeProtocol.YIELD_PROVIDER_TYPE_HYPERLIQUID();
 
 			await expect(

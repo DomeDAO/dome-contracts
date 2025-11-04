@@ -1,9 +1,7 @@
 require("dotenv").config();
 const { ethers } = require("hardhat");
 const readline = require("readline");
-const {
-	POLYGON: { MAINNET },
-} = require("../test/constants");
+const { getNetworkConstants } = require("../test/constants");
 const { getProtocolEnvVars } = require("../config");
 const { writeDeploy, getGasPrice } = require("./utils");
 
@@ -18,31 +16,34 @@ const rl = readline.createInterface({
 async function main() {
 	const [deployer] = await ethers.getSigners();
 
-	const [
-		DomeFactory,
-		GovernanceFactory,
-		WrappedVotingFactory,
-		PriceTrackerFactory,
-		DomeProtocol,
-	] = await Promise.all([
-		ethers.getContractFactory("DomeFactory"),
-		ethers.getContractFactory("GovernanceFactory"),
-		ethers.getContractFactory("WrappedVotingFactory"),
-		ethers.getContractFactory("PriceTracker"),
-		ethers.getContractFactory("DomeProtocol"),
-	]);
+	const [DomeFactory, GovernanceFactory, WrappedVotingFactory, DomeProtocol] =
+		await Promise.all([
+			ethers.getContractFactory("DomeFactory"),
+			ethers.getContractFactory("GovernanceFactory"),
+			ethers.getContractFactory("WrappedVotingFactory"),
+			ethers.getContractFactory("DomeProtocol"),
+		]);
 
-	const UNISWAP_ROUTER = MAINNET.ADDRESSES.SUSHI_ROUTER_02;
-	const USDC = MAINNET.ADDRESSES.USDC;
+	const network = await deployer.provider.getNetwork();
+	const networkConfig = getNetworkConstants(network.chainId);
 
-	const priceTrackerConstructorArguments = [UNISWAP_ROUTER, USDC];
+	if (!networkConfig) {
+		throw new Error(`Unsupported network with chainId ${network.chainId}`);
+	}
+
+	const usdcAddress = networkConfig.ADDRESSES.USDC;
+
+	if (!usdcAddress) {
+		throw new Error(
+			`Missing USDC address configuration for chainId ${network.chainId}`
+		);
+	}
 
 	console.log("You are going to deploy:\n");
 	console.log("- DomeFactory");
 	console.log("- GovernanceFactory");
 	console.log("- WrappedVotingFactory");
-	console.log(
-	);
+	console.log("- DomeProtocol");
 
 	await new Promise((resolve) =>
 		rl.question("\nPress any key to proceed...", (ans) => {
@@ -52,16 +53,15 @@ async function main() {
 
 	console.log("Deploying contracts...");
 	let gasPrice = await getGasPrice(10); // Increases by %
-	let nonce = await ethers.provider.getTransactionCount(deployer.address, "latest");
-	const [domeFactory, governanceFactory, wrappedVotingFactory, priceTracker] =
+	let nonce = await ethers.provider.getTransactionCount(
+		deployer.address,
+		"latest"
+	);
+	const [domeFactory, governanceFactory, wrappedVotingFactory] =
 		await Promise.all([
 			DomeFactory.deploy({ nonce: nonce, gasPrice }),
 			GovernanceFactory.deploy({ nonce: ++nonce, gasPrice }),
 			WrappedVotingFactory.deploy({ nonce: ++nonce, gasPrice }),
-			PriceTrackerFactory.deploy(...priceTrackerConstructorArguments, {
-				nonce: ++nonce,
-				gasPrice
-			}),
 		]);
 	console.log("Successfully deployed factories...");
 
@@ -69,13 +69,11 @@ async function main() {
 	console.log(`- DomeFactory: ${domeFactory.address}`);
 	console.log(`- GovernanceFactory: ${governanceFactory.address}`);
 	console.log(`- WrappedVotingFactory: ${wrappedVotingFactory.address}`);
-	console.log(`- PriceTracker: ${priceTracker.address}`);
 
 	await Promise.all([
 		domeFactory.deployed(),
 		governanceFactory.deployed(),
 		wrappedVotingFactory.deployed(),
-		priceTracker.deployed(),
 	]);
 
 	const domeCreationFee = DOME_CREATION_FEE;
@@ -91,7 +89,7 @@ async function main() {
 	console.log(`- DomeFactory: ${domeFactory.address}`);
 	console.log(`- GovernanceFactory: ${governanceFactory.address}`);
 	console.log(`- WrappedVotingFactory: ${wrappedVotingFactory.address}`);
-	console.log(`- PriceTracker: ${priceTracker.address}`);
+	console.log(`- Network: ${network.name} (${network.chainId})`);
 
 	await new Promise((resolve) =>
 		rl.question("\nPress any key to proceed...", (ans) => {
@@ -105,10 +103,9 @@ async function main() {
 		domeFactory.address,
 		governanceFactory.address,
 		wrappedVotingFactory.address,
-		priceTracker.address,
 		systemOwnerPercentage,
 		domeCreationFee,
-		USDC,
+		usdcAddress,
 	];
 
 	console.log("Deploying Dome protocol....");
@@ -145,10 +142,6 @@ async function main() {
 			address: wrappedVotingFactory.address,
 			constructorArguments: [],
 		},
-		PRICE_TRACKER: {
-			address: priceTracker.address,
-			constructorArguments: priceTrackerConstructorArguments,
-		},
 		BUFFER: {
 			address: bufferAddress,
 			constructorArguments: [domeProtocol.address],
@@ -159,7 +152,6 @@ async function main() {
 		},
 	};
 
-	const network = await deployer.provider.getNetwork();
 	writeDeploy(network.name, deployment);
 }
 

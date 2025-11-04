@@ -28,7 +28,6 @@ interface IDomeProtocol {
 	function domeCreators(address) external view returns (address);
 
 	function mintRewardTokens(
-		address asset,
 		address to,
 		uint256 amount
 	) external returns (uint256);
@@ -525,12 +524,10 @@ contract Dome is ERC20, IERC4626, DomeBase {
 			_stakerRewards[msg.sender];
 		_stakerRewards[msg.sender] += rewardAmount;
 
-		return
-			IDomeProtocol(DOME_PROTOCOL).mintRewardTokens(
-				yieldProtocol.asset(),
-				msg.sender,
-				rewardAmount
-			);
+		return IDomeProtocol(DOME_PROTOCOL).mintRewardTokens(
+			msg.sender,
+			rewardAmount
+		);
 	}
 
 	/**

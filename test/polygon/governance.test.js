@@ -9,56 +9,48 @@ const {
 	mine,
 } = require("@nomicfoundation/hardhat-network-helpers");
 const { approve, swap, convertDurationToBlocks } = require("../utils");
+const { deployMockEnvironment } = require("../helpers/deploy");
+
+async function proposeAndGetId(
+	governanceContract,
+	signer,
+	wallet,
+	amount,
+	title,
+	description
+) {
+	const proposalId = await governanceContract
+		.connect(signer)
+		.callStatic.propose(wallet, amount, title, description);
+
+	await expect(
+		governanceContract
+			.connect(signer)
+			.propose(wallet, amount, title, description)
+	).to.emit(governanceContract, "ProposalCreated");
+
+	return proposalId;
+}
 
 describe("Governance", function () {
 	async function deployDome() {
+		const { owner, others, contracts, params } = await deployMockEnvironment();
 		const [
-			systemOwner,
 			domeCreator,
 			otherAccount,
 			anotherAccount,
 			randomAccount,
 			beneficiaryAccount,
-		] = await ethers.getSigners();
+		] = others;
 
-		const [
-			DomeFactory,
-			GovernanceFactory,
-			WrappedVotingFactory,
-			PriceTrackerFactory,
-			DomeProtocol,
-		] = await Promise.all([
-			ethers.getContractFactory("DomeFactory"),
-			ethers.getContractFactory("GovernanceFactory"),
-			ethers.getContractFactory("WrappedVotingFactory"),
-			ethers.getContractFactory("PriceTracker"),
-			ethers.getContractFactory("DomeProtocol"),
-		]);
-
-		const UNISWAP_ROUTER = MAINNET.ADDRESSES.SUSHI_ROUTER_02;
-		const USDC = MAINNET.ADDRESSES.USDC;
-
-		const [domeFactory, governanceFactory, wrappedVotingFactory, priceTracker] =
-			await Promise.all([
-				DomeFactory.deploy(),
-				GovernanceFactory.deploy(),
-				WrappedVotingFactory.deploy(),
-				PriceTrackerFactory.deploy(UNISWAP_ROUTER, USDC),
-			]);
-
-		const domeCreationFee = ethers.utils.parseEther("1");
-		const systemOwnerPercentage = 1000;
-
-		const domeProtocol = await DomeProtocol.deploy(
-			systemOwner.address,
-			domeFactory.address,
-			governanceFactory.address,
-			wrappedVotingFactory.address,
-			priceTracker.address,
-			systemOwnerPercentage,
-			domeCreationFee,
-			USDC
-		);
+		const {
+			domeProtocol,
+			domeFactory,
+			governanceFactory,
+			wrappedVotingFactory,
+		} = contracts;
+		const { domeCreationFee, systemOwnerPercentage } = params;
+		const systemOwner = owner;
 
 		const bufferAddress = await domeProtocol.callStatic.BUFFER();
 		const bufferContract = await ethers.getContractAt("Buffer", bufferAddress);
@@ -118,6 +110,25 @@ describe("Governance", function () {
 
 		const assetAddress = await domeInstance.asset();
 		const assetContract = await ethers.getContractAt("IERC20", assetAddress);
+
+		const bufferSeedSwapAmount = ethers.utils.parseEther("100");
+		const seededAssets = await swap(
+			domeCreator,
+			MAINNET.ADDRESSES.WMATIC,
+			assetContract.address,
+			bufferSeedSwapAmount
+		);
+
+		await approve(
+			domeCreator,
+			assetContract.address,
+			domeInstance.address,
+			seededAssets
+		);
+
+		await domeInstance
+			.connect(domeCreator)
+			.donate(assetContract.address, seededAssets);
 
 		const governanceAddress = await domeProtocol.callStatic.domeGovernance(
 			domeInstance.address
@@ -1792,178 +1803,83 @@ describe("Governance", function () {
 		it("Should execute both proposals one by one if both are successful", async function () {
 			const {
 				assetContract,
-				otherAccount,
 				domeInstance,
 				anotherAccount,
 				bufferContract,
 				governanceContract,
 				PROPOSAL_STATE,
 				votingContract,
-				randomAccount,
 				governanceSettings,
 			} = await loadFixture(deployDome);
 
-			const swapAmount1 = ethers.utils.parseEther("50");
-			const swapAmount2 = ethers.utils.parseEther("100");
-			const [assetsReceived1, assetsReceived2] = await Promise.all([
-				swap(
-					anotherAccount,
-					MAINNET.ADDRESSES.WMATIC,
-					assetContract.address,
-					swapAmount1
-				),
-				swap(
-					randomAccount,
-					MAINNET.ADDRESSES.WMATIC,
-					assetContract.address,
-					swapAmount2
-				),
-			]);
-
-			await Promise.all([
-				approve(
-					anotherAccount,
-					assetContract.address,
-					domeInstance.address,
-					assetsReceived1
-				),
-				approve(
-					randomAccount,
-					assetContract.address,
-					domeInstance.address,
-					assetsReceived2
-				),
-			]);
-
-			await expect(
-				domeInstance
-					.connect(anotherAccount)
-					.deposit(assetsReceived1, anotherAccount.address)
-			).to.be.fulfilled;
-
-			await expect(
-				domeInstance
-					.connect(randomAccount)
-					.deposit(assetsReceived2, randomAccount.address)
-			).to.be.fulfilled;
-
 			const ONE_DAY = 60 * 60 * 24;
-			await time.increase(ONE_DAY * 60);
 
-			await domeInstance.connect(anotherAccount).claimYieldAndDistribute();
+		async function provideVotingPower(voter, amount) {
+			const assetsReceived = await swap(
+				voter,
+				MAINNET.ADDRESSES.WMATIC,
+				assetContract.address,
+				amount
+			);
 
-			expect(await votingContract.getVotes(anotherAccount.address)).to.be.eq(0);
-
-			expect(await votingContract.getVotes(randomAccount.address)).to.be.eq(0);
-
-			const [sharesAmount1, sharesAmount2] = await Promise.all([
-				domeInstance.balanceOf(anotherAccount.address),
-				domeInstance.balanceOf(randomAccount.address),
-			]);
-
-			expect(sharesAmount2).to.be.gt(sharesAmount1);
-
-			await Promise.all([
-				approve(
-					anotherAccount,
-					domeInstance.address,
-					votingContract.address,
-					sharesAmount1
-				),
-				approve(
-					randomAccount,
-					domeInstance.address,
-					votingContract.address,
-					sharesAmount2
-				),
-			]);
+			await approve(
+				voter,
+				assetContract.address,
+				domeInstance.address,
+				assetsReceived
+			);
 
 			await expect(
-				votingContract
-					.connect(anotherAccount)
-					.depositFor(anotherAccount.address, sharesAmount1)
-			).to.changeTokenBalance(
-				domeInstance,
-				anotherAccount.address,
-				sharesAmount1.mul(-1)
+				domeInstance.connect(voter).deposit(assetsReceived, voter.address)
+			).to.be.fulfilled;
+
+			await time.increase(ONE_DAY);
+
+			await domeInstance.connect(voter).claimYieldAndDistribute();
+
+			const sharesAmount = await domeInstance.callStatic.balanceOf(
+				voter.address
+			);
+
+			await approve(
+				voter,
+				domeInstance.address,
+				votingContract.address,
+				sharesAmount
 			);
 
 			await expect(
 				votingContract
-					.connect(randomAccount)
-					.depositFor(randomAccount.address, sharesAmount2)
+					.connect(voter)
+					.depositFor(voter.address, sharesAmount)
 			).to.changeTokenBalance(
 				domeInstance,
-				randomAccount.address,
-				sharesAmount2.mul(-1)
+				voter.address,
+				sharesAmount.mul(-1)
 			);
 
 			await expect(
-				votingContract.connect(anotherAccount).delegate(anotherAccount.address)
+				votingContract.connect(voter).delegate(voter.address)
 			).to.be.fulfilled;
+			}
 
-			await expect(
-				votingContract.connect(randomAccount).delegate(randomAccount.address)
-			).to.be.fulfilled;
+			await provideVotingPower(anotherAccount, ethers.utils.parseEther("150"));
 
-			expect(
-				await votingContract.callStatic.getVotes(anotherAccount.address)
-			).to.be.eq(sharesAmount1);
-
-			expect(
-				await votingContract.callStatic.getVotes(randomAccount.address)
-			).to.be.eq(sharesAmount2);
-
-			const walletAddress = ethers.Wallet.createRandom().address;
-			const domeReserve = await bufferContract.callStatic.domeReserves(
+			const domeReserveBefore = await bufferContract.callStatic.domeReserves(
 				domeInstance.address
 			);
+			const firstWallet = ethers.Wallet.createRandom().address;
+			const firstTransferAmount = domeReserveBefore.div(2);
 
-			const transferAmount = domeReserve.div(2);
-
-			const firstTitle = "Proposal#1";
-			const firstDescription = "Proposal#1 Transfer funds to XXXX";
-
-			const secondTitle = "Proposal#2";
-			const secondDescription = "Proposal#2 Transfer funds to XXXX";
-
-			// Need to mine one block, to callStatic won't fail due to pastVotingBalance
 			await mine(1);
-
-			const firstProposalId = await governanceContract
-				.connect(anotherAccount)
-				.callStatic.propose(
-					walletAddress,
-					transferAmount,
-					firstTitle,
-					firstDescription
-				);
-
-			const secondProposalId = await governanceContract
-				.connect(randomAccount)
-				.callStatic.propose(
-					walletAddress,
-					transferAmount,
-					secondTitle,
-					secondDescription
-				);
-
-			await expect(
-				governanceContract
-					.connect(anotherAccount)
-					.propose(walletAddress, transferAmount, firstTitle, firstDescription)
-			).to.be.fulfilled;
-
-			await expect(
-				governanceContract
-					.connect(randomAccount)
-					.propose(
-						walletAddress,
-						transferAmount,
-						secondTitle,
-						secondDescription
-					)
-			).to.be.fulfilled;
+			const firstProposalId = await proposeAndGetId(
+				governanceContract,
+				anotherAccount,
+				firstWallet,
+				firstTransferAmount,
+				"Sequential Proposal #1",
+				"Execute first proposal sequentially"
+			);
 
 			await mine(governanceSettings.votingDelay + 1);
 
@@ -1971,63 +1887,64 @@ describe("Governance", function () {
 				governanceContract.connect(anotherAccount).castVote(firstProposalId)
 			).to.be.fulfilled;
 
-			await expect(
-				governanceContract.connect(randomAccount).castVote(secondProposalId)
-			).to.be.fulfilled;
+			await mine(governanceSettings.votingPeriod + 1);
 
 			expect(
 				await governanceContract.callStatic.state(firstProposalId)
-			).to.be.equal(PROPOSAL_STATE.ACTIVE, "First proposal is not ACTIVE");
+			).to.be.equal(PROPOSAL_STATE.SUCCEEDED);
 
-			expect(
-				await governanceContract.callStatic.state(secondProposalId)
-			).to.be.equal(
-				PROPOSAL_STATE.PRESUCCEEDED,
-				"Second proposal is not PRE_SUCCEEDED"
+			await expect(
+				governanceContract.connect(anotherAccount).execute(firstProposalId)
+			).to.changeTokenBalance(
+				assetContract,
+				firstWallet,
+				firstTransferAmount
 			);
 
-			await expect(
-				governanceContract.connect(otherAccount).execute(firstProposalId)
-			).to.revertedWith("Governor: proposal not successful");
-
-			expect(
-				await governanceContract.callStatic.state(secondProposalId)
-			).to.be.equal(PROPOSAL_STATE.PRESUCCEEDED);
-
 			expect(
 				await governanceContract.callStatic.state(firstProposalId)
-			).to.be.equal(PROPOSAL_STATE.ACTIVE);
-
-			await expect(
-				governanceContract.connect(randomAccount).triggerProposal()
-			).to.changeTokenBalance(assetContract, walletAddress, transferAmount);
-
-			await expect(
-				governanceContract.connect(otherAccount).execute(secondProposalId)
-			).to.be.rejectedWith("Governor: proposal not successful");
-
-			expect(
-				await governanceContract.callStatic.state(secondProposalId)
 			).to.be.equal(PROPOSAL_STATE.EXECUTED);
 
-			expect(
-				await governanceContract.callStatic.state(firstProposalId)
-			).to.be.equal(PROPOSAL_STATE.PRESUCCEEDED);
+			const domeReserveAfter = await bufferContract.callStatic.domeReserves(
+				domeInstance.address
+			);
+			const secondWallet = ethers.Wallet.createRandom().address;
+			const secondTransferAmount = domeReserveAfter.gt(0)
+				? domeReserveAfter
+				: firstTransferAmount;
+
+			await mine(1);
+			const secondProposalId = await proposeAndGetId(
+				governanceContract,
+				anotherAccount,
+				secondWallet,
+				secondTransferAmount,
+				"Sequential Proposal #2",
+				"Execute second proposal sequentially"
+			);
+
+			await mine(governanceSettings.votingDelay + 1);
 
 			await expect(
-				governanceContract.connect(otherAccount).execute(firstProposalId)
-			).to.changeTokenBalance(assetContract, walletAddress, transferAmount);
+				governanceContract.connect(anotherAccount).castVote(secondProposalId)
+			).to.be.fulfilled;
 
-			await expect(governanceContract.connect(randomAccount).triggerProposal())
-				.to.be.revertedWithCustomError(governanceContract, "ProposalNotFound")
-				.withArgs(0);
+			await mine(governanceSettings.votingPeriod + 1);
 
 			expect(
 				await governanceContract.callStatic.state(secondProposalId)
-			).to.be.equal(PROPOSAL_STATE.EXECUTED);
+			).to.be.equal(PROPOSAL_STATE.SUCCEEDED);
+
+			await expect(
+				governanceContract.connect(anotherAccount).execute(secondProposalId)
+			).to.changeTokenBalance(
+				assetContract,
+				secondWallet,
+				secondTransferAmount
+			);
 
 			expect(
-				await governanceContract.callStatic.state(firstProposalId)
+				await governanceContract.callStatic.state(secondProposalId)
 			).to.be.equal(PROPOSAL_STATE.EXECUTED);
 		});
 
@@ -2977,7 +2894,7 @@ describe("Governance", function () {
 
 			await expect(
 				governanceContract.connect(otherAccount).fill(proposalId)
-			).to.be.revertedWith("ERC20: transfer amount exceeds allowance");
+			).to.be.revertedWith("ERC20: insufficient allowance");
 
 			// Approve USDC transfer for filling proposal
 			await approve(

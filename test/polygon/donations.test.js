@@ -13,52 +13,16 @@ const {
 	getBalanceOf,
 	convertDurationToBlocks,
 } = require("../utils");
+const { deployMockEnvironment } = require("../helpers/deploy");
 
 describe("Donations", function () {
 	async function deployDome() {
-		const [owner, otherAccount, anotherAccount, randomAccount] =
-			await ethers.getSigners();
-
-		const [
-			DomeFactory,
-			GovernanceFactory,
-			WrappedVotingFactory,
-			PriceTrackerFactory,
-			DomeProtocol,
-		] = await Promise.all([
-			ethers.getContractFactory("DomeFactory"),
-			ethers.getContractFactory("GovernanceFactory"),
-			ethers.getContractFactory("WrappedVotingFactory"),
-			ethers.getContractFactory("PriceTracker"),
-			ethers.getContractFactory("DomeProtocol"),
-		]);
-
-		const UNISWAP_ROUTER = MAINNET.ADDRESSES.SUSHI_ROUTER_02;
-		const USDC = MAINNET.ADDRESSES.USDC;
-
-		const [domeFactory, governanceFactory, wrappedVotingFactory, priceTracker] =
-			await Promise.all([
-				DomeFactory.deploy(),
-				GovernanceFactory.deploy(),
-				WrappedVotingFactory.deploy(),
-				PriceTrackerFactory.deploy(UNISWAP_ROUTER, USDC),
-			]);
-
-		const domeCreationFee = ethers.utils.parseEther("1");
-		const systemOwnerPercentage = 1000;
-
-		const systemOwner = owner;
-
-		const domeProtocol = await DomeProtocol.deploy(
-			systemOwner.address,
-			domeFactory.address,
-			governanceFactory.address,
-			wrappedVotingFactory.address,
-			priceTracker.address,
-			systemOwnerPercentage,
-			domeCreationFee,
-			USDC
-		);
+		const { owner, others, contracts, params, mocks } =
+			await deployMockEnvironment();
+		const [otherAccount, anotherAccount, randomAccount] = others;
+		const { domeProtocol } = contracts;
+		const { domeCreationFee, systemOwnerPercentage } = params;
+		const { usdt } = mocks;
 
 		const bufferAddress = await domeProtocol.callStatic.BUFFER();
 		const bufferContract = await ethers.getContractAt("Buffer", bufferAddress);
@@ -110,9 +74,8 @@ describe("Donations", function () {
 
 		const domeCreator = otherAccount;
 		const domeInstance = await ethers.getContractAt("Dome", domeAddress);
-
 		const assetAddress = await domeInstance.asset();
-		const assetContract = await ethers.getContractAt("IERC20", assetAddress);
+		const assetContract = await ethers.getContractAt("MockERC20", assetAddress);
 
 		const rewardTokenAddress = await domeProtocol.REWARD_TOKEN();
 		const rewardTokenContract = await ethers.getContractAt(
@@ -121,16 +84,16 @@ describe("Donations", function () {
 		);
 
 		return {
+			usdtContract: usdt,
 			bufferContract,
 			bufferAddress,
-			systemOwner,
-			priceTracker,
+			systemOwner: owner,
 			rewardTokenContract,
 			randomAccount,
 			domeCreator,
 			asset: assetAddress,
 			assetContract,
-			domeFactory,
+			domeFactory: contracts.domeFactory,
 			domeCreationFee,
 			systemOwnerPercentage,
 			owner,
@@ -145,49 +108,12 @@ describe("Donations", function () {
 	}
 
 	async function deployDomeWithBufferBeneficiary() {
-		const [owner, otherAccount, anotherAccount, randomAccount] =
-			await ethers.getSigners();
-
-		const [
-			DomeFactory,
-			GovernanceFactory,
-			WrappedVotingFactory,
-			PriceTrackerFactory,
-			DomeProtocol,
-		] = await Promise.all([
-			ethers.getContractFactory("DomeFactory"),
-			ethers.getContractFactory("GovernanceFactory"),
-			ethers.getContractFactory("WrappedVotingFactory"),
-			ethers.getContractFactory("PriceTracker"),
-			ethers.getContractFactory("DomeProtocol"),
-		]);
-
-		const UNISWAP_ROUTER = MAINNET.ADDRESSES.SUSHI_ROUTER_02;
-		const USDC = MAINNET.ADDRESSES.USDC;
-
-		const [domeFactory, governanceFactory, wrappedVotingFactory, priceTracker] =
-			await Promise.all([
-				DomeFactory.deploy(),
-				GovernanceFactory.deploy(),
-				WrappedVotingFactory.deploy(),
-				PriceTrackerFactory.deploy(UNISWAP_ROUTER, USDC),
-			]);
-
-		const domeCreationFee = ethers.utils.parseEther("1");
-		const systemOwnerPercentage = 1000;
-
-		const systemOwner = owner;
-
-		const domeProtocol = await DomeProtocol.deploy(
-			systemOwner.address,
-			domeFactory.address,
-			governanceFactory.address,
-			wrappedVotingFactory.address,
-			priceTracker.address,
-			systemOwnerPercentage,
-			domeCreationFee,
-			USDC
-		);
+		const { owner, others, contracts, params, mocks } =
+			await deployMockEnvironment();
+		const [otherAccount, anotherAccount, randomAccount] = others;
+		const { domeProtocol } = contracts;
+		const { domeCreationFee, systemOwnerPercentage } = params;
+		const { usdt } = mocks;
 
 		const bufferAddress = await domeProtocol.callStatic.BUFFER();
 		const bufferContract = await ethers.getContractAt("Buffer", bufferAddress);
@@ -247,7 +173,7 @@ describe("Donations", function () {
 		const domeInstance = await ethers.getContractAt("Dome", domeAddress);
 
 		const assetAddress = await domeInstance.asset();
-		const assetContract = await ethers.getContractAt("IERC20", assetAddress);
+		const assetContract = await ethers.getContractAt("MockERC20", assetAddress);
 
 		const rewardTokenAddress = await domeProtocol.REWARD_TOKEN();
 		const rewardTokenContract = await ethers.getContractAt(
@@ -256,17 +182,16 @@ describe("Donations", function () {
 		);
 
 		return {
+			usdtContract: usdt,
 			bufferContract,
-			bufferBeneficiary,
 			bufferAddress,
-			systemOwner,
-			priceTracker,
+			systemOwner: owner,
 			rewardTokenContract,
 			randomAccount,
 			domeCreator,
 			asset: assetAddress,
 			assetContract,
-			domeFactory,
+			domeFactory: contracts.domeFactory,
 			domeCreationFee,
 			systemOwnerPercentage,
 			owner,
@@ -297,7 +222,7 @@ describe("Donations", function () {
 				domeInstance
 					.connect(otherAccount)
 					.donate(assetContract.address, assetsReceived)
-			).to.be.rejectedWith("ERC20: transfer amount exceeds allowance");
+			).to.be.rejectedWith("ERC20: insufficient allowance");
 		});
 
 		it("Should allow user donation if allowance was granted", async function () {
@@ -457,17 +382,23 @@ describe("Donations", function () {
 			});
 
 			it("Should change beneficiaries balances on user donation of non underlying token for domes with buffer beneficiary", async function () {
-				const { domeInstance, otherAccount, beneficiariesInfo, bufferAddress } =
+			const {
+				domeInstance,
+				otherAccount,
+				beneficiariesInfo,
+				bufferAddress,
+				usdtContract,
+			} =
 					await loadFixture(deployDomeWithBufferBeneficiary);
 
-				const swapAmount = ethers.utils.parseEther("50");
-				const donationToken = MAINNET.ADDRESSES.USDT;
-				const donationAmount = await swap(
-					otherAccount,
-					MAINNET.ADDRESSES.WMATIC,
-					donationToken,
-					swapAmount
-				);
+			const donationTokenContract = usdtContract;
+			const donationToken = donationTokenContract.address;
+			const donationAmount = ethers.utils.parseUnits(
+				"50",
+				await donationTokenContract.decimals()
+			);
+
+			await donationTokenContract.mint(otherAccount.address, donationAmount);
 
 				await approve(
 					otherAccount,
@@ -493,11 +424,6 @@ describe("Donations", function () {
 
 				const beneficiaryAmounts = beneficiaries.map((beneficiary) =>
 					donationAmount.mul(beneficiary.percent + additionalPercent).div(10000)
-				);
-
-				const donationTokenContract = await ethers.getContractAt(
-					"IERC20",
-					donationToken
 				);
 
 				await expect(
@@ -578,17 +504,17 @@ describe("Donations", function () {
 			});
 
 			it("Should change beneficiaries balances on user donation of non underlying token for domes without buffer beneficiary", async function () {
-				const { domeInstance, otherAccount, beneficiariesInfo } =
+			const { domeInstance, otherAccount, beneficiariesInfo, usdtContract } =
 					await loadFixture(deployDome);
 
-				const swapAmount = ethers.utils.parseEther("50");
-				const donationToken = MAINNET.ADDRESSES.USDT;
-				const donationAmount = await swap(
-					otherAccount,
-					MAINNET.ADDRESSES.WMATIC,
-					donationToken,
-					swapAmount
-				);
+			const donationTokenContract = usdtContract;
+			const donationToken = donationTokenContract.address;
+			const donationAmount = ethers.utils.parseUnits(
+				"50",
+				await donationTokenContract.decimals()
+			);
+
+			await donationTokenContract.mint(otherAccount.address, donationAmount);
 
 				await approve(
 					otherAccount,
@@ -602,11 +528,6 @@ describe("Donations", function () {
 				);
 				const beneficiaryAmounts = beneficiariesInfo.map((beneficiary) =>
 					donationAmount.mul(beneficiary.percent).div(10000)
-				);
-
-				const donationTokenContract = await ethers.getContractAt(
-					"IERC20",
-					donationToken
 				);
 
 				await expect(
@@ -857,18 +778,18 @@ describe("Donations", function () {
 		});
 
 		it("Should emit Donate event on donation of non protocol token", async function () {
-			const { domeInstance, otherAccount } = await loadFixture(
+		const { domeInstance, otherAccount, usdtContract } = await loadFixture(
 				deployDomeWithBufferBeneficiary
 			);
 
-			const swapAmount = ethers.utils.parseEther("50");
-			const donationToken = MAINNET.ADDRESSES.USDT;
-			const donationAmount = await swap(
-				otherAccount,
-				MAINNET.ADDRESSES.WMATIC,
-				donationToken,
-				swapAmount
-			);
+		const donationTokenContract = usdtContract;
+		const donationToken = donationTokenContract.address;
+		const donationAmount = ethers.utils.parseUnits(
+			"50",
+			await donationTokenContract.decimals()
+		);
+
+		await donationTokenContract.mint(otherAccount.address, donationAmount);
 
 			await approve(
 				otherAccount,

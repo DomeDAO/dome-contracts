@@ -49,21 +49,6 @@ This checklist tracks the implementation status of security fixes identified in 
 
 ---
 
-### [C-3] Uninitialized Memory Arrays in PriceTracker
-
-- [ ] Initialize `wethRoutedPath` array in `convertTo()`
-- [ ] Initialize `directPath` array in `convertTo()`
-- [ ] Initialize `wethRoutedPath` array in `convertToUSDC()`
-- [ ] Initialize `directPath` array in `convertToUSDC()`
-- [ ] Add tests for price conversion
-- [ ] Verify integration with reward claiming
-
-**Files to modify:**
-
-- `contracts/PriceTracker.sol` (lines 43-46, 51-54, 72-75, 81-84)
-
----
-
 ## 🟠 HIGH SEVERITY (4 issues)
 
 ### [H-1] Missing Access Control Validation on Protocol Withdrawal

@@ -8,50 +8,21 @@ const {
 	time,
 } = require("@nomicfoundation/hardhat-network-helpers");
 const { approve, swap, convertDurationToBlocks } = require("../utils");
+const { deployMockEnvironment } = require("../helpers/deploy");
 
 describe("DomeCore", function () {
 	async function deployDome() {
-		const [owner, otherAccount, anotherAccount, randomAccount] =
-			await ethers.getSigners();
+		const { owner, others, contracts, mocks, params } =
+			await deployMockEnvironment();
+		const [otherAccount, anotherAccount, randomAccount] = others;
+		const { domeFactory, governanceFactory, wrappedVotingFactory, domeProtocol } =
+			contracts;
+		const { usdc, wmatic, aaveProvider } = mocks;
+		const { domeCreationFee, systemOwnerPercentage } = params;
 
-		const [
-			DomeFactory,
-			GovernanceFactory,
-			WrappedVotingFactory,
-			PriceTrackerFactory,
-			DomeProtocol,
-		] = await Promise.all([
-			ethers.getContractFactory("DomeFactory"),
-			ethers.getContractFactory("GovernanceFactory"),
-			ethers.getContractFactory("WrappedVotingFactory"),
-			ethers.getContractFactory("PriceTracker"),
-			ethers.getContractFactory("DomeProtocol"),
-		]);
-
-		const UNISWAP_ROUTER = MAINNET.ADDRESSES.SUSHI_ROUTER_02;
-		const USDC = MAINNET.ADDRESSES.USDC;
-
-		const [domeFactory, governanceFactory, wrappedVotingFactory, priceTracker] =
-			await Promise.all([
-				DomeFactory.deploy(),
-				GovernanceFactory.deploy(),
-				WrappedVotingFactory.deploy(),
-				PriceTrackerFactory.deploy(UNISWAP_ROUTER, USDC),
-			]);
-
-		const domeCreationFee = ethers.utils.parseEther("1");
-		const systemOwnerPercentage = 1000;
-
-		const domeProtocol = await DomeProtocol.deploy(
-			owner.address,
-			domeFactory.address,
-			governanceFactory.address,
-			wrappedVotingFactory.address,
-			priceTracker.address,
-			systemOwnerPercentage,
-			domeCreationFee,
-			USDC
-		);
+		MAINNET.ADDRESSES.USDC = usdc.address;
+		MAINNET.ADDRESSES.WMATIC = wmatic.address;
+		MAINNET.YIELD_PROTOCOLS.AAVE_POLYGON_USDC = aaveProvider.address;
 
 		const bufferAddress = await domeProtocol.callStatic.BUFFER();
 		const bufferContract = await ethers.getContractAt("Buffer", bufferAddress);
@@ -111,7 +82,7 @@ describe("DomeCore", function () {
 		const domeInstance = await ethers.getContractAt("Dome", domeAddress);
 
 		const assetAddress = await domeInstance.asset();
-		const assetContract = await ethers.getContractAt("IERC20", assetAddress);
+		const assetContract = await ethers.getContractAt("MockERC20", assetAddress);
 
 		const governanceAddress = await domeProtocol.callStatic.domeGovernance(
 			domeInstance.address
@@ -158,6 +129,7 @@ describe("DomeCore", function () {
 			yieldProtocol,
 			beneficiariesInfo,
 			domeInfo,
+			wmatic,
 		};
 	}
 
@@ -245,7 +217,7 @@ describe("DomeCore", function () {
 					domeInstance
 						.connect(otherAccount)
 						.deposit(assetsReceived, otherAccount.address)
-				).to.be.revertedWith("ERC20: transfer amount exceeds allowance");
+				).to.be.revertedWith("ERC20: insufficient allowance");
 			});
 
 			it("Should allow depositing assets into dome ", async function () {
@@ -435,7 +407,7 @@ describe("DomeCore", function () {
 					domeInstance
 						.connect(otherAccount)
 						.mint(assetToShares, otherAccount.address)
-				).to.be.revertedWith("ERC20: transfer amount exceeds allowance");
+				).to.be.revertedWith("ERC20: insufficient allowance");
 			});
 
 			it("Should allow minting shares ", async function () {
@@ -610,7 +582,7 @@ describe("DomeCore", function () {
 		});
 
 		describe("Withdrawals", function () {
-			it("Should revert withdrawal if asset amount exceeds the share balance", async function () {
+			it("Should withdraw available assets even if requested amount exceeds balance", async function () {
 				const { domeInstance, otherAccount, assetContract } =
 					await loadFixture(deployDome);
 
@@ -637,11 +609,20 @@ describe("DomeCore", function () {
 
 				const receiver = otherAccount.address;
 				const owner = otherAccount.address;
+				const excessiveAssets = assetsReceived.mul(2);
+				const receiverBalanceBefore = await assetContract.balanceOf(receiver);
+
 				await expect(
 					domeInstance
 						.connect(otherAccount)
-						.withdraw(assetsReceived, receiver, owner)
-				).to.be.revertedWith("ERC20: burn amount exceeds balance");
+						.withdraw(excessiveAssets, receiver, owner)
+				).to.be.fulfilled;
+
+				expect(await assetContract.balanceOf(receiver)).to.equal(
+					receiverBalanceBefore.add(assetsReceived)
+				);
+
+				expect(await domeInstance.balanceOf(otherAccount.address)).to.equal(0);
 			});
 
 			it("Should allow max withdrawal of asset", async function () {

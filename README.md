@@ -24,7 +24,6 @@
 - **IGovernanceFactory:** Interface for creating governance contracts for dome structures.
 - **IWrappedVotingFactory:** Interface for creating wrapped voting contracts for dome governance.
 - **IDomeFactory:** Interface for initializing dome structures with specified parameters.
-- **IPriceTracker:** Interface for converting asset amounts to USDC equivalents for reward token minting.
 - **IRewardToken:** Interface for minting reward tokens for dome participants.
 
 ## DomeCore Smart Contract
@@ -327,6 +326,8 @@ To deploy the protocol, you will need to add the following `environment variable
 `MAINNET_RPC_URL`
 `GOERLI_RPC_URL`
 `AMOY_RPC_URL`
+`ARBITRUM_RPC_URL`
+`ARBITRUM_SEPOLIA_RPC_URL`
 
 You can find the RPC URL's on: https://chainlist.org/ || Use the RPC from Alchemy
 
@@ -339,6 +340,7 @@ For contract `verification`, you will need to add the explorer api keys for the 
 `POLYGON_API_KEY`
 
 `MAINNET_API_KEY`
+`ARBITRUM_API_KEY`
 
 If you want to get detailed information about `deployment/execution gas prices`, you will need to add the `COINMARKETCAP_API` api key to your .env file:
 
@@ -412,7 +414,7 @@ Before deploying the contracts, ensure the following prerequisites are met:
    - `SYSTEM_OWNER` (public wallet address)
    - `DEPLOY_PRIV_KEY` (Extract it from Metamask or you wallet )
 
-3. Once you're ready to deploy the protocol, you should decide which network to use. We have predefined network entries, which you can use to deploy to a remote network such as `mainnet`, `polygon` or their testnets: `goerli`, `amoy`. For these networks, the corresponding environment variables should be set: `POLYGON_RPC_URL`, `MAINNET_RPC_URL`,`GOERLI_RPC_URL`, `AMOY_RPC_URL`.
+3. Once you're ready to deploy the protocol, you should decide which network to use. We have predefined network entries, which you can use to deploy to a remote network such as `mainnet`, `polygon`, `arbitrumOne` or their testnets: `goerli`, `amoy`, `arbitrumSepolia`. For these networks, set the corresponding environment variables: `MAINNET_RPC_URL`, `POLYGON_RPC_URL`, `GOERLI_RPC_URL`, `AMOY_RPC_URL`, `ARBITRUM_RPC_URL`, `ARBITRUM_SEPOLIA_RPC_URL`.
 
 If you want to deploy somewhere else, you need to add a new network entry to `hardhat.config.js` file similarly to the others:
 
@@ -444,6 +446,8 @@ npm run deployProtocol:mainnet
 npm run deployProtocol:goerli
 npm run deployProtocol:polygon
 npm run deployProtocol:amoy
+npm run deployProtocol:arbitrum
+npm run deployProtocol:arbitrumSepolia
 npm run deployProtocol:hardhat
 ```
 
@@ -452,7 +456,6 @@ This script will also deploy some additional required contracts:
 - `DomeFactory`
 - `GovernanceFactory`
 - `WrappedVotingFactory`
-- `PriceTracker`
 - `Buffer`
 - `RewardToken`.
 
@@ -532,6 +535,8 @@ After you've decided with the chain and protocol to use, you should copy its con
 
 ![ERC4626 contract position](/assets/erc4626contract.png)
 
+> **Heads up:** The entries under `test/constants/arbitrum/index.js` ship with placeholder ERC-4626 and router addresses for now. Replace them with the contracts you intend to use on Arbitrum networks before deploying.
+
 After setting the required parameters inside `scripts/deployDome.js` file. we are ready to deploy a `Dome` instance like this:
 
 ```bash
@@ -545,6 +550,8 @@ npm run deployDome:mainnet
 npm run deployDome:goerli
 npm run deployDome:polygon
 npm run deployDome:amoy
+npm run deployDome:arbitrum
+npm run deployDome:arbitrumSepolia
 npm run deployDome:hardhat
 ```
 
@@ -560,7 +567,7 @@ For smart contracts verification on the blockchain we use hardhat-verify to make
 
 ### Configuration
 
-1. Ensure you have set required environment variables for verifications on Polygon and Ethereum: `MAINNET_API_KEY`, `POLYGON_API_KEY`.
+1. Ensure you have set required environment variables for verifications on Polygon, Arbitrum and Ethereum: `MAINNET_API_KEY`, `POLYGON_API_KEY`, `ARBITRUM_API_KEY`.
 
 2. If you want to deploy somewhere else, you need to add a new etherscan api key entry to `hardhat.config.js` file, similarly to others:
 
@@ -589,7 +596,7 @@ npm run verifyProtocol:<network>
 
 We also support recent deployment verification, which reads deployment metadata and uses that data for verification without any additional configuration:
 
-Using our predefined networks (mainnet, goerli, polygon, mumbai) which are listed in `package.json`
+Using our predefined networks (`mainnet`, `goerli`, `polygon`, `amoy`, `arbitrumOne`, `arbitrumSepolia`) which are listed in `package.json`
 
 ```
 npm run verifyLatestProtocol:<network>
@@ -621,7 +628,7 @@ npm run verifyDome:<network>
 
 We also support recent deployment verification, which reads deployment metadata and uses that data for verification without any additional configuration:
 
-Using our predefined networks (mainnet, goerli, polygon, mumbai) which are listed in `package.json`
+Using our predefined networks (mainnet, goerli, polygon, amoy) which are listed in `package.json`
 
 ```
 npm run verifyLatestDome:<network>
@@ -643,3 +650,5 @@ npm run deployTestingEnv:amoy
 
 Test deployement of Protocol and Dome
 Test deployTestingEnv script
+
+```

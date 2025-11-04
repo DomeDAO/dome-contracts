@@ -13,52 +13,14 @@ const {
 	getBalanceOf,
 	convertDurationToBlocks,
 } = require("../utils");
+const { deployMockEnvironment } = require("../helpers/deploy");
 
 describe("Burning", function () {
 	async function deployDome() {
-		const [owner, otherAccount, anotherAccount, randomAccount] =
-			await ethers.getSigners();
-
-		const [
-			DomeFactory,
-			GovernanceFactory,
-			WrappedVotingFactory,
-			PriceTrackerFactory,
-			DomeProtocol,
-		] = await Promise.all([
-			ethers.getContractFactory("DomeFactory"),
-			ethers.getContractFactory("GovernanceFactory"),
-			ethers.getContractFactory("WrappedVotingFactory"),
-			ethers.getContractFactory("PriceTracker"),
-			ethers.getContractFactory("DomeProtocol"),
-		]);
-
-		const UNISWAP_ROUTER = MAINNET.ADDRESSES.SUSHI_ROUTER_02;
-		const USDC = MAINNET.ADDRESSES.USDC;
-
-		const [domeFactory, governanceFactory, wrappedVotingFactory, priceTracker] =
-			await Promise.all([
-				DomeFactory.deploy(),
-				GovernanceFactory.deploy(),
-				WrappedVotingFactory.deploy(),
-				PriceTrackerFactory.deploy(UNISWAP_ROUTER, USDC),
-			]);
-
-		const domeCreationFee = ethers.utils.parseEther("1");
-		const systemOwnerPercentage = 1000;
-
-		const systemOwner = owner;
-
-		const domeProtocol = await DomeProtocol.deploy(
-			systemOwner.address,
-			domeFactory.address,
-			governanceFactory.address,
-			wrappedVotingFactory.address,
-			priceTracker.address,
-			systemOwnerPercentage,
-			domeCreationFee,
-			USDC
-		);
+		const { owner, others, contracts, params } = await deployMockEnvironment();
+		const [otherAccount, anotherAccount, randomAccount] = others;
+		const { domeProtocol } = contracts;
+		const { domeCreationFee, systemOwnerPercentage } = params;
 
 		const bufferAddress = await domeProtocol.callStatic.BUFFER();
 
@@ -111,7 +73,7 @@ describe("Burning", function () {
 		const domeInstance = await ethers.getContractAt("Dome", domeAddress);
 
 		const assetAddress = await domeInstance.asset();
-		const assetContract = await ethers.getContractAt("IERC20", assetAddress);
+		const assetContract = await ethers.getContractAt("MockERC20", assetAddress);
 
 		const rewardTokenAddress = await domeProtocol.REWARD_TOKEN();
 		const rewardTokenContract = await ethers.getContractAt(
@@ -121,14 +83,13 @@ describe("Burning", function () {
 
 		return {
 			bufferAddress,
-			systemOwner,
-			priceTracker,
+			systemOwner: owner,
 			rewardTokenContract,
 			randomAccount,
 			domeCreator,
 			asset: assetAddress,
 			assetContract,
-			domeFactory,
+			domeFactory: contracts.domeFactory,
 			domeCreationFee,
 			systemOwnerPercentage,
 			owner,
@@ -143,49 +104,10 @@ describe("Burning", function () {
 	}
 
 	async function deployDomeWithBufferBeneficiary() {
-		const [owner, otherAccount, anotherAccount, randomAccount] =
-			await ethers.getSigners();
-
-		const [
-			DomeFactory,
-			GovernanceFactory,
-			WrappedVotingFactory,
-			PriceTrackerFactory,
-			DomeProtocol,
-		] = await Promise.all([
-			ethers.getContractFactory("DomeFactory"),
-			ethers.getContractFactory("GovernanceFactory"),
-			ethers.getContractFactory("WrappedVotingFactory"),
-			ethers.getContractFactory("PriceTracker"),
-			ethers.getContractFactory("DomeProtocol"),
-		]);
-
-		const UNISWAP_ROUTER = MAINNET.ADDRESSES.SUSHI_ROUTER_02;
-		const USDC = MAINNET.ADDRESSES.USDC;
-
-		const [domeFactory, governanceFactory, wrappedVotingFactory, priceTracker] =
-			await Promise.all([
-				DomeFactory.deploy(),
-				GovernanceFactory.deploy(),
-				WrappedVotingFactory.deploy(),
-				PriceTrackerFactory.deploy(UNISWAP_ROUTER, USDC),
-			]);
-
-		const domeCreationFee = ethers.utils.parseEther("1");
-		const systemOwnerPercentage = 1000;
-
-		const systemOwner = owner;
-
-		const domeProtocol = await DomeProtocol.deploy(
-			systemOwner.address,
-			domeFactory.address,
-			governanceFactory.address,
-			wrappedVotingFactory.address,
-			priceTracker.address,
-			systemOwnerPercentage,
-			domeCreationFee,
-			USDC
-		);
+		const { owner, others, contracts, params } = await deployMockEnvironment();
+		const [otherAccount, anotherAccount, randomAccount] = others;
+		const { domeProtocol } = contracts;
+		const { domeCreationFee, systemOwnerPercentage } = params;
 
 		const bufferAddress = await domeProtocol.callStatic.BUFFER();
 
@@ -244,7 +166,7 @@ describe("Burning", function () {
 		const domeInstance = await ethers.getContractAt("Dome", domeAddress);
 
 		const assetAddress = await domeInstance.asset();
-		const assetContract = await ethers.getContractAt("IERC20", assetAddress);
+		const assetContract = await ethers.getContractAt("MockERC20", assetAddress);
 
 		const rewardTokenAddress = await domeProtocol.REWARD_TOKEN();
 		const rewardTokenContract = await ethers.getContractAt(
@@ -255,14 +177,13 @@ describe("Burning", function () {
 		return {
 			bufferBeneficiary,
 			bufferAddress,
-			systemOwner,
-			priceTracker,
+			systemOwner: owner,
 			rewardTokenContract,
 			randomAccount,
 			domeCreator,
 			asset: assetAddress,
 			assetContract,
-			domeFactory,
+			domeFactory: contracts.domeFactory,
 			domeCreationFee,
 			systemOwnerPercentage,
 			owner,

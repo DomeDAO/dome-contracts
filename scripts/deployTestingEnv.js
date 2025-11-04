@@ -59,20 +59,16 @@ async function deployProtocol(deployer) {
 		DomeFactory,
 		GovernanceFactory,
 		WrappedVotingFactory,
-		PriceTrackerFactory,
 		DomeProtocol,
 	] = await Promise.all([
 		ethers.getContractFactory("DomeFactory"),
 		ethers.getContractFactory("GovernanceFactory"),
 		ethers.getContractFactory("WrappedVotingFactory"),
-		ethers.getContractFactory("PriceTracker"),
 		ethers.getContractFactory("DomeProtocol"),
 	]);
 
 	const UNISWAP_ROUTER = AMOY.ADDRESSES.SUSHI_ROUTER_02;
 	const USDC = fakeERC20.address;
-
-	const priceTrackerConstructorArguments = [UNISWAP_ROUTER, USDC];
 
 	console.log("You are going to deploy:\n");
 	console.log("- DomeFactory");
@@ -82,29 +78,22 @@ async function deployProtocol(deployer) {
 	);
 
 	console.log("Deploying contracts...");
-	const [domeFactory, governanceFactory, wrappedVotingFactory, priceTracker] =
-		await Promise.all([
-			DomeFactory.deploy({ nonce: nonce, gasPrice }),
-			GovernanceFactory.deploy({ nonce: ++nonce, gasPrice }),
-			WrappedVotingFactory.deploy({ nonce: ++nonce, gasPrice }),
-			PriceTrackerFactory.deploy(...priceTrackerConstructorArguments, {
-				nonce: ++nonce,
-				gasPrice
-			}),
-		]);
+	const [domeFactory, governanceFactory, wrappedVotingFactory] = await Promise.all([
+		DomeFactory.deploy({ nonce: nonce, gasPrice }),
+		GovernanceFactory.deploy({ nonce: ++nonce, gasPrice }),
+		WrappedVotingFactory.deploy({ nonce: ++nonce, gasPrice }),
+	]);
 	console.log("Successfully deployed factories...");
 
 	console.log("\nDeployment addresses: ");
 	console.log(`- DomeFactory: ${domeFactory.address}`);
 	console.log(`- GovernanceFactory: ${governanceFactory.address}`);
 	console.log(`- WrappedVotingFactory: ${wrappedVotingFactory.address}`);
-	console.log(`- PriceTracker: ${priceTracker.address}`);
 
 	await Promise.all([
 		domeFactory.deployed(),
 		governanceFactory.deployed(),
 		wrappedVotingFactory.deployed(),
-		priceTracker.deployed(),
 	]);
 
 	console.log("Successfully deployed contracts...");
@@ -128,7 +117,6 @@ async function deployProtocol(deployer) {
 		domeFactory.address,
 		governanceFactory.address,
 		wrappedVotingFactory.address,
-		priceTracker.address,
 		systemOwnerPercentage,
 		domeCreationFee,
 		USDC,
@@ -167,10 +155,6 @@ async function deployProtocol(deployer) {
 		WRAPPEDVOTING_FACTORY: {
 			address: wrappedVotingFactory.address,
 			constructorArguments: [],
-		},
-		PRICE_TRACKER: {
-			address: priceTracker.address,
-			constructorArguments: priceTrackerConstructorArguments,
 		},
 		BUFFER: {
 			address: bufferAddress,

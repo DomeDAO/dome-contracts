@@ -1,9 +1,6 @@
 require("dotenv").config();
 const { ethers } = require("hardhat");
 const readline = require("readline");
-const {
-	POLYGON: { MAINNET },
-} = require("../test/constants");
 const { getProtocolEnvVars } = require("../config");
 const { writeDeploy, getGasPrice } = require("./utils");
 
