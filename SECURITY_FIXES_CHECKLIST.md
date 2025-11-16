@@ -83,23 +83,6 @@ This checklist tracks the implementation status of security fixes identified in 
 
 ---
 
-### [H-3] Reward System Double-Spend Vulnerability
-
-- [ ] Design checkpoint system
-- [ ] Implement `RewardCheckpoint` struct
-- [ ] Add checkpoint array
-- [ ] Implement `updateRewards()` function
-- [ ] Modify `claim()` to use checkpoints
-- [ ] Add `lastClaimCheckpoint` mapping
-- [ ] Test depeg scenarios
-- [ ] Test fair distribution
-
-**Files to modify:**
-
-- `contracts/DomeCore.sol` (lines 508-530)
-
----
-
 ### [H-4] Vote Weight Manipulation in Governance
 
 - [ ] Fix `updateVotes()` to use snapshot block
@@ -239,8 +222,6 @@ This checklist tracks the implementation status of security fixes identified in 
 
 - [ ] Add `SystemOwnerPercentageChanged` event
 - [ ] Add `DomeCreationFeeChanged` event
-- [ ] Add `RewardsPaused` event
-- [ ] Add `RewardsUnpaused` event
 - [ ] Emit events in all functions
 - [ ] Update off-chain monitoring
 - [ ] Add event indexing
@@ -347,8 +328,7 @@ This checklist tracks the implementation status of security fixes identified in 
 
 1. **[H-4]** Fix vote weight manipulation
 2. **[H-2]** Fix beneficiary DoS
-3. **[H-3]** Fix reward accounting
-4. **[H-1]** Add withdrawal protections
+3. **[H-1]** Add withdrawal protections
 
 ### Week 3 - MEDIUM SEVERITY (Important for production)
 

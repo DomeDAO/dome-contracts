@@ -4,7 +4,6 @@ pragma solidity ^0.8.20;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {DomeInfo, BeneficiaryInfo} from "./DomeCore.sol";
 import {Buffer} from "./Buffer.sol";
-import {RewardToken} from "./RewardToken.sol";
 import {YieldProviderType} from "./interfaces/YieldProviderTypes.sol";
 
 struct GovernanceSettings {
@@ -42,10 +41,6 @@ interface IDomeFactory {
 	) external returns (address);
 }
 
-interface IRewardToken {
-	function mint(address to, uint256 amount) external;
-}
-
 struct YieldProviderConfig {
 	address provider;
 	YieldProviderType providerType;
@@ -76,7 +71,6 @@ contract DomeProtocol is Ownable {
 	address public GOVERNANCE_FACTORY;
 	address public WRAPPEDVOTING_FACTORY;
 	address public DOME_FACTORY;
-	address public REWARD_TOKEN;
 	address private _owner;
 	address public USDC_ADDRESS;
 
@@ -119,7 +113,6 @@ contract DomeProtocol is Ownable {
 		domeCreationFee = _domeCreationFee;
 
 		BUFFER = address(new Buffer(address(this)));
-		REWARD_TOKEN = address(new RewardToken(address(this)));
 		DOME_FACTORY = _domeFactory;
 		WRAPPEDVOTING_FACTORY = _wrappedvotingFactory;
 		GOVERNANCE_FACTORY = _governanceFactory;
@@ -241,20 +234,6 @@ contract DomeProtocol is Ownable {
 			providerInfo.providerType,
 			domeInfo.CID
 		);
-	}
-
-	function mintRewardTokens(
-		address to,
-		uint256 amount
-	) external returns (uint256) {
-		if (domeCreators[msg.sender] == address(0)) {
-			revert Unauthorized();
-		}
-
-
-		IRewardToken(REWARD_TOKEN).mint(to, amount);
-
-		return amount;
 	}
 
 	function changeSystemOwnerPercentage(uint16 percentage) external onlyOwner {

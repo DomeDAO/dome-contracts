@@ -119,11 +119,9 @@ async function main() {
 
 	await domeProtocol.deployed();
 	const bufferAddress = await domeProtocol.callStatic.BUFFER();
-	const rewardTokenAddress = await domeProtocol.callStatic.REWARD_TOKEN();
 
 	console.log(`DomeProtocol was deployed at ${domeProtocol.address}`);
 	console.log(`- BUFFER at ${bufferAddress}`);
-	console.log(`- REWARD_TOKEN at ${rewardTokenAddress}`);
 
 	const deployment = {
 		DOME_PROTOCOL: {
@@ -144,10 +142,6 @@ async function main() {
 		},
 		BUFFER: {
 			address: bufferAddress,
-			constructorArguments: [domeProtocol.address],
-		},
-		REWARD_TOKEN: {
-			address: rewardTokenAddress,
 			constructorArguments: [domeProtocol.address],
 		},
 	};

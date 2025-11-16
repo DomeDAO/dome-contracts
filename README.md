@@ -14,8 +14,6 @@
 
 - **Yield Generation:** Domes generate yield from deposited assets, and users can specify the percentage of generated yield allocated to depositors as rewards.
 
-- **Reward Token Minting:** The protocol supports the minting of reward tokens, which represent users' share of generated yield. Reward tokens can be minted for users based on their contributions to dome structures.
-
 - **Fee Management:** The protocol includes mechanisms for managing system owner percentages and dome creation fees, providing flexibility for protocol governance and sustainability.
 
 **Interfaces:**
@@ -24,22 +22,19 @@
 - **IGovernanceFactory:** Interface for creating governance contracts for dome structures.
 - **IWrappedVotingFactory:** Interface for creating wrapped voting contracts for dome governance.
 - **IDomeFactory:** Interface for initializing dome structures with specified parameters.
-- **IRewardToken:** Interface for minting reward tokens for dome participants.
 
 ## DomeCore Smart Contract
 
 **Description:**
 
-[The Dome smart contract](./contracts/DomeCore.sol) facilitates the creation of dome structures where users can deposit assets, mint shares, and earn rewards. The contract supports various functionalities including depositing, withdrawing, claiming rewards, and donating assets.
+[The Dome smart contract](./contracts/DomeCore.sol) facilitates the creation of dome structures where users can deposit assets, mint shares, and manage beneficiary distributions. The contract supports depositing, withdrawing, distributing yield, and donating assets.
 
 **Features:**
 
 - **Deposit and Mint:** Users can deposit assets into the dome and mint shares, allowing them to participate in the dome's activities.
 - **Withdraw and Redeem:** Users can withdraw assets from the dome and redeem their shares to retrieve their deposited assets.
-- **Yield Generation:** The dome generates yield from deposited assets, which can be claimed by users as rewards.
+- **Yield Generation:** The dome generates yield from deposited assets, which can be realized when beneficiaries receive distributions or when depositors unwind their positions.
 - **Beneficiary Distribution:** Generated yield and donated assets are distributed among predefined beneficiaries according to specified percentages.
-- **Rewards Distribution:** Rewards are distributed to users based on their share of deposited assets and additional system fees.
-
 **Interfaces:**
 
 - **IERC20:** Implements the ERC20 standard for fungible tokens.
@@ -99,18 +94,10 @@ sequenceDiagram
     box rgb(33,66,99)
     participant Beneficiary
     participant SystemOwner
-    participant Reward Contract
     end
     U->> D: claimYieldAndDistribute
     D->> Beneficiary: transfer beneficiary yield portion
     D->> SystemOwner: transfer system owner portion
-
-
-    U->> +D: claim
-    D->> Reward Contract: claim generated reward token
-    D->> -U: trasnfers reward token user
-
-
     U->> +D: donate
     Note over U,D: Donates erc20 tokens, transfers to beneficiaries
     U->> +D: burn
@@ -369,10 +356,6 @@ The project includes a comprehensive set of unit tests to ensure the correctness
   - Ownership management.
   - Validation of governance mechanisms.
 
-- **Reward Contract Testing:**
-
-  - Validation of contract functionality.
-
 - **Burn Testing:**
 
   - Validation of contract functionality.
@@ -457,7 +440,6 @@ This script will also deploy some additional required contracts:
 - `GovernanceFactory`
 - `WrappedVotingFactory`
 - `Buffer`
-- `RewardToken`.
 
 You will be prompted to submit the deployment of them.
 
@@ -466,7 +448,6 @@ You will be prompted to submit the deployment of them.
 ```
 DomeProtocol was deployed at 0xC72189CF685056DED9487704A80E9e2aEeC80227
 - BUFFER at 0x622F14A17F4720D017B85044235ee527f8A4557E
-- REWARD_TOKEN at 0x7feF49D87B5D293CAe263E4ab43456a27414840D
 ```
 
 The address of the `DomeProtocol` contract should be set as an environment variable:

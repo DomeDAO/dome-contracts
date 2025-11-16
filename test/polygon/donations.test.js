@@ -77,18 +77,11 @@ describe("Donations", function () {
 		const assetAddress = await domeInstance.asset();
 		const assetContract = await ethers.getContractAt("MockERC20", assetAddress);
 
-		const rewardTokenAddress = await domeProtocol.REWARD_TOKEN();
-		const rewardTokenContract = await ethers.getContractAt(
-			"RewardToken",
-			rewardTokenAddress
-		);
-
 		return {
 			usdtContract: usdt,
 			bufferContract,
 			bufferAddress,
 			systemOwner: owner,
-			rewardTokenContract,
 			randomAccount,
 			domeCreator,
 			asset: assetAddress,
@@ -175,18 +168,11 @@ describe("Donations", function () {
 		const assetAddress = await domeInstance.asset();
 		const assetContract = await ethers.getContractAt("MockERC20", assetAddress);
 
-		const rewardTokenAddress = await domeProtocol.REWARD_TOKEN();
-		const rewardTokenContract = await ethers.getContractAt(
-			"RewardToken",
-			rewardTokenAddress
-		);
-
 		return {
 			usdtContract: usdt,
 			bufferContract,
 			bufferAddress,
 			systemOwner: owner,
-			rewardTokenContract,
 			randomAccount,
 			domeCreator,
 			asset: assetAddress,

@@ -75,16 +75,9 @@ describe("Burning", function () {
 		const assetAddress = await domeInstance.asset();
 		const assetContract = await ethers.getContractAt("MockERC20", assetAddress);
 
-		const rewardTokenAddress = await domeProtocol.REWARD_TOKEN();
-		const rewardTokenContract = await ethers.getContractAt(
-			"RewardToken",
-			rewardTokenAddress
-		);
-
 		return {
 			bufferAddress,
 			systemOwner: owner,
-			rewardTokenContract,
 			randomAccount,
 			domeCreator,
 			asset: assetAddress,
@@ -168,17 +161,10 @@ describe("Burning", function () {
 		const assetAddress = await domeInstance.asset();
 		const assetContract = await ethers.getContractAt("MockERC20", assetAddress);
 
-		const rewardTokenAddress = await domeProtocol.REWARD_TOKEN();
-		const rewardTokenContract = await ethers.getContractAt(
-			"RewardToken",
-			rewardTokenAddress
-		);
-
 		return {
 			bufferBeneficiary,
 			bufferAddress,
 			systemOwner: owner,
-			rewardTokenContract,
 			randomAccount,
 			domeCreator,
 			asset: assetAddress,

@@ -423,109 +423,6 @@ function _distribute(uint256 amount) internal {
 
 ---
 
-### [H-3] Reward System Double-Spend Vulnerability
-
-**Severity:** High  
-**Status:** Open  
-**File:** `contracts/DomeCore.sol`  
-**Function:** `claim()`  
-**Lines:** 508-530
-
-#### Description
-
-The reward claiming mechanism doesn't properly account for yield protocol losses or depeg events. Users can claim rewards based on current yield, but if the underlying protocol loses value, early claimers get full rewards while later users cannot claim.
-
-#### Vulnerable Code
-
-```solidity
-function claim() external returns (uint256) {
-    if (rewardsPaused) {
-        revert InActive();
-    }
-
-    uint256 generatedYield = generatedYieldOf(msg.sender);
-
-    uint256 depositorsYieldPortion = (generatedYield * depositorYieldPercent) / 10000;
-    generatedYield = generatedYield - depositorsYieldPortion;
-
-    uint256 systemFeePortion = (generatedYield * systemFeePercent) / 10000;
-    uint256 rewardAmount = (generatedYield - systemFeePortion) - _stakerRewards[msg.sender];
-    _stakerRewards[msg.sender] += rewardAmount;
-
-    return IDomeProtocol(DOME_PROTOCOL).mintRewardTokens(
-        yieldProtocol.asset(),
-        msg.sender,
-        rewardAmount
-    );
-}
-```
-
-#### Impact
-
-- Early claimers drain reward pool
-- Later claimers receive nothing
-- Unfair distribution during depeg events
-- Gaming opportunity during volatility
-
-#### Attack Scenario
-
-```
-1. Yield protocol has $1M in deposits, $100K in yield
-2. Alice claims $50K in reward tokens ✅
-3. Yield protocol experiences 50% loss (now $500K + $50K yield)
-4. Bob tries to claim his $50K in reward tokens ❌ Only $50K yield remains
-5. Alice already received full rewards, Bob gets nothing
-```
-
-#### Recommendation
-
-Implement checkpoint-based reward distribution:
-
-```solidity
-struct RewardCheckpoint {
-    uint256 timestamp;
-    uint256 cumulativeRewardPerShare;
-    uint256 totalShares;
-}
-
-RewardCheckpoint[] public rewardCheckpoints;
-mapping(address => uint256) public lastClaimCheckpoint;
-
-function updateRewards() external {
-    uint256 totalYield = calculateTotalYield();
-    uint256 rewardPerShare = (totalYield * 1e18) / totalSupply();
-
-    rewardCheckpoints.push(RewardCheckpoint({
-        timestamp: block.timestamp,
-        cumulativeRewardPerShare: rewardCheckpoints.length > 0
-            ? rewardCheckpoints[rewardCheckpoints.length - 1].cumulativeRewardPerShare + rewardPerShare
-            : rewardPerShare,
-        totalShares: totalSupply()
-    }));
-}
-
-function claim() external returns (uint256) {
-    uint256 lastCheckpoint = lastClaimCheckpoint[msg.sender];
-    uint256 currentCheckpoint = rewardCheckpoints.length - 1;
-
-    uint256 rewardAmount = calculateRewardsBetweenCheckpoints(
-        msg.sender,
-        lastCheckpoint,
-        currentCheckpoint
-    );
-
-    lastClaimCheckpoint[msg.sender] = currentCheckpoint;
-
-    return IDomeProtocol(DOME_PROTOCOL).mintRewardTokens(
-        yieldProtocol.asset(),
-        msg.sender,
-        rewardAmount
-    );
-}
-```
-
----
-
 ### [H-4] Vote Weight Manipulation in Governance
 
 **Severity:** High  
@@ -775,7 +672,6 @@ function withdraw(
 
 System owner and dome owner have extensive unilateral powers:
 
-- Pause/unpause rewards anytime
 - Withdraw all protocol ETH
 - Change fee percentages
 - Update critical contract addresses
@@ -818,7 +714,6 @@ import "@openzeppelin/contracts/governance/TimelockController.sol";
 // Use DAO voting for:
 // - Fee changes
 // - Address updates
-// - Reward pause/unpause
 ```
 
 ---
@@ -1088,34 +983,13 @@ function changeDomeCreationFee(uint256 value) external onlyOwner {
     domeCreationFee = value;  // ❌ No event
 }
 
-// DomeCore.sol
-function pauseRewards() external {
-    rewardsPaused = true;  // ❌ No event
-}
-
-function unpauseRewards() external {
-    rewardsPaused = false;  // ❌ No event
-}
-```
-
-#### Recommendation
-
-```solidity
 event SystemOwnerPercentageChanged(uint16 oldPercentage, uint16 newPercentage);
 event DomeCreationFeeChanged(uint256 oldFee, uint256 newFee);
-event RewardsPaused(address indexed dome);
-event RewardsUnpaused(address indexed dome);
 
 function changeSystemOwnerPercentage(uint16 percentage) external onlyOwner {
     uint16 oldPercentage = systemOwnerPercentage;
     systemOwnerPercentage = percentage;
     emit SystemOwnerPercentageChanged(oldPercentage, percentage);
-}
-
-function pauseRewards() external {
-    require(msg.sender == domeOwner() || msg.sender == systemOwner, "Unauthorized");
-    rewardsPaused = true;
-    emit RewardsPaused(address(this));
 }
 ```
 
@@ -1245,7 +1119,7 @@ Different contracts use different Solidity versions, which can lead to:
 - ^0.8.4  : Governance.sol, GovernorVotes.sol
 - ^0.8.9  : Buffer.sol
 - ^0.8.17 : DomeCore.sol, DomeFactory.sol, DomeProtocol.sol, WrappedVoting.sol, etc.
-- ^0.8.20 : RewardToken.sol
+
 ```
 
 #### Recommendation
@@ -1397,7 +1271,6 @@ function _afterTokenTransfer(
 2. ✅ **Fix High Severity Issues**
    - [ ] Fix vote weight manipulation
    - [ ] Add beneficiary DoS protection
-   - [ ] Implement proper reward accounting
    - [ ] Add withdrawal validation
 
 ### Medium-term Improvements
@@ -1434,7 +1307,6 @@ We recommend addressing all Critical and High severity issues before any mainnet
 - [ ] C-2: Fix donation distribution rounding
 - [ ] H-1: Add timelock to protocol withdrawals
 - [ ] H-2: Implement pull-over-push pattern for distributions
-- [ ] H-3: Add checkpoint-based reward system
 - [ ] H-4: Fix governance vote weight calculation
 - [ ] M-1: Add commit-reveal to dome creation
 - [ ] M-2: Add slippage protection parameters

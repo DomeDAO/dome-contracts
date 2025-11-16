@@ -3,6 +3,7 @@
 pragma solidity ^0.8.20;
 
 import {IERC4626, IERC20Metadata, ERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import {DomeBase, SafeERC20} from "./base/DomeBase.sol";
 import {YieldProviderType} from "./interfaces/YieldProviderTypes.sol";
 
@@ -26,14 +27,9 @@ interface IDomeProtocol {
 	function BUFFER() external view returns (address);
 
 	function domeCreators(address) external view returns (address);
-
-	function mintRewardTokens(
-		address to,
-		uint256 amount
-	) external returns (uint256);
 }
 
-contract Dome is ERC20, IERC4626, DomeBase {
+contract Dome is ERC20, IERC4626, DomeBase, ReentrancyGuard {
 	using SafeERC20 for IERC20;
 
 	address public immutable DOME_PROTOCOL;
@@ -44,8 +40,6 @@ contract Dome is ERC20, IERC4626, DomeBase {
 	mapping(address => uint256) private _assets;
 	mapping(address => uint256) private _depositorYield;
 
-	mapping(address => uint256) private _stakerRewards;
-
 	string public DOME_CID;
 
 	BeneficiaryInfo[] public beneficiaries;
@@ -53,9 +47,6 @@ contract Dome is ERC20, IERC4626, DomeBase {
 	uint16 public immutable depositorYieldPercent;
 	uint256 public depositorsYield;
 
-	bool public rewardsPaused = true;
-
-	error InActive();
 	error Unauthorized();
 
 	event YieldClaimed(address _yieldProtocol, uint256 _amount);
@@ -137,28 +128,6 @@ contract Dome is ERC20, IERC4626, DomeBase {
 	}
 
 	/**
-	 * @dev Pauses reward token issuance
-	 */
-	function pauseRewards() external {
-		if (msg.sender != domeOwner() && msg.sender != systemOwner) {
-			revert Unauthorized();
-		}
-
-		rewardsPaused = true;
-	}
-
-	/**
-	 * @dev Unpauses reward token issuance
-	 */
-	function unpauseRewards() external {
-		if (msg.sender != domeOwner() && msg.sender != systemOwner) {
-			revert Unauthorized();
-		}
-
-		rewardsPaused = false;
-	}
-
-	/**
 	 * Deposits assets and enteres dome
 	 * @param assets asset amount to deposit
 	 * @param receiver receiver address of shares
@@ -233,7 +202,7 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		uint256 assets,
 		address receiver,
 		address owner
-	) external override returns (uint256) {
+	) external override nonReentrant returns (uint256) {
 		uint256 shares = previewWithdraw(assets);
 
 		_withdraw(msg.sender, receiver, owner, assets, shares);
@@ -251,7 +220,7 @@ contract Dome is ERC20, IERC4626, DomeBase {
 		uint256 shares,
 		address receiver,
 		address owner
-	) public virtual override returns (uint256) {
+	) public virtual override nonReentrant returns (uint256) {
 		uint256 assets = previewRedeem(shares);
 
 		_withdraw(msg.sender, receiver, owner, assets, shares);
@@ -275,10 +244,6 @@ contract Dome is ERC20, IERC4626, DomeBase {
 	) internal returns (uint256) {
 		if (caller != owner) {
 			_decreaseAllowance(owner, caller, shares);
-		}
-
-		if (assets > _assets[owner]) {
-			_stakerRewards[owner] = 0;
 		}
 
 		(uint256 updatedAssetAmount, uint256 yield) = _assetsWithdrawForOwner(
@@ -395,7 +360,7 @@ contract Dome is ERC20, IERC4626, DomeBase {
 	/**
 	 * Claims generated yield and distributes amoung beneficiares
 	 */
-	function claimYieldAndDistribute() external {
+	function claimYieldAndDistribute() external nonReentrant {
 		(uint256 assets, uint256 shares) = availableYield();
 
 		assets = yieldProtocol.redeem(shares, address(this), address(this));
@@ -506,31 +471,6 @@ contract Dome is ERC20, IERC4626, DomeBase {
 	}
 
 	/**
-	 * Claims reward tokens
-	 */
-	function claim() external returns (uint256) {
-		if (rewardsPaused) {
-			revert InActive();
-		}
-
-		uint256 generatedYield = generatedYieldOf(msg.sender);
-
-		uint256 depositorsYieldPortion = (generatedYield *
-			depositorYieldPercent) / 10000;
-		generatedYield = generatedYield - depositorsYieldPortion;
-
-		uint256 systemFeePortion = (generatedYield * systemFeePercent) / 10000;
-		uint256 rewardAmount = (generatedYield - systemFeePortion) -
-			_stakerRewards[msg.sender];
-		_stakerRewards[msg.sender] += rewardAmount;
-
-		return IDomeProtocol(DOME_PROTOCOL).mintRewardTokens(
-			msg.sender,
-			rewardAmount
-		);
-	}
-
-	/**
 	 * Donates ERC20-compatible tokens
 	 * @param token address of token
 	 * @param amount amount to donate
@@ -595,7 +535,7 @@ contract Dome is ERC20, IERC4626, DomeBase {
 	 * Burns share tokens, and distributes underlying assets among beneficiaries
 	 * @param shares shares amount to burn
 	 */
-	function burn(uint shares) public {
+	function burn(uint shares) public nonReentrant {
 		uint256 assets = previewRedeem(shares);
 
 		uint256 amount = _withdraw(
