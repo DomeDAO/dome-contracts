@@ -35,7 +35,7 @@
 - **Withdraw and Redeem:** Users can withdraw assets from the dome and redeem their shares to retrieve their deposited assets.
 - **Yield Generation:** The dome generates yield from deposited assets, which can be realized when beneficiaries receive distributions or when depositors unwind their positions.
 - **Beneficiary Distribution:** Generated yield and donated assets are distributed among predefined beneficiaries according to specified percentages.
-**Interfaces:**
+  **Interfaces:**
 
 - **IERC20:** Implements the ERC20 standard for fungible tokens.
 - **IERC4626:** Integrates additional ERC4626 functionality for ERC20 tokens.
@@ -141,6 +141,19 @@ await domeProtocol.configureYieldProviders([
 ```
 
 Disable a provider by setting `enabled` to `false`. Future Hyperliquid adapters should honour this flag to gate deployment environments safely.
+
+### Hyperliquid Vault Adapter
+
+- Contract source: `contracts/hyperliquid/HyperliquidVault.sol` (auto-deploy + PnL reporting)
+- Deployment script: `scripts/deployHyperliquidVault.js` (see `docs/hyperliquid.md` for env variables and workflow)
+- Tests: `test/hyperliquid/vault.test.js`
+
+- Treasury + Governance:
+  - `contracts/hyperliquid/HyperliquidBuffer.sol`
+  - `contracts/hyperliquid/HyperliquidGovernor.sol`
+  - Tests: `test/hyperliquid/governance.test.js`
+
+The vault keeps ERC-4626 semantics so Dome domes treat it like any other yield provider, while the designated buffer wallet manages Hyperliquid positions through the CoreWriter system contract. Auto-deploy keeps deposits single-tx, `reportDeployedValue` lets keepers reflect live Hyperliquid equity (so later deposits mint fewer IOUs when NAV has risen), and `positionValue(owner)` gives front ends a simple “current balance” hook. Every share mints the IOU/voting token (configurable name/symbol, defaults to `hlIOU`, powered by `ERC20Votes`) and feeds into `HyperliquidGovernor`, which releases reserves held in `HyperliquidBuffer` to the winning project portfolio. See [docs/hyperliquid.md](./docs/hyperliquid.md) for the full lifecycle, role definitions, and deployment instructions.
 
 ```mermaid
 sequenceDiagram
@@ -631,5 +644,7 @@ npm run deployTestingEnv:amoy
 
 Test deployement of Protocol and Dome
 Test deployTestingEnv script
+
+```
 
 ```
