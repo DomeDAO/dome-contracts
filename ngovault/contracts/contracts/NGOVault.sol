@@ -1,0 +1,173 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
+import { IStrategyVault } from "./interfaces/IStrategyVault.sol";
+import { NGOShare } from "./NGOShare.sol";
+import { NGOGovernance } from "./NGOGovernance.sol";
+
+contract NGOVault is Ownable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
+    uint256 private constant SHARE_SCALAR = 1e12;
+    uint16 public constant MAX_DONATION_BPS = 10_000;
+
+    IERC20 public immutable asset;
+    NGOShare public immutable shareToken;
+    IStrategyVault public immutable underlying;
+
+    NGOGovernance public governance;
+    uint16 public donationBps;
+
+    struct UserAccounting {
+        uint256 deposited;
+        uint256 withdrawn;
+        uint256 donated;
+    }
+
+    mapping(address => uint256) public totalDeposited;
+    mapping(address => uint256) public totalWithdrawn;
+    mapping(address => uint256) public totalDonated;
+
+    event Deposited(address indexed caller, address indexed receiver, uint256 assets, uint256 shares);
+    event Redeemed(address indexed user, uint256 shares, uint256 grossAssets, uint256 netAssets, uint256 donation);
+    event DonationBpsUpdated(uint16 newDonationBps);
+    event GovernanceUpdated(address newGovernance);
+
+    constructor(
+        IERC20 _asset,
+        NGOShare _shareToken,
+        IStrategyVault _underlying,
+        uint16 _donationBps,
+        NGOGovernance _governance
+    ) Ownable(msg.sender) {
+        require(address(_asset) != address(0), "asset zero");
+        require(address(_shareToken) != address(0), "share zero");
+        require(address(_underlying) != address(0), "underlying zero");
+        require(address(_governance) != address(0), "governance zero");
+        require(_donationBps <= MAX_DONATION_BPS, "donationBps too high");
+        require(_shareToken.vault() == address(this), "share mismatch");
+
+        asset = _asset;
+        shareToken = _shareToken;
+        underlying = _underlying;
+        donationBps = _donationBps;
+        governance = _governance;
+    }
+
+    function totalAssets() public view returns (uint256) {
+        return underlying.totalAssets();
+    }
+
+    function totalSupply() public view returns (uint256) {
+        return shareToken.totalSupply();
+    }
+
+    function deposit(uint256 assets, address receiver) external nonReentrant returns (uint256 shares) {
+        require(assets > 0, "Zero assets");
+        require(receiver != address(0), "Invalid receiver");
+
+        uint256 assetsBefore = totalAssets();
+        uint256 sharesBefore = totalSupply();
+
+        asset.safeTransferFrom(msg.sender, address(this), assets);
+        asset.forceApprove(address(underlying), assets);
+        underlying.deposit(assets);
+
+        if (sharesBefore == 0 || assetsBefore == 0) {
+            shares = assets * SHARE_SCALAR;
+        } else {
+            shares = (assets * sharesBefore) / assetsBefore;
+        }
+
+        require(shares > 0, "Zero shares");
+
+        totalDeposited[receiver] += assets;
+        shareToken.mint(receiver, shares);
+
+        emit Deposited(msg.sender, receiver, assets, shares);
+    }
+
+    function redeem(uint256 shares, address receiver) external nonReentrant returns (uint256 netToUser, uint256 donation) {
+        require(shares > 0, "Zero shares");
+        require(receiver != address(0), "Invalid receiver");
+
+        uint256 supply = totalSupply();
+        require(supply > 0, "No supply");
+
+        uint256 assetsTotal = totalAssets();
+        uint256 assetsOutGross = (shares * assetsTotal) / supply;
+
+        shareToken.burn(msg.sender, shares);
+
+        uint256 received;
+        if (assetsOutGross > 0) {
+            uint256 balanceBefore = asset.balanceOf(address(this));
+            underlying.withdraw(assetsOutGross);
+            uint256 balanceAfter = asset.balanceOf(address(this));
+            received = balanceAfter - balanceBefore;
+        }
+
+        address user = msg.sender;
+        uint256 deposited = totalDeposited[user];
+        uint256 withdrawn = totalWithdrawn[user];
+        uint256 donated = totalDonated[user];
+
+        uint256 profitBefore = 0;
+        if (withdrawn + donated > deposited) {
+            profitBefore = withdrawn + donated - deposited;
+        }
+
+        uint256 profitIfNoDonation = 0;
+        if (withdrawn + donated + received > deposited) {
+            profitIfNoDonation = withdrawn + donated + received - deposited;
+        }
+
+        uint256 incrementalProfit = profitIfNoDonation - profitBefore;
+        uint256 donationAmount = (incrementalProfit * donationBps) / MAX_DONATION_BPS;
+        if (donationAmount > received) {
+            donationAmount = received;
+        }
+
+        uint256 net = received - donationAmount;
+
+        totalWithdrawn[user] = withdrawn + net;
+        totalDonated[user] = donated + donationAmount;
+
+        if (donationAmount > 0) {
+            asset.safeTransfer(address(governance), donationAmount);
+        }
+
+        if (net > 0) {
+            asset.safeTransfer(receiver, net);
+        }
+
+        emit Redeemed(user, shares, received, net, donationAmount);
+        return (net, donationAmount);
+    }
+
+    function setDonationBps(uint16 newDonationBps) external onlyOwner {
+        require(newDonationBps <= MAX_DONATION_BPS, "donationBps too high");
+        donationBps = newDonationBps;
+        emit DonationBpsUpdated(newDonationBps);
+    }
+
+    function setGovernance(NGOGovernance newGovernance) external onlyOwner {
+        require(address(newGovernance) != address(0), "governance zero");
+        governance = newGovernance;
+        emit GovernanceUpdated(address(newGovernance));
+    }
+
+    function getUserAccounting(address user) external view returns (UserAccounting memory) {
+        return UserAccounting({
+            deposited: totalDeposited[user],
+            withdrawn: totalWithdrawn[user],
+            donated: totalDonated[user]
+        });
+    }
+}
+
