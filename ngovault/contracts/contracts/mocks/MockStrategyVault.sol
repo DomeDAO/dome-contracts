@@ -14,6 +14,7 @@ contract MockStrategyVault is IStrategyVault {
     IERC20 public immutable asset;
     uint256 public totalShares;
     uint256 public sharePriceWad;
+    bool public withdrawalsEnabled = true;
 
     event SharePriceUpdated(uint256 newSharePriceWad);
     event Deposited(address indexed caller, uint256 assets, uint256 shares);
@@ -48,6 +49,7 @@ contract MockStrategyVault is IStrategyVault {
 
     function withdraw(uint256 assets) external returns (uint256 sharesBurned) {
         require(assets > 0, "zero assets");
+        require(withdrawalsEnabled, "withdraw disabled");
         sharesBurned = (assets * SHARE_SCALAR * 1e18) / sharePriceWad;
         require(sharesBurned <= totalShares, "insufficient shares");
         require(sharesBurned > 0, "zero burn");
@@ -59,6 +61,10 @@ contract MockStrategyVault is IStrategyVault {
 
     function totalAssets() external view returns (uint256) {
         return (totalShares * sharePriceWad) / (1e18 * SHARE_SCALAR);
+    }
+
+    function setWithdrawalsEnabled(bool enabled) external {
+        withdrawalsEnabled = enabled;
     }
 }
 

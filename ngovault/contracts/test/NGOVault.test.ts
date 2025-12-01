@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
@@ -25,6 +26,7 @@ async function deposit(
   await asset.connect(user).approve(await vault.getAddress(), amount);
   return vault.connect(user).deposit(amount, receiver ?? user.address);
 }
+
 
 async function syncStrategyHoldings(asset: MockUSDC, strategy: MockStrategyVault) {
   const strategyAddress = await strategy.getAddress();
@@ -95,6 +97,48 @@ describe("NGOVault", () => {
       expect(await vault.totalDeposited(bob.address)).to.equal(amount);
       expect(await share.balanceOf(alice.address)).to.equal(0n);
     });
+  });
+
+  describe("withdrawal queue", () => {
+    it("blocks deposits for receivers with pending withdrawals", async () => {
+      const { vault, asset, share, strategy, alice } = await loadFixture(fixture);
+      await deposit(vault, asset, alice, toUSDC("25"));
+      await strategy.setWithdrawalsEnabled(false);
+      const shares = await share.balanceOf(alice.address);
+      await vault.connect(alice).redeem(shares, alice.address);
+      await asset.connect(alice).approve(await vault.getAddress(), toUSDC("1"));
+      await expect(vault.connect(alice).deposit(toUSDC("1"), alice.address)).to.be.revertedWith(
+        "Withdrawal pending"
+      );
+    });
+
+    it("queues withdrawals when strategy is locked and processes later", async () => {
+      const { vault, asset, share, strategy, governance, alice } = await loadFixture(fixture);
+      await deposit(vault, asset, alice, toUSDC("50"));
+      await strategy.setWithdrawalsEnabled(false);
+      const shares = await share.balanceOf(alice.address);
+
+      const tx = await vault.connect(alice).redeem(shares, alice.address);
+      await expect(tx).to.emit(vault, "WithdrawalQueued").withArgs(alice.address, shares, toUSDC("50"));
+      const request = await vault.queuedWithdrawals(alice.address);
+      expect(request.shares).to.equal(shares);
+
+      await expect(vault.connect(alice).redeem(1n, alice.address)).to.be.revertedWith("Withdrawal pending");
+
+      await strategy.setWithdrawalsEnabled(true);
+      const processTx = await vault.processQueuedWithdrawal(alice.address);
+      await expect(processTx)
+        .to.emit(vault, "WithdrawalProcessed")
+        .withArgs(alice.address, alice.address, anyValue, anyValue);
+
+      expect((await asset.balanceOf(alice.address)) > 0n).to.be.true;
+      expect(await asset.balanceOf(await governance.getAddress())).to.be.gte(0n);
+      const cleared = await vault.queuedWithdrawals(alice.address);
+      expect(cleared.shares).to.equal(0n);
+    });
+  });
+
+  describe("withdrawal queue", () => {
   });
 
   describe("redeem", () => {
@@ -207,7 +251,8 @@ describe("NGOVault", () => {
       await deposit(vault, asset, bob, toUSDC("150"));
       await strategy.setSharePrice(toWad("2"));
       await syncStrategyHoldings(asset, strategy);
-      await vault.connect(alice).redeem(await share.balanceOf(alice.address), alice.address);
+      const aliceShares = await share.balanceOf(alice.address);
+      await vault.connect(alice).redeem(aliceShares, alice.address);
       expect(await vault.totalWithdrawn(bob.address)).to.equal(0n);
       expect(await share.balanceOf(bob.address)).to.equal(toUSDC("150") * SHARE_SCALAR);
     });
@@ -240,14 +285,15 @@ describe("NGOVault", () => {
       await deposit(vault, asset, alice, toUSDC("100"));
       await strategy.setSharePrice(toWad("2"));
       await syncStrategyHoldings(asset, strategy);
-      await vault.connect(alice).redeem(await share.balanceOf(alice.address), alice.address);
+      let shares = await share.balanceOf(alice.address);
+      await vault.connect(alice).redeem(shares, alice.address);
 
       await deposit(vault, asset, alice, toUSDC("10"));
       await strategy.setSharePrice(toWad("2"));
       await syncStrategyHoldings(asset, strategy);
       await forceSetDonationBps(vault, 20_000);
 
-      const shares = await share.balanceOf(alice.address);
+      shares = await share.balanceOf(alice.address);
       const [net, donation] = await vault.connect(alice).redeem.staticCall(shares, alice.address);
       expect(net).to.equal(0n);
       expect(donation).to.equal(toUSDC("20"));
