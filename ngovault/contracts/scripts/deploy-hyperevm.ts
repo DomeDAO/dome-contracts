@@ -2,6 +2,15 @@ import { ethers, network } from "hardhat";
 import { getCreateAddress } from "ethers";
 import path from "path";
 import fs from "fs/promises";
+import { HYPER_EVM_NETWORKS, HyperEVMNetwork } from "../config/hyperevm";
+
+const optionalEnv = (key: string): string | undefined => {
+  const value = process.env[key];
+  if (!value || value.trim() === "") {
+    return undefined;
+  }
+  return value;
+};
 
 type DeploymentConfig = {
   usdc: string;
@@ -85,9 +94,14 @@ async function writeDeploymentFile(targetPath: string, payload: Record<string, u
 }
 
 async function main() {
-  if (network.config.chainId !== 98881) {
+  const selectedNetwork = (optionalEnv("HYPER_EVM_NETWORK") as HyperEVMNetwork) ?? "testnet";
+  const networkDefaults = HYPER_EVM_NETWORKS[selectedNetwork] ?? HYPER_EVM_NETWORKS.testnet;
+  const chainIdOverride = optionalEnv("HYPER_EVM_CHAIN_ID");
+  const expectedChainId = chainIdOverride ? Number(chainIdOverride) : networkDefaults.chainId;
+
+  if (network.config.chainId !== expectedChainId) {
     console.warn(
-      `Warning: expected HyperEVM chainId 98881 but connected to ${network.config.chainId}. Override if intentional.`
+      `Warning: expected HyperEVM chainId ${expectedChainId} but connected to ${network.config.chainId}. Override if intentional.`
     );
   }
 
@@ -96,7 +110,11 @@ async function main() {
   console.log(`Deploying from ${deployer.address}`);
 
   const baseNonce = await deployer.getNonce();
-  const vaultDeploymentNonce = baseNonce + 4;
+  // Contracts are deployed in the following order:
+  // bridge (nonce), strategy (nonce + 1), authorize tx (nonce + 2),
+  // share (nonce + 3), governance (nonce + 4), vault (nonce + 5).
+  // We need the predicted vault address beforehand to pass into the share constructor.
+  const vaultDeploymentNonce = baseNonce + 5;
   const predictedVaultAddress = getCreateAddress({
     from: deployer.address,
     nonce: vaultDeploymentNonce,

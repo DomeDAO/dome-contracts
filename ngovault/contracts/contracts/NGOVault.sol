@@ -32,9 +32,22 @@ contract NGOVault is Ownable, ReentrancyGuard {
     mapping(address => uint256) public totalDeposited;
     mapping(address => uint256) public totalWithdrawn;
     mapping(address => uint256) public totalDonated;
+    struct QueuedWithdrawal {
+        uint256 shares;
+        uint256 assets;
+        uint256 net;
+        uint256 donation;
+        address receiver;
+        uint256 timestamp;
+    }
+
+    mapping(address => QueuedWithdrawal) public queuedWithdrawals;
+    uint256 public totalQueuedWithdrawalAssets;
 
     event Deposited(address indexed caller, address indexed receiver, uint256 assets, uint256 shares);
     event Redeemed(address indexed user, uint256 shares, uint256 grossAssets, uint256 netAssets, uint256 donation);
+    event WithdrawalQueued(address indexed user, uint256 shares, uint256 assets);
+    event WithdrawalProcessed(address indexed user, address indexed receiver, uint256 netAssets, uint256 donation);
     event DonationBpsUpdated(uint16 newDonationBps);
     event GovernanceUpdated(address newGovernance);
 
@@ -60,7 +73,11 @@ contract NGOVault is Ownable, ReentrancyGuard {
     }
 
     function totalAssets() public view returns (uint256) {
-        return underlying.totalAssets();
+        uint256 managed = underlying.totalAssets();
+        if (managed <= totalQueuedWithdrawalAssets) {
+            return 0;
+        }
+        return managed - totalQueuedWithdrawalAssets;
     }
 
     function totalSupply() public view returns (uint256) {
@@ -70,6 +87,7 @@ contract NGOVault is Ownable, ReentrancyGuard {
     function deposit(uint256 assets, address receiver) external nonReentrant returns (uint256 shares) {
         require(assets > 0, "Zero assets");
         require(receiver != address(0), "Invalid receiver");
+        require(queuedWithdrawals[receiver].shares == 0, "Withdrawal pending");
 
         uint256 assetsBefore = totalAssets();
         uint256 sharesBefore = totalSupply();
@@ -96,23 +114,90 @@ contract NGOVault is Ownable, ReentrancyGuard {
         require(shares > 0, "Zero shares");
         require(receiver != address(0), "Invalid receiver");
 
+        address user = msg.sender;
+        require(queuedWithdrawals[user].shares == 0, "Withdrawal pending");
+
         uint256 supply = totalSupply();
         require(supply > 0, "No supply");
 
         uint256 assetsTotal = totalAssets();
         uint256 assetsOutGross = (shares * assetsTotal) / supply;
 
-        shareToken.burn(msg.sender, shares);
+        shareToken.burn(user, shares);
 
-        uint256 received;
-        if (assetsOutGross > 0) {
-            uint256 balanceBefore = asset.balanceOf(address(this));
-            underlying.withdraw(assetsOutGross);
-            uint256 balanceAfter = asset.balanceOf(address(this));
-            received = balanceAfter - balanceBefore;
+        uint256 balanceBefore = asset.balanceOf(address(this));
+        bool withdrawn = _tryWithdrawFromStrategy(assetsOutGross);
+
+        if (withdrawn) {
+            uint256 received = asset.balanceOf(address(this)) - balanceBefore;
+            (uint256 net, uint256 donationAmount) = _calculatePayout(user, received);
+            _applyAccounting(user, net, donationAmount);
+            _transferPayout(receiver, net, donationAmount);
+
+            emit Redeemed(user, shares, received, net, donationAmount);
+            return (net, donationAmount);
         }
 
-        address user = msg.sender;
+        (uint256 queuedNet, uint256 queuedDonation) = _calculatePayout(user, assetsOutGross);
+        _queueWithdrawal(user, receiver, shares, assetsOutGross, queuedNet, queuedDonation);
+        return (0, 0);
+    }
+
+    function processQueuedWithdrawal(address user) external nonReentrant returns (uint256 netToUser, uint256 donation) {
+        QueuedWithdrawal memory request = queuedWithdrawals[user];
+        require(request.shares > 0, "No pending withdrawal");
+
+        uint256 balanceBefore = asset.balanceOf(address(this));
+        bool withdrawn = _tryWithdrawFromStrategy(request.assets);
+        require(withdrawn, "Withdrawal locked");
+
+        uint256 received = asset.balanceOf(address(this)) - balanceBefore;
+        require(received >= request.net + request.donation, "Insufficient payout");
+
+        delete queuedWithdrawals[user];
+        totalQueuedWithdrawalAssets -= request.assets;
+
+        _applyAccounting(user, request.net, request.donation);
+        _transferPayout(request.receiver, request.net, request.donation);
+
+        emit WithdrawalProcessed(user, request.receiver, request.net, request.donation);
+        emit Redeemed(user, request.shares, request.assets, request.net, request.donation);
+        return (request.net, request.donation);
+    }
+
+    function _queueWithdrawal(
+        address user,
+        address receiver,
+        uint256 shares,
+        uint256 assets,
+        uint256 net,
+        uint256 donationAmount
+    ) private {
+        queuedWithdrawals[user] = QueuedWithdrawal({
+            shares: shares,
+            assets: assets,
+            net: net,
+            donation: donationAmount,
+            receiver: receiver,
+            timestamp: block.timestamp
+        });
+        totalQueuedWithdrawalAssets += assets;
+        emit WithdrawalQueued(user, shares, assets);
+    }
+
+    function _tryWithdrawFromStrategy(uint256 assets) private returns (bool) {
+        if (assets == 0) {
+            return true;
+        }
+
+        try underlying.withdraw(assets) returns (uint256) {
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    function _calculatePayout(address user, uint256 received) private view returns (uint256 net, uint256 donationAmount) {
         uint256 deposited = totalDeposited[user];
         uint256 withdrawn = totalWithdrawn[user];
         uint256 donated = totalDonated[user];
@@ -128,16 +213,20 @@ contract NGOVault is Ownable, ReentrancyGuard {
         }
 
         uint256 incrementalProfit = profitIfNoDonation - profitBefore;
-        uint256 donationAmount = (incrementalProfit * donationBps) / MAX_DONATION_BPS;
+        donationAmount = (incrementalProfit * donationBps) / MAX_DONATION_BPS;
         if (donationAmount > received) {
             donationAmount = received;
         }
 
-        uint256 net = received - donationAmount;
+        net = received - donationAmount;
+    }
 
-        totalWithdrawn[user] = withdrawn + net;
-        totalDonated[user] = donated + donationAmount;
+    function _applyAccounting(address user, uint256 net, uint256 donationAmount) private {
+        totalWithdrawn[user] += net;
+        totalDonated[user] += donationAmount;
+    }
 
+    function _transferPayout(address receiver, uint256 net, uint256 donationAmount) private {
         if (donationAmount > 0) {
             asset.safeTransfer(address(governance), donationAmount);
         }
@@ -145,9 +234,6 @@ contract NGOVault is Ownable, ReentrancyGuard {
         if (net > 0) {
             asset.safeTransfer(receiver, net);
         }
-
-        emit Redeemed(user, shares, received, net, donationAmount);
-        return (net, donationAmount);
     }
 
     function setDonationBps(uint16 newDonationBps) external onlyOwner {

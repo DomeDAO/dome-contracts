@@ -1,5 +1,22 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
+import { HYPER_EVM_NETWORKS, HyperEVMNetwork } from "./config/hyperevm";
+
+const optionalEnv = (key: string): string | undefined => {
+  const value = process.env[key];
+  if (!value || value.trim() === "") {
+    return undefined;
+  }
+  return value;
+};
+
+const selectedNetwork = (optionalEnv("HYPER_EVM_NETWORK") as HyperEVMNetwork) ?? "testnet";
+const networkDefaults = HYPER_EVM_NETWORKS[selectedNetwork] ?? HYPER_EVM_NETWORKS.testnet;
+
+const hyperevmRpcUrl = optionalEnv("HYPER_EVM_RPC") ?? networkDefaults.rpcUrl;
+const chainIdOverride = optionalEnv("HYPER_EVM_CHAIN_ID");
+const hyperevmChainId = chainIdOverride !== undefined ? Number(chainIdOverride) : networkDefaults.chainId;
+const hyperevmKey = optionalEnv("HYPER_EVM_PRIVATE_KEY");
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -7,6 +24,13 @@ const config: HardhatUserConfig = {
     settings: {
       optimizer: { enabled: true, runs: 200 },
       viaIR: true,
+    },
+  },
+  networks: {
+    hyperevm: {
+      url: hyperevmRpcUrl,
+      chainId: hyperevmChainId,
+      accounts: hyperevmKey ? [hyperevmKey] : [],
     },
   },
   paths: {
