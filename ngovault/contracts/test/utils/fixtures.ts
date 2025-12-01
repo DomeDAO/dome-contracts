@@ -5,6 +5,7 @@ import {
   MockUSDC,
   MockStrategyVault,
   NGOGovernance,
+  NGOGovernanceBuffer,
   NGOVault,
   NGOShare,
 } from "../../typechain-types";
@@ -19,6 +20,7 @@ export async function deployVaultFixture(): Promise<{
   asset: MockUSDC;
   strategy: MockStrategyVault;
   share: NGOShare;
+  governanceBuffer: NGOGovernanceBuffer;
   vault: NGOVault;
   governance: NGOGovernance;
 }> {
@@ -38,18 +40,28 @@ export async function deployVaultFixture(): Promise<{
   }
 
   const nonce = await deployer.getNonce();
-  const predictedVault = ethers.getCreateAddress({ from: deployer.address, nonce: nonce + 2 });
+  const predictedVault = ethers.getCreateAddress({ from: deployer.address, nonce: nonce + 4 });
 
   const NGOShareFactory = await ethers.getContractFactory("NGOShare");
   const share = (await NGOShareFactory.deploy("NGO Share", "NGOS", predictedVault)) as NGOShare;
   await share.waitForDeployment();
 
+  const BufferFactory = await ethers.getContractFactory("NGOGovernanceBuffer");
+  const governanceBuffer = (await BufferFactory.deploy(
+    await asset.getAddress(),
+    ethers.ZeroAddress
+  )) as NGOGovernanceBuffer;
+  await governanceBuffer.waitForDeployment();
+
   const NGOGovernanceFactory = await ethers.getContractFactory("NGOGovernance");
   const governance = (await NGOGovernanceFactory.deploy(
     await asset.getAddress(),
-    await share.getAddress()
+    await share.getAddress(),
+    await governanceBuffer.getAddress()
   )) as NGOGovernance;
   await governance.waitForDeployment();
+
+  await (await governanceBuffer.setGovernance(await governance.getAddress())).wait();
 
   const NGOVaultFactory = await ethers.getContractFactory("NGOVault");
   const donationBps = 1_000; // 10%
@@ -58,7 +70,8 @@ export async function deployVaultFixture(): Promise<{
     await share.getAddress(),
     await strategy.getAddress(),
     donationBps,
-    await governance.getAddress()
+    await governance.getAddress(),
+    await governanceBuffer.getAddress()
   )) as NGOVault;
   await vault.waitForDeployment();
 
@@ -70,6 +83,7 @@ export async function deployVaultFixture(): Promise<{
     asset,
     strategy,
     share,
+    governanceBuffer,
     vault,
     governance,
   };

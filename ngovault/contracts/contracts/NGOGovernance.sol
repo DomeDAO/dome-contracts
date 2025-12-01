@@ -5,6 +5,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import { NGOShare } from "./NGOShare.sol";
+import { INGOGovernanceBuffer } from "./interfaces/INGOGovernanceBuffer.sol";
 
 contract NGOGovernance {
     using SafeERC20 for IERC20;
@@ -35,6 +36,7 @@ contract NGOGovernance {
 
     IERC20 public immutable asset;
     NGOShare public immutable shareToken;
+    INGOGovernanceBuffer public immutable buffer;
 
     uint256 public projectCount;
     mapping(uint256 => Project) public projects;
@@ -50,11 +52,13 @@ contract NGOGovernance {
     event Voted(uint256 indexed projectId, address indexed voter, uint256 weight);
     event ProjectFunded(uint256 indexed projectId, address indexed wallet, uint256 amount);
 
-    constructor(IERC20 _asset, NGOShare _shareToken) {
+    constructor(IERC20 _asset, NGOShare _shareToken, INGOGovernanceBuffer _buffer) {
         require(address(_asset) != address(0), "asset zero");
         require(address(_shareToken) != address(0), "share zero");
+        require(address(_buffer) != address(0), "buffer zero");
         asset = _asset;
         shareToken = _shareToken;
+        buffer = _buffer;
     }
 
     function submitProject(
@@ -110,7 +114,7 @@ contract NGOGovernance {
         if (length == 0) {
             revert NoEligibleProject();
         }
-        uint256 buffer = asset.balanceOf(address(this));
+        uint256 bufferBalance = buffer.balance();
 
         uint256 bestId;
         uint256 bestVotes;
@@ -127,7 +131,7 @@ contract NGOGovernance {
             if (block.timestamp > project.createdAt + VOTING_DURATION) {
                 revert VotingEnded();
             }
-            if (project.funded || project.amountRequested > buffer) {
+            if (project.funded || project.amountRequested > bufferBalance) {
                 continue;
             }
 
@@ -143,13 +147,13 @@ contract NGOGovernance {
 
         Project storage winner = projects[bestId];
         winner.funded = true;
-        asset.safeTransfer(winner.projectWallet, winner.amountRequested);
+        buffer.release(winner.projectWallet, winner.amountRequested);
 
         emit ProjectFunded(bestId, winner.projectWallet, winner.amountRequested);
     }
 
     function donationBuffer() external view returns (uint256) {
-        return asset.balanceOf(address(this));
+        return buffer.balance();
     }
 }
 
