@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 import { loadFixture, time } from "@nomicfoundation/hardhat-network-helpers";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { NGOGovernance, NGOVault, MockUSDC } from "../typechain-types";
+import { NGOGovernance, NGOGovernanceBuffer, NGOVault, MockUSDC } from "../typechain-types";
 import { deployVaultFixture } from "./utils/fixtures";
 
 const toUSDC = (value: string) => ethers.parseUnits(value, 6);
@@ -101,7 +101,7 @@ describe("NGOGovernance", () => {
   });
 
   it("funds top project when buffer sufficient", async () => {
-    const { governance, vault, asset, alice, bob, carol } = await loadFixture(fixture);
+    const { governance, governanceBuffer, vault, asset, alice, bob, carol } = await loadFixture(fixture);
     await depositShares(vault, asset, alice, toUSDC("100"));
     await depositShares(vault, asset, bob, toUSDC("150"));
     await depositShares(vault, asset, carol, toUSDC("50"));
@@ -115,7 +115,7 @@ describe("NGOGovernance", () => {
     await waitFundingWindow(governance);
 
     const bufferAmount = toUSDC("80");
-    await asset.mint(await governance.getAddress(), bufferAmount);
+    await asset.mint(await governanceBuffer.getAddress(), bufferAmount);
     const bobBalanceBefore = await asset.balanceOf(bob.address);
 
     await expect(governance.fundTopProject([projectA, projectB]))
@@ -130,7 +130,7 @@ describe("NGOGovernance", () => {
   });
 
   it("skips expensive project when buffer too small", async () => {
-    const { governance, vault, asset, alice, bob } = await loadFixture(fixture);
+    const { governance, governanceBuffer, vault, asset, alice, bob } = await loadFixture(fixture);
     await depositShares(vault, asset, alice, toUSDC("100"));
     await depositShares(vault, asset, bob, toUSDC("100"));
 
@@ -142,7 +142,7 @@ describe("NGOGovernance", () => {
     await governance.connect(bob).vote(projectB);
     await waitFundingWindow(governance);
 
-    await asset.mint(await governance.getAddress(), toUSDC("80"));
+    await asset.mint(await governanceBuffer.getAddress(), toUSDC("80"));
     await governance.fundTopProject([projectA, projectB]);
     const project = await governance.projects(projectB);
     expect(project.funded).to.equal(true);
@@ -161,10 +161,10 @@ describe("NGOGovernance", () => {
   });
 
   it("reverts before minimum funding window", async () => {
-    const { governance, vault, asset, alice } = await loadFixture(fixture);
+    const { governance, governanceBuffer, vault, asset, alice } = await loadFixture(fixture);
     await depositShares(vault, asset, alice, toUSDC("50"));
     const projectId = await submitProject(governance, alice, alice.address, toUSDC("10"), "Soon");
-    await asset.mint(await governance.getAddress(), toUSDC("10"));
+    await asset.mint(await governanceBuffer.getAddress(), toUSDC("10"));
     await expect(governance.fundTopProject([projectId])).to.be.revertedWithCustomError(
       governance,
       "VotingStillActive"
@@ -172,13 +172,13 @@ describe("NGOGovernance", () => {
   });
 
   it("reverts after six-month window ends", async () => {
-    const { governance, vault, asset, alice } = await loadFixture(fixture);
+    const { governance, governanceBuffer, vault, asset, alice } = await loadFixture(fixture);
     await depositShares(vault, asset, alice, toUSDC("50"));
     const projectId = await submitProject(governance, alice, alice.address, toUSDC("10"), "Later");
     await startVoting(governance);
     await governance.connect(alice).vote(projectId);
     await endVoting(governance);
-    await asset.mint(await governance.getAddress(), toUSDC("10"));
+    await asset.mint(await governanceBuffer.getAddress(), toUSDC("10"));
     await expect(governance.fundTopProject([projectId])).to.be.revertedWithCustomError(
       governance,
       "VotingEnded"
@@ -186,13 +186,13 @@ describe("NGOGovernance", () => {
   });
 
   it("prevents double funding", async () => {
-    const { governance, vault, asset, alice } = await loadFixture(fixture);
+    const { governance, governanceBuffer, vault, asset, alice } = await loadFixture(fixture);
     await depositShares(vault, asset, alice, toUSDC("50"));
     const projectId = await submitProject(governance, alice, alice.address, toUSDC("10"), "One");
     await startVoting(governance);
     await governance.connect(alice).vote(projectId);
     await waitFundingWindow(governance);
-    await asset.mint(await governance.getAddress(), toUSDC("20"));
+    await asset.mint(await governanceBuffer.getAddress(), toUSDC("20"));
     await governance.fundTopProject([projectId]);
     await expect(governance.fundTopProject([projectId])).to.be.revertedWithCustomError(
       governance,
@@ -201,7 +201,7 @@ describe("NGOGovernance", () => {
   });
 
   it("selects first candidate in case of vote tie", async () => {
-    const { governance, vault, asset, alice, bob } = await loadFixture(fixture);
+    const { governance, governanceBuffer, vault, asset, alice, bob } = await loadFixture(fixture);
     await depositShares(vault, asset, alice, toUSDC("100"));
     await depositShares(vault, asset, bob, toUSDC("100"));
 
@@ -212,7 +212,7 @@ describe("NGOGovernance", () => {
     await governance.connect(bob).vote(projectB);
     await waitFundingWindow(governance);
 
-    await asset.mint(await governance.getAddress(), toUSDC("40"));
+    await asset.mint(await governanceBuffer.getAddress(), toUSDC("40"));
     await governance.fundTopProject([projectB, projectA]);
     const funded = await governance.projects(projectB);
     expect(funded.funded).to.equal(true);

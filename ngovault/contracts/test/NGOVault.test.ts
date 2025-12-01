@@ -6,6 +6,7 @@ import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   NGOGovernance,
+  NGOGovernanceBuffer,
   NGOVault,
   NGOShare,
   MockStrategyVault,
@@ -113,7 +114,7 @@ describe("NGOVault", () => {
     });
 
     it("queues withdrawals when strategy is locked and processes later", async () => {
-      const { vault, asset, share, strategy, governance, alice } = await loadFixture(fixture);
+      const { vault, asset, share, strategy, governanceBuffer, alice } = await loadFixture(fixture);
       await deposit(vault, asset, alice, toUSDC("50"));
       await strategy.setWithdrawalsEnabled(false);
       const shares = await share.balanceOf(alice.address);
@@ -132,7 +133,7 @@ describe("NGOVault", () => {
         .withArgs(alice.address, alice.address, anyValue, anyValue);
 
       expect((await asset.balanceOf(alice.address)) > 0n).to.be.true;
-      expect(await asset.balanceOf(await governance.getAddress())).to.be.gte(0n);
+      expect(await asset.balanceOf(await governanceBuffer.getAddress())).to.be.gte(0n);
       const cleared = await vault.queuedWithdrawals(alice.address);
       expect(cleared.shares).to.equal(0n);
     });
@@ -180,7 +181,7 @@ describe("NGOVault", () => {
     });
 
     it("donates on profit only", async () => {
-      const { vault, asset, share, strategy, governance, alice } = await loadFixture(fixture);
+      const { vault, asset, share, strategy, governanceBuffer, alice } = await loadFixture(fixture);
       await deposit(vault, asset, alice, toUSDC("100"));
       await strategy.setSharePrice(toWad("1.5"));
       await syncStrategyHoldings(asset, strategy);
@@ -193,13 +194,13 @@ describe("NGOVault", () => {
       await vault.connect(alice).redeem(shares, alice.address);
       const aliceBalanceAfter = await asset.balanceOf(alice.address);
       expect(aliceBalanceAfter - aliceBalanceBefore).to.equal(expectedNet);
-      expect(await asset.balanceOf(await governance.getAddress())).to.equal(expectedDonation);
+      expect(await asset.balanceOf(await governanceBuffer.getAddress())).to.equal(expectedDonation);
       expect(await vault.totalDonated(alice.address)).to.equal(expectedDonation);
       expect(await vault.totalWithdrawn(alice.address)).to.equal(expectedNet);
     });
 
     it("does not donate on pure losses", async () => {
-      const { vault, asset, share, strategy, governance, alice } = await loadFixture(fixture);
+      const { vault, asset, share, strategy, governanceBuffer, alice } = await loadFixture(fixture);
       await deposit(vault, asset, alice, toUSDC("100"));
       await strategy.setSharePrice(toWad("0.4"));
       await syncStrategyHoldings(asset, strategy);
@@ -207,7 +208,7 @@ describe("NGOVault", () => {
       const [, donation] = await vault.connect(alice).redeem.staticCall(shares, alice.address);
       expect(donation).to.equal(0n);
       await vault.connect(alice).redeem(shares, alice.address);
-      expect(await asset.balanceOf(await governance.getAddress())).to.equal(0n);
+      expect(await asset.balanceOf(await governanceBuffer.getAddress())).to.equal(0n);
       expect(await vault.totalDonated(alice.address)).to.equal(0n);
     });
 
@@ -226,7 +227,7 @@ describe("NGOVault", () => {
     });
 
     it("donates only once user fully profitable after prior losses", async () => {
-      const { vault, asset, share, strategy, governance, alice } = await loadFixture(fixture);
+      const { vault, asset, share, strategy, governanceBuffer, alice } = await loadFixture(fixture);
       await deposit(vault, asset, alice, toUSDC("100"));
       await strategy.setSharePrice(toWad("0.5"));
       await syncStrategyHoldings(asset, strategy);
@@ -240,7 +241,7 @@ describe("NGOVault", () => {
         .redeem.staticCall(await share.balanceOf(alice.address), alice.address);
       expect(donation).to.equal(toUSDC("3"));
       await vault.connect(alice).redeem(await share.balanceOf(alice.address), alice.address);
-      expect(await asset.balanceOf(await governance.getAddress())).to.equal(donation);
+      expect(await asset.balanceOf(await governanceBuffer.getAddress())).to.equal(donation);
       expect(await vault.totalWithdrawn(alice.address)).to.equal(net + toUSDC("10"));
       expect(await vault.totalDonated(alice.address)).to.equal(donation);
     });
@@ -266,7 +267,7 @@ describe("NGOVault", () => {
     });
 
     it("caps donation if misconfigured bps exceed 100%", async () => {
-      const { vault, asset, share, strategy, governance, alice } = await loadFixture(fixture);
+      const { vault, asset, share, strategy, governanceBuffer, alice } = await loadFixture(fixture);
       await deposit(vault, asset, alice, toUSDC("100"));
       await strategy.setSharePrice(toWad("2"));
       await syncStrategyHoldings(asset, strategy);
@@ -277,11 +278,11 @@ describe("NGOVault", () => {
       expect(donation).to.equal(toUSDC("200"));
       await vault.connect(alice).redeem(shares, alice.address);
       expect(await vault.totalWithdrawn(alice.address)).to.equal(0n);
-      expect(await asset.balanceOf(await governance.getAddress())).to.equal(toUSDC("200"));
+      expect(await asset.balanceOf(await governanceBuffer.getAddress())).to.equal(toUSDC("200"));
     });
 
     it("caps donation when user already realized profits", async () => {
-      const { vault, asset, share, strategy, governance, alice } = await loadFixture(fixture);
+      const { vault, asset, share, strategy, governanceBuffer, alice } = await loadFixture(fixture);
       await deposit(vault, asset, alice, toUSDC("100"));
       await strategy.setSharePrice(toWad("2"));
       await syncStrategyHoldings(asset, strategy);
@@ -300,7 +301,7 @@ describe("NGOVault", () => {
       await vault.connect(alice).redeem(shares, alice.address);
 
       expect(await vault.totalDonated(alice.address)).to.equal(toUSDC("30"));
-      expect(await asset.balanceOf(await governance.getAddress())).to.equal(toUSDC("30"));
+      expect(await asset.balanceOf(await governanceBuffer.getAddress())).to.equal(toUSDC("30"));
     });
   });
 

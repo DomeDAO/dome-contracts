@@ -19,7 +19,6 @@ type DeploymentConfig = {
   donationBps: number;
   shareName: string;
   shareSymbol: string;
-  governanceBufferAddress?: string;
   outputFile?: string;
 };
 
@@ -47,7 +46,6 @@ function loadConfig(): DeploymentConfig {
     donationBps: envDonation,
     shareName: process.env.HYPER_EVM_SHARE_NAME ?? "NGO Hyper Share",
     shareSymbol: process.env.HYPER_EVM_SHARE_SYMBOL ?? "NGO-H",
-    governanceBufferAddress: process.env.HYPER_EVM_GOVERNANCE_BUFFER,
     outputFile: process.env.HYPER_EVM_DEPLOY_OUTPUT ?? "../deployments/hyperevm.json",
   };
 
@@ -110,11 +108,12 @@ async function main() {
   console.log(`Deploying from ${deployer.address}`);
 
   const baseNonce = await deployer.getNonce();
-  // Contracts are deployed in the following order:
+  // Contracts/transactions are executed in the following order:
   // bridge (nonce), strategy (nonce + 1), authorize tx (nonce + 2),
-  // share (nonce + 3), governance (nonce + 4), vault (nonce + 5).
+  // share (nonce + 3), buffer (nonce + 4), governance (nonce + 5),
+  // buffer.setGovernance (nonce + 6), vault (nonce + 7).
   // We need the predicted vault address beforehand to pass into the share constructor.
-  const vaultDeploymentNonce = baseNonce + 5;
+  const vaultDeploymentNonce = baseNonce + 7;
   const predictedVaultAddress = getCreateAddress({
     from: deployer.address,
     nonce: vaultDeploymentNonce,
@@ -140,18 +139,31 @@ async function main() {
   await share.waitForDeployment();
   console.log(`NGOShare deployed at ${await share.getAddress()}`);
 
+  const BufferFactory = await ethers.getContractFactory("NGOGovernanceBuffer");
+  const governanceBuffer = await BufferFactory.deploy(config.usdc, ethers.ZeroAddress);
+  await governanceBuffer.waitForDeployment();
+  console.log(`NGOGovernanceBuffer deployed at ${await governanceBuffer.getAddress()}`);
+
   const GovernanceFactory = await ethers.getContractFactory("NGOGovernance");
-  const governance = await GovernanceFactory.deploy(config.usdc, await share.getAddress());
+  const governance = await (GovernanceFactory as any).deploy(
+    config.usdc,
+    await share.getAddress(),
+    await governanceBuffer.getAddress()
+  );
   await governance.waitForDeployment();
   console.log(`NGOGovernance deployed at ${await governance.getAddress()}`);
 
+  await (await (governanceBuffer as any).setGovernance(await governance.getAddress())).wait();
+  console.log("Governance buffer linked to NGOGovernance");
+
   const VaultFactory = await ethers.getContractFactory("NGOVault");
-  const vault = await VaultFactory.deploy(
+  const vault = await (VaultFactory as any).deploy(
     config.usdc,
     await share.getAddress(),
     await strategy.getAddress(),
     config.donationBps,
-    await governance.getAddress()
+    await governance.getAddress(),
+    await governanceBuffer.getAddress()
   );
   await vault.waitForDeployment();
   console.log(`NGOVault deployed at ${await vault.getAddress()}`);
@@ -168,6 +180,7 @@ async function main() {
       strategy: await strategy.getAddress(),
       share: await share.getAddress(),
       governance: await governance.getAddress(),
+      buffer: await governanceBuffer.getAddress(),
       vault: await vault.getAddress(),
     },
     parameters: {

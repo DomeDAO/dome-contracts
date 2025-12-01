@@ -21,6 +21,7 @@ contract NGOVault is Ownable, ReentrancyGuard {
     IStrategyVault public immutable underlying;
 
     NGOGovernance public governance;
+    address public governanceBuffer;
     uint16 public donationBps;
 
     struct UserAccounting {
@@ -56,12 +57,14 @@ contract NGOVault is Ownable, ReentrancyGuard {
         NGOShare _shareToken,
         IStrategyVault _underlying,
         uint16 _donationBps,
-        NGOGovernance _governance
+        NGOGovernance _governance,
+        address _governanceBuffer
     ) Ownable(msg.sender) {
         require(address(_asset) != address(0), "asset zero");
         require(address(_shareToken) != address(0), "share zero");
         require(address(_underlying) != address(0), "underlying zero");
         require(address(_governance) != address(0), "governance zero");
+        require(_governanceBuffer != address(0), "buffer zero");
         require(_donationBps <= MAX_DONATION_BPS, "donationBps too high");
         require(_shareToken.vault() == address(this), "share mismatch");
 
@@ -70,6 +73,7 @@ contract NGOVault is Ownable, ReentrancyGuard {
         underlying = _underlying;
         donationBps = _donationBps;
         governance = _governance;
+        governanceBuffer = _governanceBuffer;
     }
 
     function totalAssets() public view returns (uint256) {
@@ -228,7 +232,7 @@ contract NGOVault is Ownable, ReentrancyGuard {
 
     function _transferPayout(address receiver, uint256 net, uint256 donationAmount) private {
         if (donationAmount > 0) {
-            asset.safeTransfer(address(governance), donationAmount);
+            asset.safeTransfer(governanceBuffer, donationAmount);
         }
 
         if (net > 0) {
@@ -246,6 +250,11 @@ contract NGOVault is Ownable, ReentrancyGuard {
         require(address(newGovernance) != address(0), "governance zero");
         governance = newGovernance;
         emit GovernanceUpdated(address(newGovernance));
+    }
+
+    function setGovernanceBuffer(address newBuffer) external onlyOwner {
+        require(newBuffer != address(0), "buffer zero");
+        governanceBuffer = newBuffer;
     }
 
     function getUserAccounting(address user) external view returns (UserAccounting memory) {
