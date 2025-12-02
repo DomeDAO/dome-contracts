@@ -1,13 +1,21 @@
+import path from "path";
+import dotenv from "dotenv";
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 import { HYPER_EVM_NETWORKS, HyperEVMNetwork } from "./config/hyperevm";
 
+dotenv.config({ path: path.join(__dirname, ".env") });
+
 const optionalEnv = (key: string): string | undefined => {
   const value = process.env[key];
-  if (!value || value.trim() === "") {
+  if (!value) {
     return undefined;
   }
-  return value;
+  const trimmed = value.trim();
+  if (trimmed === "") {
+    return undefined;
+  }
+  return trimmed.replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
 };
 
 const selectedNetwork = (optionalEnv("HYPER_EVM_NETWORK") as HyperEVMNetwork) ?? "testnet";
