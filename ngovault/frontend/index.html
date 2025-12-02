@@ -1,93 +1,14 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NGO Vault Dashboard</title>
-    <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <main class="app">
-      <header>
-        <div>
-          <h1>NGO Vault</h1>
-          <p class="muted">Stake USDC on HyperEVM and track Hyperliquid performance.</p>
-          <p id="connection-badge" class="muted badge">Wallet not connected.</p>
-        </div>
-        <div class="header-actions">
-          <button id="refresh-btn" class="secondary">Refresh Stats</button>
-          <button id="connect-btn">Connect Wallet</button>
-        </div>
-      </header>
-
-      <section class="panel">
-        <h2>Deployment Settings</h2>
-        <div class="grid">
-          <label>
-            <span>Vault address</span>
-            <input id="vault-address" placeholder="0x..." />
-          </label>
-          <label>
-            <span>USDC address</span>
-            <input id="asset-address" placeholder="0x..." />
-          </label>
-          <label>
-            <span>Share token address</span>
-            <input id="share-address" placeholder="0x..." />
-          </label>
-        </div>
-        <p class="muted">
-          Paste the deployed contract addresses for the current network (or host <code>/deployments/&lt;chainId&gt;.json</code>
-          and click “Load from JSON”).
-        </p>
-        <div class="button-row">
-          <button id="load-json-btn" class="secondary">Load from JSON</button>
-          <button id="clear-addresses-btn" class="ghost">Clear saved</button>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2>Vault Overview</h2>
-        <div id="stats" class="grid stats"></div>
-        <div id="user-stats" class="grid stats"></div>
-      </section>
-
-      <section class="panel">
-        <h2>Actions</h2>
-        <div class="form-grid">
-          <label>
-            <span id="deposit-label">Deposit USDC</span>
-            <div class="input-row">
-              <input id="deposit-input" placeholder="0.00" inputmode="decimal" autocomplete="off" />
-              <button type="button" id="deposit-max-btn" class="ghost small">Max</button>
-            </div>
-          </label>
-          <div class="action-stack">
-            <button id="deposit-btn">Deposit</button>
-            <p id="deposit-preview" class="muted hint">Enter an amount to preview.</p>
-          </div>
-        </div>
-        <div class="form-grid">
-          <label>
-            <span id="redeem-label">Redeem Shares</span>
-            <div class="input-row">
-              <input id="redeem-input" placeholder="0.00" inputmode="decimal" autocomplete="off" />
-              <button type="button" id="redeem-max-btn" class="ghost small">Max</button>
-            </div>
-          </label>
-          <div class="action-stack">
-            <button id="redeem-btn">Redeem</button>
-            <p id="redeem-preview" class="muted hint">Enter shares to see an estimate.</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2>Status</h2>
-        <pre id="status">Connect wallet to begin.</pre>
-      </section>
-    </main>
-    <script type="module" src="./main.js"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
 

@@ -1,15 +1,23 @@
+import path from "path";
+import dotenv from "dotenv";
 import { ethers, network } from "hardhat";
 import { getCreateAddress } from "ethers";
-import path from "path";
 import fs from "fs/promises";
 import { HYPER_EVM_NETWORKS, HyperEVMNetwork } from "../config/hyperevm";
 
+dotenv.config({ path: path.join(__dirname, "..", ".env") });
+
 const optionalEnv = (key: string): string | undefined => {
   const value = process.env[key];
-  if (!value || value.trim() === "") {
+  if (!value) {
     return undefined;
   }
-  return value;
+  const trimmed = value.trim();
+  if (trimmed === "") {
+    return undefined;
+  }
+  // Strip surrounding quotes if users wrap values in "" or ''
+  return trimmed.replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
 };
 
 type DeploymentConfig = {
@@ -40,13 +48,13 @@ function loadConfig(): DeploymentConfig {
   }
 
   const config: DeploymentConfig = {
-    usdc: process.env.HYPER_EVM_USDC ?? "",
-    hyperliquidVault: process.env.HYPER_EVM_HYPER_VAULT ?? DEFAULT_HYPERLIQUID_NATIVE_VAULT,
-    coreWriter: process.env.HYPER_EVM_CORE_WRITER ?? DEFAULT_CORE_WRITER,
+    usdc: optionalEnv("HYPER_EVM_USDC") ?? "",
+    hyperliquidVault: optionalEnv("HYPER_EVM_HYPER_VAULT") ?? DEFAULT_HYPERLIQUID_NATIVE_VAULT,
+    coreWriter: optionalEnv("HYPER_EVM_CORE_WRITER") ?? DEFAULT_CORE_WRITER,
     donationBps: envDonation,
-    shareName: process.env.HYPER_EVM_SHARE_NAME ?? "NGO Hyper Share",
-    shareSymbol: process.env.HYPER_EVM_SHARE_SYMBOL ?? "NGO-H",
-    outputFile: process.env.HYPER_EVM_DEPLOY_OUTPUT ?? "../deployments/hyperevm.json",
+    shareName: optionalEnv("HYPER_EVM_SHARE_NAME") ?? "NGO Hyper Share",
+    shareSymbol: optionalEnv("HYPER_EVM_SHARE_SYMBOL") ?? "NGO-H",
+    outputFile: optionalEnv("HYPER_EVM_DEPLOY_OUTPUT") ?? "../deployments/hyperevm.json",
   };
 
   if (!ethers.isAddress(config.usdc)) {
@@ -104,7 +112,13 @@ async function main() {
   }
 
   const config = loadConfig();
-  const [deployer] = await ethers.getSigners();
+  const signers = await ethers.getSigners();
+  if (!signers.length) {
+    throw new Error(
+      "No deployer account configured. Set HYPER_EVM_PRIVATE_KEY in .env so the hyperevm network has credentials."
+    );
+  }
+  const [deployer] = signers;
   console.log(`Deploying from ${deployer.address}`);
 
   const baseNonce = await deployer.getNonce();
