@@ -1,39 +1,30 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BrowserProvider, Contract, ethers } from "ethers";
+import { ethers } from "ethers";
 
-const vaultAbi = [
-  "function totalAssets() view returns (uint256)",
-  "function totalSupply() view returns (uint256)",
-  "function donationBps() view returns (uint16)",
-  "function totalQueuedWithdrawalAssets() view returns (uint256)",
-  "function totalDeposited(address) view returns (uint256)",
-  "function totalWithdrawn(address) view returns (uint256)",
-  "function totalDonated(address) view returns (uint256)",
-  "function queuedWithdrawals(address) view returns (uint256 shares,uint256 assets,uint256 net,uint256 donation,address receiver,uint256 timestamp)",
-  "function deposit(uint256 assets, address receiver) returns (uint256)",
-  "function redeem(uint256 shares, address receiver) returns (uint256,uint256)",
-  "function processQueuedWithdrawal(address user) returns (uint256,uint256)",
-];
+import { getInjectedBrowserProvider, getRpcProvider, makeContractsWithOptions, normalizeAccount } from "./lib/contracts";
+import {
+  discoverQueuedWithdrawalUsers,
+  fetchPendingQueuedWithdrawals,
+  getQueueFromBlockFromEnv,
+} from "./lib/queueIndexer";
 
-const erc20Abi = [
-  "function balanceOf(address owner) view returns (uint256)",
-  "function allowance(address owner, address spender) view returns (uint256)",
-  "function approve(address spender, uint256 amount) returns (bool)",
-  "function decimals() view returns (uint8)",
-  "function symbol() view returns (string)",
-];
+import { estimateAssetsFromShares, estimateSharesForDeposit } from "./utils/estimates";
+import { formatDateTime, formatDuration, formatToken, formatUsd, shorten } from "./utils/format";
+import { normalizeProject, normalizeQueueStruct } from "./utils/normalize";
 
-const shareAbi = [
-  "function balanceOf(address owner) view returns (uint256)",
-  "function decimals() view returns (uint8)",
-  "function symbol() view returns (string)",
-];
+import { Header } from "./components/Header";
+import { DeploymentSettings } from "./components/DeploymentSettings";
+import { VaultOverview } from "./components/VaultOverview";
+import { VaultActions } from "./components/VaultActions";
+import { UserWithdrawalQueue } from "./components/UserWithdrawalQueue";
+import { GlobalWithdrawalQueue } from "./components/GlobalWithdrawalQueue";
+import { GovernanceProjects } from "./components/GovernanceProjects";
+import { StatusPanel } from "./components/StatusPanel";
 
-const SHARE_SCALAR = 1_000_000_000_000n;
 const AUTO_REFRESH_MS = 20_000;
 const WITHDRAWAL_LOCK_SECONDS = 60 * 60 * 24;
 const ADDRESS_STORAGE_KEY = "ngovault:addresses";
-const emptyAddresses = { vault: "", asset: "", share: "" };
+const emptyAddresses = { vault: "", asset: "", share: "", governance: "", buffer: "" };
 
 const defaultUserStats = {
   usdcBalance: 0n,
@@ -75,17 +66,36 @@ function App() {
   const [vaultStats, setVaultStats] = useState(defaultVaultStats);
   const [userStats, setUserStats] = useState(defaultUserStats);
   const [queueInfo, setQueueInfo] = useState(null);
+  const [globalQueue, setGlobalQueue] = useState([]);
+  const [globalQueueStatus, setGlobalQueueStatus] = useState("");
+  const [governanceStats, setGovernanceStats] = useState({ bufferBalance: 0n, projectCount: 0 });
+  const [projects, setProjects] = useState([]);
+  const [projectForm, setProjectForm] = useState({ wallet: "", amount: "", description: "" });
   const [depositAmount, setDepositAmount] = useState("");
   const [redeemAmount, setRedeemAmount] = useState("");
-  const [busy, setBusy] = useState({ deposit: false, redeem: false, process: false });
+  const [busy, setBusy] = useState({
+    deposit: false,
+    redeem: false,
+    process: false,
+    refreshQueue: false,
+    processAll: false,
+    submitProject: false,
+    vote: false,
+    fund: false,
+  });
 
   const log = useCallback((message) => {
     const timestamp = new Date().toLocaleTimeString();
     setStatus(`[${timestamp}] ${message}`);
   }, []);
 
-  const addressesAreValid = useMemo(
+  const coreAddressesAreValid = useMemo(
     () => ["vault", "asset", "share"].every((key) => ethers.isAddress(addresses[key] ?? "")),
+    [addresses]
+  );
+
+  const governanceAddressesAreValid = useMemo(
+    () => ["governance", "buffer"].every((key) => ethers.isAddress(addresses[key] ?? "")),
     [addresses]
   );
 
@@ -99,13 +109,18 @@ function App() {
   }, [addresses]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !window.ethereum) {
+    if (typeof window === "undefined") return;
+    if (!window.ethereum) {
       log("MetaMask not detected. Install it to continue.");
       return;
     }
 
     let mounted = true;
-    const browserProvider = new BrowserProvider(window.ethereum);
+    const browserProvider = getInjectedBrowserProvider();
+    if (!browserProvider) {
+      log("MetaMask provider unavailable.");
+      return;
+    }
     setProvider(browserProvider);
 
     const init = async () => {
@@ -135,6 +150,7 @@ function App() {
         setSigner(null);
         setUserStats(defaultUserStats);
         setQueueInfo(null);
+        setGlobalQueue([]);
         log("Wallet disconnected.");
         return;
       }
@@ -156,6 +172,7 @@ function App() {
       setChainId(Number.isNaN(numeric) ? null : numeric);
       setSigner(null);
       setQueueInfo(null);
+      setGlobalQueue([]);
       log(`Switched to chain ${numeric}.`);
       await refreshStats();
     };
@@ -168,7 +185,6 @@ function App() {
       window.ethereum?.removeListener("accountsChanged", handleAccountsChanged);
       window.ethereum?.removeListener("chainChanged", handleChainChanged);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const refreshStats = useCallback(
@@ -178,8 +194,8 @@ function App() {
         return false;
       }
 
-      if (!addressesAreValid) {
-        if (!silent) log("Enter valid vault, asset, and share addresses.");
+      if (!coreAddressesAreValid) {
+        if (!silent) log("Enter valid vault, USDC, and share addresses.");
         return false;
       }
 
@@ -189,9 +205,9 @@ function App() {
 
       try {
         const runner = signer ?? provider;
-        const vaultContract = new Contract(addresses.vault, vaultAbi, runner);
-        const assetContract = new Contract(addresses.asset, erc20Abi, runner);
-        const shareContract = new Contract(addresses.share, shareAbi, runner);
+        const { vault, asset, share, governance, buffer } = makeContractsWithOptions(addresses, runner, {
+          require: ["vault", "asset", "share"],
+        });
 
         const [
           totalAssets,
@@ -203,14 +219,14 @@ function App() {
           shareDecimals,
           shareSymbol,
         ] = await Promise.all([
-          vaultContract.totalAssets(),
-          vaultContract.totalSupply(),
-          vaultContract.donationBps(),
-          vaultContract.totalQueuedWithdrawalAssets(),
-          assetContract.decimals().catch(() => meta.assetDecimals),
-          assetContract.symbol().catch(() => meta.assetSymbol),
-          shareContract.decimals().catch(() => meta.shareDecimals),
-          shareContract.symbol().catch(() => meta.shareSymbol),
+          vault.totalAssets(),
+          vault.totalSupply(),
+          vault.donationBps(),
+          vault.totalQueuedWithdrawalAssets(),
+          asset.decimals().catch(() => meta.assetDecimals),
+          asset.symbol().catch(() => meta.assetSymbol),
+          share.decimals().catch(() => meta.shareDecimals),
+          share.symbol().catch(() => meta.shareSymbol),
         ]);
 
         setMeta({
@@ -229,12 +245,12 @@ function App() {
 
         if (account) {
           const [shareBalance, usdcBalance, deposited, withdrawn, donated, queueStruct] = await Promise.all([
-            shareContract.balanceOf(account),
-            assetContract.balanceOf(account),
-            vaultContract.totalDeposited(account),
-            vaultContract.totalWithdrawn(account),
-            vaultContract.totalDonated(account),
-            vaultContract.queuedWithdrawals(account),
+            share.balanceOf(account),
+            asset.balanceOf(account),
+            vault.totalDeposited(account),
+            vault.totalWithdrawn(account),
+            vault.totalDonated(account),
+            vault.queuedWithdrawals(account),
           ]);
 
           setUserStats({
@@ -250,6 +266,19 @@ function App() {
           setQueueInfo(null);
         }
 
+        if (governanceAddressesAreValid && governance) {
+          const [bufferBalance, projectCount] = await Promise.all([
+            governance.donationBuffer().catch(() => (buffer ? buffer.balance() : 0n)),
+            governance.projectCount().catch(() => 0n),
+          ]);
+          setGovernanceStats({
+            bufferBalance: bufferBalance ?? 0n,
+            projectCount: Number(projectCount ?? 0n),
+          });
+        } else {
+          setGovernanceStats({ bufferBalance: 0n, projectCount: 0 });
+        }
+
         if (!silent) {
           log("Stats refreshed.");
         }
@@ -260,16 +289,28 @@ function App() {
         return false;
       }
     },
-    [account, addresses, addressesAreValid, log, meta.assetDecimals, meta.assetSymbol, meta.shareDecimals, meta.shareSymbol, provider, signer]
+    [
+      account,
+      addresses,
+      coreAddressesAreValid,
+      governanceAddressesAreValid,
+      log,
+      meta.assetDecimals,
+      meta.assetSymbol,
+      meta.shareDecimals,
+      meta.shareSymbol,
+      provider,
+      signer,
+    ]
   );
 
   useEffect(() => {
-    if (!provider || !addressesAreValid) return undefined;
+    if (!provider || !coreAddressesAreValid) return undefined;
     const interval = setInterval(() => {
       refreshStats(true);
     }, AUTO_REFRESH_MS);
     return () => clearInterval(interval);
-  }, [addressesAreValid, provider, refreshStats]);
+  }, [coreAddressesAreValid, provider, refreshStats]);
 
   useEffect(() => {
     const handleVisibility = () => {
@@ -287,7 +328,11 @@ function App() {
       return;
     }
     try {
-      const nextProvider = provider ?? new BrowserProvider(window.ethereum);
+      const nextProvider = provider ?? getInjectedBrowserProvider();
+      if (!nextProvider) {
+        log("MetaMask provider unavailable.");
+        return;
+      }
       setProvider(nextProvider);
       const accounts = await nextProvider.send("eth_requestAccounts", []);
       const nextAccount = normalizeAccount(accounts?.[0]);
@@ -339,6 +384,8 @@ function App() {
         vault: json.contracts?.vault ?? "",
         asset: json.contracts?.usdc ?? "",
         share: json.contracts?.share ?? "",
+        governance: json.contracts?.governance ?? "",
+        buffer: json.contracts?.buffer ?? "",
       });
       log(`Loaded deployment for chain ${chainId}.`);
       await refreshStats();
@@ -349,7 +396,7 @@ function App() {
   };
 
   const hasQueuedWithdrawal = Boolean(queueInfo && queueInfo.shares > 0n);
-  const canTransact = Boolean(signer) && !hasQueuedWithdrawal;
+  const canTransact = Boolean(signer) && coreAddressesAreValid && !hasQueuedWithdrawal;
 
   const depositPreview = useMemo(() => {
     if (!depositAmount) return "Enter an amount to preview.";
@@ -405,8 +452,8 @@ function App() {
       log("Process your pending withdrawal before depositing again.");
       return;
     }
-    if (!addressesAreValid) {
-      log("Enter valid vault and asset addresses.");
+    if (!coreAddressesAreValid) {
+      log("Enter valid vault, USDC, and share addresses.");
       return;
     }
     let amount;
@@ -423,16 +470,20 @@ function App() {
 
     setBusy((prev) => ({ ...prev, deposit: true }));
     try {
-      const assetContract = new Contract(addresses.asset, erc20Abi, signer);
-      const vaultContract = new Contract(addresses.vault, vaultAbi, signer);
-      const allowance = await assetContract.allowance(account, addresses.vault);
+      const { vault, asset } = makeContractsWithOptions(addresses, signer, { require: ["vault", "asset"] });
+      if (!vault || !asset) {
+        log("Missing vault or asset contract.");
+        return;
+      }
+
+      const allowance = await asset.allowance(account, addresses.vault);
       if (allowance < amount) {
         log("Approving asset spend...");
-        const approveTx = await assetContract.approve(addresses.vault, amount);
+        const approveTx = await asset.approve(addresses.vault, amount);
         await approveTx.wait();
       }
       log("Submitting deposit...");
-      const tx = await vaultContract.deposit(amount, account);
+      const tx = await vault.deposit(amount, account);
       await tx.wait();
       setDepositAmount("");
       log("Deposit confirmed.");
@@ -454,8 +505,8 @@ function App() {
       log("Process the pending withdrawal before redeeming again.");
       return;
     }
-    if (!ethers.isAddress(addresses.vault)) {
-      log("Enter a valid vault address.");
+    if (!coreAddressesAreValid) {
+      log("Enter valid vault, USDC, and share addresses.");
       return;
     }
     let shares;
@@ -472,9 +523,13 @@ function App() {
 
     setBusy((prev) => ({ ...prev, redeem: true }));
     try {
-      const vaultContract = new Contract(addresses.vault, vaultAbi, signer);
+      const { vault } = makeContractsWithOptions(addresses, signer, { require: ["vault"] });
+      if (!vault) {
+        log("Missing vault contract.");
+        return;
+      }
       log("Submitting redemption...");
-      const tx = await vaultContract.redeem(shares, account);
+      const tx = await vault.redeem(shares, account);
       await tx.wait();
       setRedeemAmount("");
       log("Redemption confirmed.");
@@ -503,9 +558,13 @@ function App() {
 
     setBusy((prev) => ({ ...prev, process: true }));
     try {
-      const vaultContract = new Contract(addresses.vault, vaultAbi, signer);
+      const { vault } = makeContractsWithOptions(addresses, signer, { require: ["vault"] });
+      if (!vault) {
+        log("Missing vault contract.");
+        return;
+      }
       log("Processing queued withdrawal...");
-      const tx = await vaultContract.processQueuedWithdrawal(account);
+      const tx = await vault.processQueuedWithdrawal(account);
       await tx.wait();
       log("Queued withdrawal processed.");
       await refreshStats();
@@ -514,6 +573,260 @@ function App() {
       log(`Processing failed: ${error.shortMessage ?? error.message}`);
     } finally {
       setBusy((prev) => ({ ...prev, process: false }));
+    }
+  };
+
+  const refreshGlobalQueue = async () => {
+    if (!provider) {
+      log("Connect a wallet (or open the app with an RPC) to scan the global queue.");
+      return;
+    }
+    if (!ethers.isAddress(addresses.vault)) {
+      log("Enter a valid vault address to scan the queue.");
+      return;
+    }
+
+    const fromBlock = getQueueFromBlockFromEnv();
+    if (fromBlock === null) {
+      log("Set VITE_QUEUE_FROM_BLOCK to enable global queue discovery.");
+      return;
+    }
+
+    setBusy((prev) => ({ ...prev, refreshQueue: true }));
+    setGlobalQueueStatus("Scanning WithdrawalQueued logs...");
+    try {
+      const rpcProvider = getRpcProvider(import.meta.env.VITE_RPC_URL);
+      const logProvider = rpcProvider ?? provider;
+
+      const users = await discoverQueuedWithdrawalUsers({
+        provider: logProvider,
+        vaultAddress: addresses.vault,
+        fromBlock,
+        onProgress: ({ chunkStart, chunkEnd, logs, uniqueUsers }) => {
+          setGlobalQueueStatus(
+            `Scanning blocks ${chunkStart}..${chunkEnd} · ${logs} logs · ${uniqueUsers} unique users`
+          );
+        },
+      });
+
+      setGlobalQueueStatus(`Found ${users.length} wallets in queue logs. Checking pending withdrawals...`);
+      const { vault } = makeContractsWithOptions(addresses, logProvider, { require: ["vault"] });
+      const pending = await fetchPendingQueuedWithdrawals({
+        vaultContract: vault,
+        users,
+        onProgress: ({ completed, total }) => {
+          setGlobalQueueStatus(`Checking queuedWithdrawals(user) · ${completed}/${total}`);
+        },
+      });
+
+      setGlobalQueue(pending);
+      setGlobalQueueStatus(`Pending withdrawals: ${pending.length}`);
+    } catch (error) {
+      console.error(error);
+      setGlobalQueueStatus(`Queue scan failed: ${error.shortMessage ?? error.message}`);
+    } finally {
+      setBusy((prev) => ({ ...prev, refreshQueue: false }));
+    }
+  };
+
+  const processSingleGlobalQueue = async (user) => {
+    if (!signer) {
+      log("Connect wallet to process withdrawals.");
+      return;
+    }
+    if (!ethers.isAddress(addresses.vault)) {
+      log("Enter a valid vault address first.");
+      return;
+    }
+    try {
+      const { vault } = makeContractsWithOptions(addresses, signer, { require: ["vault"] });
+      if (!vault) throw new Error("Missing vault contract");
+      log(`Processing queued withdrawal for ${shorten(user)}...`);
+      const tx = await vault.processQueuedWithdrawal(user);
+      await tx.wait();
+      log(`Processed queued withdrawal for ${shorten(user)}.`);
+      await refreshStats(true);
+      await refreshGlobalQueue();
+    } catch (error) {
+      console.error(error);
+      log(`Process failed: ${error.shortMessage ?? error.message}`);
+    }
+  };
+
+  const processAllQueuedWithdrawals = async () => {
+    if (!signer) {
+      log("Connect wallet to process withdrawals.");
+      return;
+    }
+    if (!ethers.isAddress(addresses.vault)) {
+      log("Enter a valid vault address first.");
+      return;
+    }
+    if (!globalQueue.length) {
+      log("No global queued withdrawals found.");
+      return;
+    }
+
+    setBusy((prev) => ({ ...prev, processAll: true }));
+    try {
+      const { vault } = makeContractsWithOptions(addresses, signer, { require: ["vault"] });
+      if (!vault) throw new Error("Missing vault contract");
+
+      for (let i = 0; i < globalQueue.length; i++) {
+        const entry = globalQueue[i];
+        try {
+          log(`(${i + 1}/${globalQueue.length}) Processing ${shorten(entry.user)}...`);
+          const tx = await vault.processQueuedWithdrawal(entry.user);
+          await tx.wait();
+        } catch (error) {
+          // Most common: Withdrawal locked. Continue to next.
+          console.warn("Process failed", entry.user, error);
+          log(`(${i + 1}/${globalQueue.length}) Failed for ${shorten(entry.user)}: ${error.shortMessage ?? error.message}`);
+        }
+      }
+
+      log("Process-all completed.");
+      await refreshStats(true);
+      await refreshGlobalQueue();
+    } finally {
+      setBusy((prev) => ({ ...prev, processAll: false }));
+    }
+  };
+
+  const refreshProjects = async () => {
+    if (!provider) {
+      log("Connect a wallet (or view with a provider) to load projects.");
+      return;
+    }
+    if (!governanceAddressesAreValid) {
+      log("Enter governance + buffer addresses to load projects.");
+      return;
+    }
+    try {
+      const runner = signer ?? provider;
+      const { governance } = makeContractsWithOptions(addresses, runner, { require: ["governance"] });
+      if (!governance) throw new Error("Missing governance contract");
+
+      const countBn = await governance.projectCount();
+      const count = Number(countBn ?? 0n);
+      const ids = Array.from({ length: count }, (_, i) => i + 1);
+      if (!ids.length) {
+        setProjects([]);
+        return;
+      }
+
+      const entries = await Promise.all(
+        ids.map(async (id) => {
+          const raw = await governance.projects(id);
+          const has = account ? await governance.hasVoted(id, account).catch(() => false) : false;
+          return { ...normalizeProject(raw), hasVoted: Boolean(has) };
+        })
+      );
+      setProjects(entries);
+    } catch (error) {
+      console.error(error);
+      log(`Unable to load projects: ${error.shortMessage ?? error.message}`);
+    }
+  };
+
+  const submitProject = async () => {
+    if (!signer) {
+      log("Connect wallet to submit a project.");
+      return;
+    }
+    if (!governanceAddressesAreValid) {
+      log("Enter governance + buffer addresses first.");
+      return;
+    }
+    if (!ethers.isAddress(projectForm.wallet)) {
+      log("Enter a valid project wallet address.");
+      return;
+    }
+    let amount;
+    try {
+      amount = ethers.parseUnits(projectForm.amount || "0", meta.assetDecimals);
+    } catch {
+      log("Enter a valid amount requested.");
+      return;
+    }
+    if (amount === 0n) {
+      log("Amount requested must be > 0.");
+      return;
+    }
+    setBusy((prev) => ({ ...prev, submitProject: true }));
+    try {
+      const { governance } = makeContractsWithOptions(addresses, signer, { require: ["governance"] });
+      if (!governance) throw new Error("Missing governance contract");
+      log("Submitting project...");
+      const tx = await governance.submitProject(projectForm.wallet, amount, projectForm.description || "");
+      await tx.wait();
+      log("Project submitted.");
+      setProjectForm({ wallet: "", amount: "", description: "" });
+      await refreshStats(true);
+      await refreshProjects();
+    } catch (error) {
+      console.error(error);
+      log(`Submit failed: ${error.shortMessage ?? error.message}`);
+    } finally {
+      setBusy((prev) => ({ ...prev, submitProject: false }));
+    }
+  };
+
+  const voteForProject = async (projectId) => {
+    if (!signer) {
+      log("Connect wallet to vote.");
+      return;
+    }
+    if (!governanceAddressesAreValid) {
+      log("Enter governance + buffer addresses first.");
+      return;
+    }
+    setBusy((prev) => ({ ...prev, vote: true }));
+    try {
+      const { governance } = makeContractsWithOptions(addresses, signer, { require: ["governance"] });
+      if (!governance) throw new Error("Missing governance contract");
+      log(`Voting for project #${projectId}...`);
+      const tx = await governance.vote(projectId);
+      await tx.wait();
+      log(`Voted for project #${projectId}.`);
+      await refreshProjects();
+    } catch (error) {
+      console.error(error);
+      log(`Vote failed: ${error.shortMessage ?? error.message}`);
+    } finally {
+      setBusy((prev) => ({ ...prev, vote: false }));
+    }
+  };
+
+  const fundTopProject = async () => {
+    if (!signer) {
+      log("Connect wallet to fund a project.");
+      return;
+    }
+    if (!governanceAddressesAreValid) {
+      log("Enter governance + buffer addresses first.");
+      return;
+    }
+    if (!projects.length) {
+      log("Load projects first.");
+      return;
+    }
+    setBusy((prev) => ({ ...prev, fund: true }));
+    try {
+      const { governance } = makeContractsWithOptions(addresses, signer, { require: ["governance"] });
+      if (!governance) throw new Error("Missing governance contract");
+      const candidateIds = projects.map((p) => Number(p.id)).filter(Boolean);
+      log("Funding top eligible project...");
+      const tx = await governance.fundTopProject(candidateIds);
+      await tx.wait();
+      log("Funded top eligible project.");
+      await refreshStats(true);
+      await refreshProjects();
+    } catch (error) {
+      console.error(error);
+      log(`Fund failed: ${error.shortMessage ?? error.message}`);
+    } finally {
+      setBusy((prev) => ({ ...prev, fund: false }));
     }
   };
 
@@ -559,294 +872,91 @@ function App() {
 
   return (
     <main className="app">
-      <header>
-        <div>
-          <h1>NGO Vault</h1>
-          <p className="muted">Stake USDC on HyperEVM and track Hyperliquid bridge settlements.</p>
-          <p className="muted badge">{connectionBadge}</p>
-        </div>
-        <div className="header-actions">
-          <button className="secondary" onClick={() => refreshStats()} disabled={!addressesAreValid || !provider}>
-            Refresh Stats
-          </button>
-          <button onClick={connectWallet}>{account ? "Switch Wallet" : "Connect Wallet"}</button>
-        </div>
-      </header>
+      <Header
+        connectionBadge={connectionBadge}
+        onRefreshStats={() => refreshStats()}
+        disableRefresh={!coreAddressesAreValid || !provider}
+        onConnectWallet={connectWallet}
+        account={account}
+      />
 
-      <section className="panel">
-        <h2>Deployment Settings</h2>
-        <div className="grid">
-          <label>
-            <span>Vault address</span>
-            <input value={addresses.vault} onChange={(e) => handleAddressChange("vault", e.target.value)} placeholder="0x..." />
-          </label>
-          <label>
-            <span>USDC address</span>
-            <input value={addresses.asset} onChange={(e) => handleAddressChange("asset", e.target.value)} placeholder="0x..." />
-          </label>
-          <label>
-            <span>Share token address</span>
-            <input value={addresses.share} onChange={(e) => handleAddressChange("share", e.target.value)} placeholder="0x..." />
-          </label>
-        </div>
-        <p className="muted">
-          Paste the deployed contract addresses for the current network or host <code>/deployments/&lt;chainId&gt;.json</code> and click “Load from JSON”.
-        </p>
-        <div className="button-row">
-          <button className="secondary" onClick={loadDeploymentJson}>
-            Load from JSON
-          </button>
-          <button className="ghost" onClick={clearAddresses}>
-            Clear saved
-          </button>
-        </div>
-      </section>
+      <DeploymentSettings
+        addresses={addresses}
+        onChangeAddress={handleAddressChange}
+        onLoadFromJson={loadDeploymentJson}
+        onClearSaved={clearAddresses}
+        chainId={chainId}
+      />
 
-      <section className="panel">
-        <h2>Vault Overview</h2>
-        <div className="grid stats">
-          <div>
-            <span>Total Assets ({meta.assetSymbol})</span>
-            <strong>{formatUsd(vaultStats.totalAssets, meta.assetDecimals)}</strong>
-          </div>
-          <div>
-            <span>Total Supply ({meta.shareSymbol})</span>
-            <strong>{formatToken(vaultStats.totalSupply, meta.shareDecimals)}</strong>
-          </div>
-          <div>
-            <span>Price / Share</span>
-            <strong>${sharePrice.toFixed(4)}</strong>
-          </div>
-          <div>
-            <span>Queued Withdrawals</span>
-            <strong>{formatUsd(vaultStats.totalQueuedAssets, meta.assetDecimals)}</strong>
-          </div>
-          <div>
-            <span>Donation Rate</span>
-            <strong>{(vaultStats.donationBps / 100).toFixed(2)}%</strong>
-          </div>
-        </div>
-        <div className="grid stats">
-          <div>
-            <span>Your {meta.assetSymbol}</span>
-            <strong>{formatUsd(userStats.usdcBalance, meta.assetDecimals)}</strong>
-          </div>
-          <div>
-            <span>Your {meta.shareSymbol}</span>
-            <strong>{formatToken(userStats.shareBalance, meta.shareDecimals)}</strong>
-          </div>
-          <div>
-            <span>Total Deposited</span>
-            <strong>{formatUsd(userStats.deposited, meta.assetDecimals)}</strong>
-          </div>
-          <div>
-            <span>Total Withdrawn</span>
-            <strong>{formatUsd(userStats.withdrawn, meta.assetDecimals)}</strong>
-          </div>
-          <div>
-            <span>Total Donated</span>
-            <strong>{formatUsd(userStats.donated, meta.assetDecimals)}</strong>
-          </div>
-        </div>
-      </section>
+      <VaultOverview
+        meta={meta}
+        vaultStats={vaultStats}
+        userStats={userStats}
+        sharePrice={sharePrice}
+        governanceStats={governanceStats}
+      />
 
-      <section className="panel">
-        <h2>Actions</h2>
-        <div className="form-grid">
-          <label>
-            <span>Deposit {meta.assetSymbol}</span>
-            <div className="input-row">
-              <input value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} placeholder="0.00" inputMode="decimal" autoComplete="off" />
-              <button type="button" className="ghost small" onClick={fillMaxDeposit} disabled={!account}>
-                Max
-              </button>
-            </div>
-          </label>
-          <div className="action-stack">
-            <button onClick={deposit} disabled={!canTransact || busy.deposit}>
-              {busy.deposit ? "Depositing..." : "Deposit"}
-            </button>
-            <p className="muted hint">{depositPreview}</p>
-          </div>
-        </div>
-        <div className="form-grid">
-          <label>
-            <span>Redeem {meta.shareSymbol}</span>
-            <div className="input-row">
-              <input value={redeemAmount} onChange={(e) => setRedeemAmount(e.target.value)} placeholder="0.00" inputMode="decimal" autoComplete="off" />
-              <button type="button" className="ghost small" onClick={fillMaxRedeem} disabled={!account}>
-                Max
-              </button>
-            </div>
-          </label>
-          <div className="action-stack">
-            <button onClick={redeem} disabled={!canTransact || busy.redeem}>
-              {busy.redeem ? "Redeeming..." : "Redeem"}
-            </button>
-            <p className="muted hint">{redeemPreview}</p>
-          </div>
-        </div>
-      </section>
+      <VaultActions
+        meta={meta}
+        userStats={userStats}
+        depositAmount={depositAmount}
+        setDepositAmount={setDepositAmount}
+        depositPreview={depositPreview}
+        onDeposit={deposit}
+        redeemAmount={redeemAmount}
+        setRedeemAmount={setRedeemAmount}
+        redeemPreview={redeemPreview}
+        onRedeem={redeem}
+        canTransact={canTransact}
+        busy={busy}
+        onFillMaxDeposit={fillMaxDeposit}
+        onFillMaxRedeem={fillMaxRedeem}
+        account={account}
+      />
 
-      <section className="panel">
-        <h2>Withdrawal Queue</h2>
-        <p className="muted">
-          HyperEVM withdrawals unlock after the strategy releases liquidity (≈24h bridge window). If a redeem cannot settle instantly it is queued here; once ready click “Process Withdrawal”.
-        </p>
-        {queueInfo && queueInfo.shares > 0n ? (
-          <>
-            <div className="grid stats">
-              <div>
-                <span>Queued Shares</span>
-                <strong>{formatToken(queueInfo.shares, meta.shareDecimals)}</strong>
-              </div>
-              <div>
-                <span>Net Assets</span>
-                <strong>{formatUsd(queueInfo.net, meta.assetDecimals)}</strong>
-              </div>
-              <div>
-                <span>Donation Cap</span>
-                <strong>{formatUsd(queueInfo.donation, meta.assetDecimals)}</strong>
-              </div>
-              <div>
-                <span>Receiver</span>
-                <strong>{shorten(queueInfo.receiver)}</strong>
-              </div>
-              <div>
-                <span>Requested</span>
-                <strong>{formatDateTime(queueInfo.timestamp)}</strong>
-              </div>
-              <div className="queue-status">
-                <span>Lock Status</span>
-                <strong>{queueReadyText}</strong>
-              </div>
-            </div>
-            <div className="button-row">
-              <button className="secondary" onClick={processQueuedWithdrawal} disabled={!signer || !hasQueuedWithdrawal || busy.process}>
-                {busy.process ? "Processing..." : "Process Withdrawal"}
-              </button>
-            </div>
-          </>
-        ) : (
-          <p className="muted">No queued withdrawal detected for {account ? shorten(account) : "this wallet"}.</p>
-        )}
-      </section>
+      <UserWithdrawalQueue
+        queueInfo={queueInfo}
+        meta={meta}
+        queueReadyText={queueReadyText}
+        onProcess={processQueuedWithdrawal}
+        busy={busy}
+        signer={signer}
+        hasQueuedWithdrawal={hasQueuedWithdrawal}
+        account={account}
+      />
 
-      <section className="panel">
-        <h2>Status</h2>
-        <pre className="status-box">{status}</pre>
-      </section>
+      <GlobalWithdrawalQueue
+        provider={provider}
+        signer={signer}
+        vaultAddress={ethers.isAddress(addresses.vault) ? addresses.vault : ""}
+        meta={meta}
+        globalQueueStatus={globalQueueStatus}
+        globalQueue={globalQueue}
+        busy={busy}
+        onRefresh={refreshGlobalQueue}
+        onProcessAll={processAllQueuedWithdrawals}
+        onProcessOne={processSingleGlobalQueue}
+      />
+
+      <GovernanceProjects
+        provider={provider}
+        signer={signer}
+        governanceAddressesAreValid={governanceAddressesAreValid}
+        meta={meta}
+        governanceStats={governanceStats}
+        projects={projects}
+        busy={busy}
+        onLoadProjects={refreshProjects}
+        onFundTop={fundTopProject}
+        projectForm={projectForm}
+        setProjectForm={setProjectForm}
+        onSubmitProject={submitProject}
+        onVote={voteForProject}
+      />
+
+      <StatusPanel status={status} />
     </main>
   );
-}
-
-function estimateSharesForDeposit(amount, totalSupply, totalAssets) {
-  if (amount <= 0n) return 0n;
-  if (totalSupply === 0n || totalAssets === 0n) {
-    return amount * SHARE_SCALAR;
-  }
-  return (amount * totalSupply) / totalAssets;
-}
-
-function estimateAssetsFromShares(shares, totalSupply, totalAssets) {
-  if (shares <= 0n || totalSupply === 0n) return 0n;
-  return (shares * totalAssets) / totalSupply;
-}
-
-function formatUsd(value = 0n, decimals = 6, precision = 2) {
-  const scaled = Number(ethers.formatUnits(value ?? 0n, decimals));
-  if (!Number.isFinite(scaled)) return "$0.00";
-  return `$${scaled.toLocaleString(undefined, {
-    minimumFractionDigits: precision,
-    maximumFractionDigits: precision,
-  })}`;
-}
-
-function formatToken(value = 0n, decimals = 18, precision = 4) {
-  const scaled = Number(ethers.formatUnits(value ?? 0n, decimals));
-  if (!Number.isFinite(scaled)) return "0";
-  return scaled.toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: precision,
-  });
-}
-
-function formatDateTime(timestampSeconds = 0) {
-  if (!timestampSeconds) return "—";
-  const date = new Date(Number(timestampSeconds) * 1000);
-  if (Number.isNaN(date.getTime())) {
-    return "—";
-  }
-  return date.toLocaleString();
-}
-
-function formatDuration(seconds = 0) {
-  if (!Number.isFinite(seconds) || seconds <= 0) {
-    return "ready now";
-  }
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = Math.max(0, Math.floor(seconds % 60));
-  const parts = [];
-  if (hrs) parts.push(`${hrs}h`);
-  if (mins) parts.push(`${mins}m`);
-  if (!hrs && !mins) parts.push(`${secs}s`);
-  return parts.slice(0, 2).join(" ");
-}
-
-function shorten(address) {
-  if (!address) return "";
-  return `${address.slice(0, 6)}…${address.slice(-4)}`;
-}
-
-function normalizeAccount(value) {
-  if (!value) return undefined;
-  if (typeof value === "string") return value;
-  if (typeof value.address === "string") return value.address;
-  return undefined;
-}
-
-function normalizeQueueStruct(raw) {
-  if (!raw) {
-    return {
-      shares: 0n,
-      assets: 0n,
-      net: 0n,
-      donation: 0n,
-      receiver: ethers.ZeroAddress,
-      timestamp: 0,
-    };
-  }
-  const shares = valueToBigInt(raw.shares ?? raw[0]);
-  const assets = valueToBigInt(raw.assets ?? raw[1]);
-  const net = valueToBigInt(raw.net ?? raw[2]);
-  const donation = valueToBigInt(raw.donation ?? raw[3]);
-  const receiver = (raw.receiver ?? raw[4] ?? ethers.ZeroAddress)?.toString?.() ?? ethers.ZeroAddress;
-  const timestampValue = raw.timestamp ?? raw[5] ?? 0;
-  const timestamp = typeof timestampValue === "bigint" ? Number(timestampValue) : Number(timestampValue ?? 0);
-
-  return {
-    shares,
-    assets,
-    net,
-    donation,
-    receiver,
-    timestamp: Number.isFinite(timestamp) ? timestamp : 0,
-  };
-}
-
-function valueToBigInt(value) {
-  if (typeof value === "bigint") return value;
-  if (typeof value === "number") return BigInt(value);
-  if (typeof value === "string" && value.length) return BigInt(value);
-  if (value && typeof value.toString === "function") {
-    try {
-      return BigInt(value.toString());
-    } catch {
-      return 0n;
-    }
-  }
-  return 0n;
 }
 
 export default App;

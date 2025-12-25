@@ -23,5 +23,19 @@ module.exports = {
 			files: ["hardhat.config.js"],
 			globals: { task: true },
 		},
+		{
+			files: ["ngovault/frontend/**/*.{js,jsx}"],
+			env: { browser: true, es6: true, es2020: true },
+			parserOptions: {
+				ecmaVersion: 2021,
+				sourceType: "module",
+				ecmaFeatures: { jsx: true },
+			},
+			rules: {
+				"prettier/prettier": "off",
+				"no-console": "off",
+				"no-unused-vars": "off",
+			},
+		},
 	],
 };
