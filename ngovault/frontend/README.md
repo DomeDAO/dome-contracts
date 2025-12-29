@@ -1,6 +1,11 @@
-# NGO Vault React frontend
+# NGO Vault Frontend (React + Vite)
 
-A tiny React + Vite dashboard for exercising the HyperEVM vault deployment (deposit, redeem, queued withdrawal processing).
+Dashboard for testing the HyperEVM NGO vault end-to-end:
+- Deposit (stake) USDC into `NGOVault`
+- Redeem shares (may queue if Hyperliquid liquidity is locked)
+- View **your** queued withdrawal + view the **global** queue (from logs)
+- Process one queued withdrawal or **process all**
+- Submit/vote/fund governance projects + view donation buffer balance
 
 ## Quick start
 
@@ -11,47 +16,73 @@ npm run dev
 ```
 
 Then:
+1. Open the printed `http://localhost:5173/`
+2. Connect MetaMask (or any injected wallet)
+3. Switch to the right chain (HyperEVM testnet is chain id `998`)
+4. Load contract addresses (see next section)
 
-1. Open the printed `http://localhost:5173/`.
-2. Connect MetaMask (or any injected wallet) to HyperEVM chain id `998`.
-3. Press **Load from JSON** to auto-populate contract addresses from `public/deployments/998.json` (update that file if you redeploy).
-4. Interact via the dashboard. Deposits/withdrawals mirror the vault contract guards and will highlight queued withdrawal status as Hyperliquid liquidity unlocks (≈24h).
+## Where do I put the contract addresses?
+
+You have **two** ways:
+
+### Option A (recommended): `public/deployments/<chainId>.json`
+
+Create/update:
+- `ngovault/frontend/public/deployments/998.json` for HyperEVM testnet
+- `ngovault/frontend/public/deployments/999.json` for HyperEVM mainnet
+
+The app reads this file when you click **Load from JSON**. It expects:
+
+```json
+{
+  "contracts": {
+    "vault": "0x...",
+    "usdc": "0x...",
+    "share": "0x...",
+    "governance": "0x...",
+    "buffer": "0x..."
+  }
+}
+```
+
+Tip: after deploying from `ngovault/contracts`, copy the addresses from the deploy output JSON into this file.
+
+### Option B: paste into the UI
+
+In **Deployment Settings**, paste:
+- `Vault address`
+- `USDC address`
+- `Share token address`
+- `Governance address`
+- `Buffer address`
+
+These values are saved to **`localStorage`** in your browser, so you only enter them once per browser.
+
+## Global queue (important)
+
+The global queue is built by scanning `WithdrawalQueued` logs, so you must set:
+- `VITE_QUEUE_FROM_BLOCK` to the vault deployment block (or earlier)
+
+Copy `.env.example` → `.env.local` and edit:
+
+```bash
+cp .env.example .env.local
+```
+
+Then set:
+- `VITE_QUEUE_FROM_BLOCK=123456`
+
+Optional (recommended for log scanning reliability):
+- `VITE_RPC_URL=https://rpc.hyperliquid-testnet.xyz/evm`
 
 ## Production build
 
-```
+```bash
 npm run build
-npm run preview # optional smoke-test of the static build
+npm run preview
 ```
 
-Copy the generated `dist/` folder to any static host.
-
 ## Notes
-
-- The app polls every 20 seconds while the tab is open and also refreshes on visibility changes or wallet events.
-- Deposits/redeems are blocked while a queued withdrawal exists; use the **Process Withdrawal** button once funds are ready.
-- Contract addresses persist in `localStorage` per browser to minimize re-entry across sessions.
-# NGO Vault Frontend
-
-Lightweight static UI (no build tooling required) for testing the HyperEVM deployment.
-
-## Quick start
-
-1. `cd /home/aurelien/Documents/github/dome-contracts/ngovault/frontend`
-2. Serve the directory with any static server (examples):
-   - `npx http-server -c-1 .`
-   - `python -m http.server 4173`
-3. Visit the printed URL (usually `http://localhost:8080`) and connect MetaMask to HyperEVM (chain id `998`).
-4. Click **Load from JSON** to auto-fill vault, share, and USDC addresses from `deployments/998.json`.  
-   - Update that JSON if you redeploy.
-5. Use the **Actions** panel to deposit USDC or redeem shares.
-6. If Hyperliquid liquidity is still locked (≈24h window), the withdrawal automatically lands in the **Withdrawal Queue** section where you can monitor readiness and click **Process Withdrawal** once funds are released.
-
-> Tip: You can also paste addresses manually; they persist in local storage so you only have to enter them once per network.
-
-## Notes
-
-- The UI polls every 20 seconds while the tab is focused and whenever you reconnect your wallet.
-- Deposits are disabled while a withdrawal is queued, matching the contract’s guard.
-- Status logs at the bottom mirror the latest action/result to simplify debugging transactions.
+- Deposits/redeems are blocked while **your** withdrawal is queued (matches the smart contract guard).
+- “Process all” will submit multiple transactions sequentially (your wallet will ask you to confirm each one).
 
