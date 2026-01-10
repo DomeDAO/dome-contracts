@@ -59,7 +59,7 @@ module.exports = {
 	paths: {
 		cache: "./hh-cache",
 		artifacts: "./artifacts",
-		sources: "./contracts",
+		sources: "./dome-safe",
 		tests: "./test",
 	},
 	solidity: {

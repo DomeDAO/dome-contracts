@@ -1,4 +1,6 @@
-# HyperEVM NGO Vault (Hyperliquid)
+# Dome Risk - HyperEVM NGO Vault (Hyperliquid)
+
+> ⚠️ **HIGH RISK**: This vault deploys capital into Hyperliquid's native vault. Hyperliquid positions are volatile; you can lose principal when funding rates or liquidation events move against the position.
 
 NGO Vault is a HyperEVM-native ERC-4626 style vault that aggregates USDC donations, deploys capital into Hyperliquid's native vault, and routes profits toward civil society projects. Depositors receive `NGOShare` (18‑decimals) receipts, while a configurable portion of every profitable withdrawal is donated to the governance buffer that funds approved initiatives.
 
@@ -10,12 +12,12 @@ NGO Vault is a HyperEVM-native ERC-4626 style vault that aggregates USDC donatio
 
 | Component | Location | Responsibility |
 | --- | --- | --- |
-| `NGOVault` | `contracts/contracts/NGOVault.sol` | Entry point for deposits, redemptions, accounting, and queuing during Hyperliquid lockups. |
-| `NGOShare` | `contracts/contracts/NGOShare.sol` | Share token minted/burned exclusively by the vault. |
-| `NGOGovernance` | `contracts/contracts/NGOGovernance.sol` | Registers/votes on projects and instructs the buffer to release donated funds. |
-| `NGOGovernanceBuffer` | `contracts/contracts/NGOGovernanceBuffer.sol` | Custodies donated USDC until governance disbursement. |
-| `HyperliquidStrategyVault` | `contracts/contracts/hyperliquid/HyperliquidStrategyVault.sol` | ERC-4626 strategy wrapper that talks to the bridge. |
-| `HyperliquidBridgeAdapter` | `contracts/contracts/hyperliquid/HyperliquidBridgeAdapter.sol` | Handles deposits/redemptions against Hyperliquid's native vault and emits `CoreWriter` actions. |
+| `NGOVault` | `dome-risk/contracts/contracts/NGOVault.sol` | Entry point for deposits, redemptions, accounting, and queuing during Hyperliquid lockups. |
+| `NGOShare` | `dome-risk/contracts/contracts/NGOShare.sol` | Share token minted/burned exclusively by the vault. |
+| `NGOGovernance` | `dome-risk/contracts/contracts/NGOGovernance.sol` | Registers/votes on projects and instructs the buffer to release donated funds. |
+| `NGOGovernanceBuffer` | `dome-risk/contracts/contracts/NGOGovernanceBuffer.sol` | Custodies donated USDC until governance disbursement. |
+| `HyperliquidStrategyVault` | `dome-risk/contracts/contracts/hyperliquid/HyperliquidStrategyVault.sol` | ERC-4626 strategy wrapper that talks to the bridge. |
+| `HyperliquidBridgeAdapter` | `dome-risk/contracts/contracts/hyperliquid/HyperliquidBridgeAdapter.sol` | Handles deposits/redemptions against Hyperliquid's native vault and emits `CoreWriter` actions. |
 
 ### Fund Lifecycle
 
@@ -29,10 +31,10 @@ NGO Vault is a HyperEVM-native ERC-4626 style vault that aggregates USDC donatio
 
 ## Deploying to HyperEVM
 
-All commands are executed from `ngovault/contracts`.
+All commands are executed from `dome-risk/contracts`.
 
 ```bash
-cd /home/aurelien/Documents/github/dome-contracts/ngovault/contracts
+cd /home/aurelien/Documents/github/dome-contracts/dome-risk/contracts
 npm install
 ```
 
@@ -86,7 +88,7 @@ Because the once-per-day staging is an operational rule rather than a smart-cont
 
 ## Frontend Companion
 
-The lightweight dashboard in `ngovault/frontend` mirrors the vault's guards (queued withdrawals disable deposits, 20s polling cadence). Follow its dedicated README for Vite instructions, then point it at your deployment JSON to:
+The lightweight dashboard in `dome-risk/frontend` mirrors the vault's guards (queued withdrawals disable deposits, 20s polling cadence). Follow its dedicated README for Vite instructions, then point it at your deployment JSON to:
 
 - Deposit USDC and mint `NGOShare`.
 - Observe queued withdrawals during the 24h lock.
@@ -103,6 +105,11 @@ The lightweight dashboard in `ngovault/frontend` mirrors the vault's guards (que
 - Always verify CoreWriter payloads when upgrading Hyperliquid contracts—action encoding (`0x01` + `0x000002`) must remain in sync with official docs.
 
 Keep `HYPER_EVM_PRIVATE_KEY` cold and rotate donation parameters (`donationBps`) via multisig ownership to avoid unilateral fee changes.
+
+
+
+
+
 
 
 
