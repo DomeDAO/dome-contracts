@@ -1,10 +1,21 @@
-# Contract Layout
+# Dome Contracts
+
+This repository contains two distinct projects:
+
+| Folder | Description | Risk Level |
+|--------|-------------|------------|
+| `dome-safe/` | Original Dome Protocol - stable yield generation with ERC-4626 vaults (Aave) | **Low Risk** |
+| `dome-risk/` | NGO Vault on Hyperliquid - higher yield potential via Hyperliquid native vaults | **High Risk** |
+
+---
+
+# Dome Safe (dome-safe/)
 
 ## Dome Protocol Smart Contract
 
 **Description:**
 
-[The Dome Protocol Smart Contract](./contracts/DomeProtocol.sol) enables the creation of dome structures with predefined governance settings, beneficiaries, and yield generation mechanisms.
+[The Dome Protocol Smart Contract](./dome-safe/DomeProtocol.sol) enables the creation of dome structures with predefined governance settings, beneficiaries, and yield generation mechanisms.
 
 **Features:**
 
