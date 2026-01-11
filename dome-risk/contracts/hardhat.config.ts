@@ -48,6 +48,11 @@ const config: HardhatUserConfig = {
         : {}),
     },
   },
+  sourcify: {
+    enabled: true,
+    apiUrl: "https://sourcify.parsec.finance",
+    browserUrl: "https://purrsec.com",
+  },
   paths: {
     sources: "./contracts",
     tests: "./test",
