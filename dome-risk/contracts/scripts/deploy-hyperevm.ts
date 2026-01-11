@@ -112,14 +112,26 @@ async function main() {
   }
 
   const config = loadConfig();
-  const signers = await ethers.getSigners();
-  if (!signers.length) {
-    throw new Error(
-      "No deployer account configured. Set HYPER_EVM_PRIVATE_KEY in .env so the hyperevm network has credentials."
-    );
+  
+  // Get deployer - use Ledger address directly if configured (avoids eth_accounts RPC call
+  // which HyperEVM doesn't support), otherwise fall back to getSigners() for private key mode
+  const ledgerAddress = optionalEnv("HYPER_EVM_LEDGER_ADDRESS");
+  let deployer;
+  if (ledgerAddress) {
+    // For Ledger: get signer by address directly (bypasses eth_accounts)
+    deployer = await ethers.getSigner(ledgerAddress);
+    console.log(`Using Ledger deployer: ${deployer.address}`);
+  } else {
+    // For private key: use getSigners()
+    const signers = await ethers.getSigners();
+    if (!signers.length) {
+      throw new Error(
+        "No deployer account configured. Set HYPER_EVM_PRIVATE_KEY or HYPER_EVM_LEDGER_ADDRESS in .env."
+      );
+    }
+    deployer = signers[0];
+    console.log(`Deploying from ${deployer.address}`);
   }
-  const [deployer] = signers;
-  console.log(`Deploying from ${deployer.address}`);
 
   const baseNonce = await deployer.getNonce();
   // Contracts/transactions are executed in the following order:
@@ -135,12 +147,13 @@ async function main() {
 
   console.log(`Predicted NGOVault address: ${predictedVaultAddress}`);
 
-  const BridgeFactory = await ethers.getContractFactory("HyperliquidBridgeAdapter");
+  // Pass deployer signer explicitly to contract factories to avoid eth_accounts RPC calls
+  const BridgeFactory = await ethers.getContractFactory("HyperliquidBridgeAdapter", deployer);
   const bridge = await BridgeFactory.deploy(config.usdc, config.hyperliquidVault, config.coreWriter);
   await bridge.waitForDeployment();
   console.log(`HyperliquidBridgeAdapter deployed at ${await bridge.getAddress()}`);
 
-  const StrategyFactory = await ethers.getContractFactory("HyperliquidStrategyVault");
+  const StrategyFactory = await ethers.getContractFactory("HyperliquidStrategyVault", deployer);
   const strategy = await StrategyFactory.deploy(config.usdc, await bridge.getAddress());
   await strategy.waitForDeployment();
   console.log(`HyperliquidStrategyVault deployed at ${await strategy.getAddress()}`);
@@ -148,29 +161,29 @@ async function main() {
   await (await bridge.setAuthorizedStrategy(await strategy.getAddress(), true)).wait();
   console.log("Strategy authorized on bridge");
 
-  const ShareFactory = await ethers.getContractFactory("NGOShare");
+  const ShareFactory = await ethers.getContractFactory("Share", deployer);
   const share = await ShareFactory.deploy(config.shareName, config.shareSymbol, predictedVaultAddress);
   await share.waitForDeployment();
-  console.log(`NGOShare deployed at ${await share.getAddress()}`);
+  console.log(`Share deployed at ${await share.getAddress()}`);
 
-  const BufferFactory = await ethers.getContractFactory("NGOGovernanceBuffer");
+  const BufferFactory = await ethers.getContractFactory("GovernanceBuffer", deployer);
   const governanceBuffer = await BufferFactory.deploy(config.usdc, ethers.ZeroAddress);
   await governanceBuffer.waitForDeployment();
-  console.log(`NGOGovernanceBuffer deployed at ${await governanceBuffer.getAddress()}`);
+  console.log(`GovernanceBuffer deployed at ${await governanceBuffer.getAddress()}`);
 
-  const GovernanceFactory = await ethers.getContractFactory("NGOGovernance");
+  const GovernanceFactory = await ethers.getContractFactory("Governance", deployer);
   const governance = await (GovernanceFactory as any).deploy(
     config.usdc,
     await share.getAddress(),
     await governanceBuffer.getAddress()
   );
   await governance.waitForDeployment();
-  console.log(`NGOGovernance deployed at ${await governance.getAddress()}`);
+  console.log(`Governance deployed at ${await governance.getAddress()}`);
 
   await (await (governanceBuffer as any).setGovernance(await governance.getAddress())).wait();
-  console.log("Governance buffer linked to NGOGovernance");
+  console.log("Governance buffer linked to Governance");
 
-  const VaultFactory = await ethers.getContractFactory("NGOVault");
+  const VaultFactory = await ethers.getContractFactory("Vault", deployer);
   const vault = await (VaultFactory as any).deploy(
     config.usdc,
     await share.getAddress(),
@@ -180,7 +193,7 @@ async function main() {
     await governanceBuffer.getAddress()
   );
   await vault.waitForDeployment();
-  console.log(`NGOVault deployed at ${await vault.getAddress()}`);
+  console.log(`Vault deployed at ${await vault.getAddress()}`);
 
   const deploymentSummary = {
     network: network.name,
