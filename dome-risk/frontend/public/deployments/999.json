@@ -1,0 +1,11 @@
+{
+  "network": "hyperevm-mainnet",
+  "chainId": 999,
+  "contracts": {
+    "usdc": "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
+    "share": "0x52496010b162799134654ED4139BdfBD3d088c85",
+    "vault": "0xb35b55dD9878aE6B2aFf351ad109fB6DC60930B9",
+    "governance": "0xcf5AE784031E6660F41ECD27eb04FeAFF24eA605",
+    "buffer": "0x89c950b281179A46aE5b36722331cdF4626ca7AF"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "network": "hyperevm",
+  "chainId": 999,
+  "docs": {
+    "overview": "https://app.hyperliquid.xyz/hyperliquid",
+    "hyperevmDocs": "https://docs.hyperliquid.xyz/",
+    "addresses": "https://docs.hyperliquid.xyz/hyperliquid/build-on-hyperliquid/reference/hyperevm-addresses",
+    "rpc": "https://docs.hyperliquid.xyz/hyperliquid/build-on-hyperliquid/reference/hyperevm-rpc"
+  },
+  "contracts": {
+    "usdc": "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
+    "hyperliquidVault": "0x93ad52177d0795de8c67c92b1a72035293cb7aac",
+    "coreWriter": "0x3333333333333333333333333333333333333333",
+    "bridge": "0xB5199D9CDc452FD127BC82ABa81f05704092D5A6",
+    "strategy": "0xb58e21E1192040055F9430cF501437e87D648d34",
+    "share": "0x52496010b162799134654ED4139BdfBD3d088c85",
+    "governance": "0xcf5AE784031E6660F41ECD27eb04FeAFF24eA605",
+    "buffer": "0x89c950b281179A46aE5b36722331cdF4626ca7AF",
+    "vault": "0xb35b55dD9878aE6B2aFf351ad109fB6DC60930B9"
+  },
+  "parameters": {
+    "donationBps": 1000,
+    "shareName": "NGO Hyper Share",
+    "shareSymbol": "NGO-H"
+  }
+}
