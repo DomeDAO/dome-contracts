@@ -21,7 +21,7 @@ async function verify(address: string, constructorArguments: any[], contractName
 async function main() {
   const { contracts, parameters } = deploymentData;
 
-  console.log("Starting contract verification on Purrsec (HyperEVM)...\n");
+  console.log("Starting contract verification on HyperEVM (Sourcify + Etherscan v2)...\n");
 
   // 1. HyperliquidBridgeAdapter
   await verify(
@@ -73,7 +73,8 @@ async function main() {
   );
 
   console.log("\n🎉 Verification complete!");
-  console.log(`View contracts at: https://purrsec.com/address/${contracts.vault}`);
+  console.log(`View on HyperEVMScan: https://hyperevmscan.io/address/${contracts.vault}#code`);
+  console.log(`View on Purrsec: https://purrsec.com/address/${contracts.vault}`);
 }
 
 main().catch((error) => {

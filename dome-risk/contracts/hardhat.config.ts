@@ -27,6 +27,7 @@ const chainIdOverride = optionalEnv("HYPER_EVM_CHAIN_ID");
 const hyperevmChainId = chainIdOverride !== undefined ? Number(chainIdOverride) : networkDefaults.chainId;
 const hyperevmKey = optionalEnv("HYPER_EVM_PRIVATE_KEY");
 const ledgerAddress = optionalEnv("HYPER_EVM_LEDGER_ADDRESS");
+const etherscanApiKey = optionalEnv("ETHERSCAN_API_KEY");
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -47,6 +48,19 @@ const config: HardhatUserConfig = {
         ? { accounts: [hyperevmKey] }
         : {}),
     },
+  },
+  etherscan: {
+    apiKey: etherscanApiKey ?? "",
+    customChains: [
+      {
+        network: "hyperevm",
+        chainId: 999,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api",
+          browserURL: "https://hyperevmscan.io",
+        },
+      },
+    ],
   },
   sourcify: {
     enabled: true,
