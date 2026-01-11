@@ -7,20 +7,21 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import { IStrategyVault } from "./interfaces/IStrategyVault.sol";
-import { NGOShare } from "./NGOShare.sol";
-import { NGOGovernance } from "./NGOGovernance.sol";
+import { Share } from "./Share.sol";
+import { Governance } from "./Governance.sol";
 
-contract NGOVault is Ownable, ReentrancyGuard {
+contract Vault is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint256 private constant SHARE_SCALAR = 1e12;
     uint16 public constant MAX_DONATION_BPS = 10_000;
+    uint256 public constant MIN_WITHDRAWAL_DELAY = 24 hours;
 
     IERC20 public immutable asset;
-    NGOShare public immutable shareToken;
+    Share public immutable shareToken;
     IStrategyVault public immutable underlying;
 
-    NGOGovernance public governance;
+    Governance public governance;
     address public governanceBuffer;
     uint16 public donationBps;
 
@@ -54,10 +55,10 @@ contract NGOVault is Ownable, ReentrancyGuard {
 
     constructor(
         IERC20 _asset,
-        NGOShare _shareToken,
+        Share _shareToken,
         IStrategyVault _underlying,
         uint16 _donationBps,
-        NGOGovernance _governance,
+        Governance _governance,
         address _governanceBuffer
     ) Ownable(msg.sender) {
         require(address(_asset) != address(0), "asset zero");
@@ -150,6 +151,7 @@ contract NGOVault is Ownable, ReentrancyGuard {
     function processQueuedWithdrawal(address user) external nonReentrant returns (uint256 netToUser, uint256 donation) {
         QueuedWithdrawal memory request = queuedWithdrawals[user];
         require(request.shares > 0, "No pending withdrawal");
+        require(block.timestamp >= request.timestamp + MIN_WITHDRAWAL_DELAY, "Withdrawal delay not met");
 
         uint256 balanceBefore = asset.balanceOf(address(this));
         bool withdrawn = _tryWithdrawFromStrategy(request.assets);
@@ -246,7 +248,7 @@ contract NGOVault is Ownable, ReentrancyGuard {
         emit DonationBpsUpdated(newDonationBps);
     }
 
-    function setGovernance(NGOGovernance newGovernance) external onlyOwner {
+    function setGovernance(Governance newGovernance) external onlyOwner {
         require(address(newGovernance) != address(0), "governance zero");
         governance = newGovernance;
         emit GovernanceUpdated(address(newGovernance));
@@ -264,5 +266,22 @@ contract NGOVault is Ownable, ReentrancyGuard {
             donated: totalDonated[user]
         });
     }
-}
 
+    /// @notice Returns the timestamp when a queued withdrawal can be processed, or 0 if no withdrawal is queued
+    function withdrawalUnlockTime(address user) external view returns (uint256) {
+        QueuedWithdrawal memory request = queuedWithdrawals[user];
+        if (request.shares == 0) {
+            return 0;
+        }
+        return request.timestamp + MIN_WITHDRAWAL_DELAY;
+    }
+
+    /// @notice Returns true if a queued withdrawal has passed the minimum delay period
+    function canProcessWithdrawal(address user) external view returns (bool) {
+        QueuedWithdrawal memory request = queuedWithdrawals[user];
+        if (request.shares == 0) {
+            return false;
+        }
+        return block.timestamp >= request.timestamp + MIN_WITHDRAWAL_DELAY;
+    }
+}

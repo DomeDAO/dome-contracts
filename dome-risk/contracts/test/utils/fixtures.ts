@@ -4,10 +4,10 @@ import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   MockUSDC,
   MockStrategyVault,
-  NGOGovernance,
-  NGOGovernanceBuffer,
-  NGOVault,
-  NGOShare,
+  Governance,
+  GovernanceBuffer,
+  Vault,
+  Share,
 } from "../../typechain-types";
 
 export const SHARE_SCALAR = 1_000_000_000_000n;
@@ -19,10 +19,10 @@ export async function deployVaultFixture(): Promise<{
   carol: SignerWithAddress;
   asset: MockUSDC;
   strategy: MockStrategyVault;
-  share: NGOShare;
-  governanceBuffer: NGOGovernanceBuffer;
-  vault: NGOVault;
-  governance: NGOGovernance;
+  share: Share;
+  governanceBuffer: GovernanceBuffer;
+  vault: Vault;
+  governance: Governance;
 }> {
   const [deployer, alice, bob, carol] = await ethers.getSigners();
 
@@ -42,37 +42,37 @@ export async function deployVaultFixture(): Promise<{
   const nonce = await deployer.getNonce();
   const predictedVault = ethers.getCreateAddress({ from: deployer.address, nonce: nonce + 4 });
 
-  const NGOShareFactory = await ethers.getContractFactory("NGOShare");
-  const share = (await NGOShareFactory.deploy("NGO Share", "NGOS", predictedVault)) as NGOShare;
+  const ShareFactory = await ethers.getContractFactory("Share");
+  const share = (await ShareFactory.deploy("Dome Risk Share", "DRS", predictedVault)) as Share;
   await share.waitForDeployment();
 
-  const BufferFactory = await ethers.getContractFactory("NGOGovernanceBuffer");
+  const BufferFactory = await ethers.getContractFactory("GovernanceBuffer");
   const governanceBuffer = (await BufferFactory.deploy(
     await asset.getAddress(),
     ethers.ZeroAddress
-  )) as NGOGovernanceBuffer;
+  )) as GovernanceBuffer;
   await governanceBuffer.waitForDeployment();
 
-  const NGOGovernanceFactory = await ethers.getContractFactory("NGOGovernance");
-  const governance = (await NGOGovernanceFactory.deploy(
+  const GovernanceFactory = await ethers.getContractFactory("Governance");
+  const governance = (await GovernanceFactory.deploy(
     await asset.getAddress(),
     await share.getAddress(),
     await governanceBuffer.getAddress()
-  )) as NGOGovernance;
+  )) as Governance;
   await governance.waitForDeployment();
 
   await (await governanceBuffer.setGovernance(await governance.getAddress())).wait();
 
-  const NGOVaultFactory = await ethers.getContractFactory("NGOVault");
+  const VaultFactory = await ethers.getContractFactory("Vault");
   const donationBps = 1_000; // 10%
-  const vault = (await NGOVaultFactory.deploy(
+  const vault = (await VaultFactory.deploy(
     await asset.getAddress(),
     await share.getAddress(),
     await strategy.getAddress(),
     donationBps,
     await governance.getAddress(),
     await governanceBuffer.getAddress()
-  )) as NGOVault;
+  )) as Vault;
   await vault.waitForDeployment();
 
   return {
@@ -88,4 +88,3 @@ export async function deployVaultFixture(): Promise<{
     governance,
   };
 }
-
