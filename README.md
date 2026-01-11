@@ -6,9 +6,9 @@ A collection of decentralized protocols for yield generation, donations, and gov
 
 This monorepo contains multiple independent projects with different risk profiles:
 
-| Project | Path | Description | Risk Level |
-|---------|------|-------------|------------|
-| **Dome Safe** | [`dome-safe/`](./dome-safe/) | Original Dome Protocol - stable yield generation with ERC-4626 vaults (Aave) | 🟢 **Low Risk** |
+| Project       | Path                         | Description                                                                     | Risk Level       |
+| ------------- | ---------------------------- | ------------------------------------------------------------------------------- | ---------------- |
+| **Dome Safe** | [`dome-safe/`](./dome-safe/) | Original Dome Protocol - stable yield generation with ERC-4626 vaults (Aave)    | 🟢 **Low Risk**  |
 | **Dome Risk** | [`dome-risk/`](./dome-risk/) | NGO Vault on Hyperliquid - higher yield potential via Hyperliquid native vaults | 🔴 **High Risk** |
 
 ---
@@ -26,15 +26,15 @@ The original Dome Protocol enables the creation of dome structures where users c
 
 ### Core Contracts
 
-| Contract | Description |
-|----------|-------------|
-| `DomeProtocol` | Factory for creating dome structures with governance settings |
-| `DomeCore` | Main vault - deposit/withdraw assets, mint/burn shares |
-| `Governance` | Proposal creation, voting, and execution |
-| `Buffer` | Asset management and distribution buffer |
-| `WrappedVoting` | Wraps staked tokens for governance participation |
+| Contract        | Description                                                   |
+| --------------- | ------------------------------------------------------------- |
+| `DomeProtocol`  | Factory for creating dome structures with governance settings |
+| `DomeCore`      | Main vault - deposit/withdraw assets, mint/burn shares        |
+| `Governance`    | Proposal creation, voting, and execution                      |
+| `Buffer`        | Asset management and distribution buffer                      |
+| `WrappedVoting` | Wraps staked tokens for governance participation              |
 
-📖 **[Full Dome Safe Documentation](./dome-safe/README.md)** *(coming soon)*
+📖 **[Full Dome Safe Documentation](./dome-safe/README.md)** _(coming soon)_
 
 ---
 
@@ -53,13 +53,13 @@ NGO Vault is a HyperEVM-native ERC-4626 style vault that aggregates USDC donatio
 
 ### Core Contracts
 
-| Contract | Description |
-|----------|-------------|
-| `NGOVault` | Entry point for deposits, redemptions, and withdrawal queuing |
-| `NGOShare` | Share token (18 decimals) minted/burned by the vault |
-| `NGOGovernance` | Project registration, voting, and fund disbursement |
-| `NGOGovernanceBuffer` | Custodies donated USDC until governance release |
-| `HyperliquidBridgeAdapter` | Handles deposits/redemptions against Hyperliquid |
+| Contract                   | Description                                                   |
+| -------------------------- | ------------------------------------------------------------- |
+| `NGOVault`                 | Entry point for deposits, redemptions, and withdrawal queuing |
+| `NGOShare`                 | Share token (18 decimals) minted/burned by the vault          |
+| `NGOGovernance`            | Project registration, voting, and fund disbursement           |
+| `NGOGovernanceBuffer`      | Custodies donated USDC until governance release               |
+| `HyperliquidBridgeAdapter` | Handles deposits/redemptions against Hyperliquid              |
 
 📖 **[Full Dome Risk Documentation](./dome-risk/README.md)**
 
@@ -144,11 +144,13 @@ See [`dome-risk/contracts/.env.example`](./dome-risk/contracts/.env.example) for
 ## Supported Networks
 
 ### Dome Safe
+
 - Ethereum Mainnet / Goerli
 - Polygon Mainnet / Amoy
 - Arbitrum One / Arbitrum Sepolia
 
 ### Dome Risk
+
 - HyperEVM Testnet (Chain ID: 998)
 - HyperEVM Mainnet (Chain ID: 999)
 
