@@ -76,7 +76,7 @@ describe("HyperliquidBridgeAdapter", () => {
   });
 
   it("stakes assets and tracks strategy shares", async () => {
-    const { bridge, strategy, asset, mockHyper } = await loadFixture(fixture);
+    const { bridge, strategy, asset } = await loadFixture(fixture);
     await bridge.setAuthorizedStrategy(strategy.address, true);
 
     const depositAmount = toUSDC("150");
@@ -87,7 +87,8 @@ describe("HyperliquidBridgeAdapter", () => {
 
     const shares = await bridge.shareBalance(strategy.address);
     expect(shares).to.equal(depositAmount);
-    expect(await mockHyper.balanceOf(await bridge.getAddress())).to.equal(shares);
+    // Bridge holds assets locally (not deposited into Hyper vault via EVM)
+    expect(await asset.balanceOf(await bridge.getAddress())).to.equal(depositAmount);
     expect(await bridge.totalAssets(strategy.address)).to.equal(depositAmount);
   });
 
@@ -192,8 +193,8 @@ describe("HyperliquidBridgeAdapter", () => {
     await expect(bridge.connect(strategy).unstake(1n)).to.be.revertedWithCustomError(bridge, "InsufficientAssets");
   });
 
-  it("reverts unstake when strategy requests more than holdings or vault slippage hits", async () => {
-    const { bridge, strategy, asset, mockHyper } = await loadFixture(fixture);
+  it("reverts unstake when strategy requests more than holdings", async () => {
+    const { bridge, strategy, asset } = await loadFixture(fixture);
     await bridge.setAuthorizedStrategy(strategy.address, true);
 
     const depositAmount = toUSDC("50");
@@ -201,39 +202,34 @@ describe("HyperliquidBridgeAdapter", () => {
     await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
     await bridge.connect(strategy).stake(depositAmount);
 
+    // Requesting more than staked should revert
     await expect(bridge.connect(strategy).unstake(toUSDC("60"))).to.be.revertedWithCustomError(
       bridge,
       "InsufficientAssets"
     );
 
-    await mockHyper.setRedemptionSlippageBps(5_000);
-    await expect(bridge.connect(strategy).unstake(toUSDC("10"))).to.be.revertedWithCustomError(
-      bridge,
-      "InsufficientAssets"
-    );
+    // Requesting exactly what's staked should succeed
+    const before = await asset.balanceOf(strategy.address);
+    await bridge.connect(strategy).unstake(depositAmount);
+    const after = await asset.balanceOf(strategy.address);
+    expect(after - before).to.equal(depositAmount);
   });
 
-  it("reverts unstake when redemption amount would overflow uint64", async () => {
-    const { bridge, strategy, asset, mockHyper } = await loadFixture(fixture);
+  it("allows unstake at uint64 max boundary", async () => {
+    const { bridge, strategy, asset } = await loadFixture(fixture);
     await bridge.setAuthorizedStrategy(strategy.address, true);
 
+    // Stake at uint64 max boundary
     const depositAmount = UINT64_MAX;
     await asset.mint(strategy.address, depositAmount);
     await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
     await bridge.connect(strategy).stake(depositAmount);
 
-    await mockHyper.setSharePrice(toWad("2"));
-    const bridgeAddress = await bridge.getAddress();
-    const expectedAssets = await mockHyper.convertToAssets(await mockHyper.balanceOf(bridgeAddress));
-    const balance = await asset.balanceOf(await mockHyper.getAddress());
-    if (expectedAssets > balance) {
-      await asset.mint(await mockHyper.getAddress(), expectedAssets - balance);
-    }
-
-    await expect(bridge.connect(strategy).unstake(depositAmount)).to.be.revertedWithCustomError(
-      bridge,
-      "AmountTooLarge"
-    );
+    // Should be able to unstake the same amount (1:1 tracking)
+    const before = await asset.balanceOf(strategy.address);
+    await bridge.connect(strategy).unstake(depositAmount);
+    const after = await asset.balanceOf(strategy.address);
+    expect(after - before).to.equal(depositAmount);
   });
 });
 

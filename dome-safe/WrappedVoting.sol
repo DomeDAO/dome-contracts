@@ -59,6 +59,28 @@ contract DomeWrappedVoting is ERC20, ERC20Permit, ERC20Votes, ERC20Wrapper {
 		uint256 amount
 	) internal override(ERC20, ERC20Votes) {
 		super._afterTokenTransfer(from, to, amount);
+
+		// Update votes on transfers to keep governance in sync
+		if (amount > 0) {
+			address governanceAddress = IDomeProtocol(DOME_PROTOCOL)
+				.domeGovernance(DOME_ADDRESS());
+
+			// Update sender's votes (balance decreased)
+			if (from != address(0)) {
+				address delegateeFrom = delegates(from);
+				if (delegateeFrom != address(0)) {
+					IGovernance(governanceAddress).updateVotes(delegateeFrom);
+				}
+			}
+
+			// Update receiver's votes (balance increased)
+			if (to != address(0)) {
+				address delegateeTo = delegates(to);
+				if (delegateeTo != address(0)) {
+					IGovernance(governanceAddress).updateVotes(delegateeTo);
+				}
+			}
+		}
 	}
 
 	function _mint(

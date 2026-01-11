@@ -3,8 +3,8 @@ import { ethers } from "hardhat";
 import { loadFixture, time } from "@nomicfoundation/hardhat-network-helpers";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Governance, GovernanceBuffer, Vault, MockUSDC } from "../typechain-types";
-import { deployVaultFixture } from "./utils/fixtures";
+import { Governance, GovernanceBuffer, Vault, MockUSDC, Share } from "../typechain-types";
+import { deployVaultFixture, SHARE_SCALAR } from "./utils/fixtures";
 
 const toUSDC = (value: string) => ethers.parseUnits(value, 6);
 
@@ -18,7 +18,7 @@ async function depositShares(
   await vault.connect(user).deposit(amount, user.address);
 }
 
-describe("NGOGovernance", () => {
+describe("Governance", () => {
   async function fixture() {
     return deployVaultFixture();
   }
@@ -113,6 +113,12 @@ describe("NGOGovernance", () => {
     await governance.connect(bob).vote(projectB);
     await governance.connect(carol).vote(projectB);
     await waitFundingWindow(governance);
+
+    // Check votes using new real-time calculation
+    const votesA = await governance.getProjectVotes(projectA);
+    const votesB = await governance.getProjectVotes(projectB);
+    expect(votesA).to.equal(toUSDC("100") * SHARE_SCALAR); // Alice's shares
+    expect(votesB).to.equal(toUSDC("200") * SHARE_SCALAR); // Bob + Carol shares
 
     const bufferAmount = toUSDC("80");
     await asset.mint(await governanceBuffer.getAddress(), bufferAmount);
@@ -217,5 +223,117 @@ describe("NGOGovernance", () => {
     const funded = await governance.projects(projectB);
     expect(funded.funded).to.equal(true);
   });
-});
 
+  describe("real-time voting power", () => {
+    it("vote power increases when user stakes more", async () => {
+      const { governance, vault, asset, alice } = await loadFixture(fixture);
+      await depositShares(vault, asset, alice, toUSDC("100"));
+      const projectId = await submitProject(governance, alice, alice.address, toUSDC("10"), "Test");
+      await startVoting(governance);
+      await governance.connect(alice).vote(projectId);
+
+      // Initially 100 USDC worth of shares
+      let votes = await governance.getProjectVotes(projectId);
+      expect(votes).to.equal(toUSDC("100") * SHARE_SCALAR);
+
+      // Stake 50 more
+      await depositShares(vault, asset, alice, toUSDC("50"));
+      
+      // Now should have 150 USDC worth of voting power
+      votes = await governance.getProjectVotes(projectId);
+      expect(votes).to.equal(toUSDC("150") * SHARE_SCALAR);
+    });
+
+    it("vote power decreases when user redeems shares", async () => {
+      const { governance, vault, asset, share, alice } = await loadFixture(fixture);
+      await depositShares(vault, asset, alice, toUSDC("100"));
+      const projectId = await submitProject(governance, alice, alice.address, toUSDC("10"), "Test");
+      await startVoting(governance);
+      await governance.connect(alice).vote(projectId);
+
+      // Initially 100 USDC worth of shares
+      let votes = await governance.getProjectVotes(projectId);
+      expect(votes).to.equal(toUSDC("100") * SHARE_SCALAR);
+
+      // Redeem half
+      const sharesToRedeem = (await share.balanceOf(alice.address)) / 2n;
+      await vault.connect(alice).redeem(sharesToRedeem, alice.address);
+      
+      // Now should have ~50 USDC worth of voting power
+      votes = await governance.getProjectVotes(projectId);
+      expect(votes).to.be.closeTo(toUSDC("50") * SHARE_SCALAR, toUSDC("1") * SHARE_SCALAR);
+    });
+
+    it("vote power goes to zero when user transfers all shares", async () => {
+      const { governance, vault, asset, share, alice, bob } = await loadFixture(fixture);
+      await depositShares(vault, asset, alice, toUSDC("100"));
+      const projectId = await submitProject(governance, alice, alice.address, toUSDC("10"), "Test");
+      await startVoting(governance);
+      await governance.connect(alice).vote(projectId);
+
+      // Initially 100 USDC worth of shares
+      let votes = await governance.getProjectVotes(projectId);
+      expect(votes).to.equal(toUSDC("100") * SHARE_SCALAR);
+
+      // Transfer all shares to Bob
+      const aliceShares = await share.balanceOf(alice.address);
+      await share.connect(alice).transfer(bob.address, aliceShares);
+      
+      // Alice's vote is now worth 0
+      votes = await governance.getProjectVotes(projectId);
+      expect(votes).to.equal(0n);
+    });
+
+    it("prevents transfer voting attack", async () => {
+      const { governance, governanceBuffer, vault, asset, share, alice, bob } = await loadFixture(fixture);
+      await depositShares(vault, asset, alice, toUSDC("100"));
+      
+      const projectId = await submitProject(governance, alice, alice.address, toUSDC("10"), "Test");
+      await startVoting(governance);
+      
+      // Alice votes
+      await governance.connect(alice).vote(projectId);
+      let votes = await governance.getProjectVotes(projectId);
+      expect(votes).to.equal(toUSDC("100") * SHARE_SCALAR);
+
+      // Alice transfers to Bob
+      const aliceShares = await share.balanceOf(alice.address);
+      await share.connect(alice).transfer(bob.address, aliceShares);
+
+      // Bob votes
+      await governance.connect(bob).vote(projectId);
+      
+      // Total votes should still be 100 (not 200!)
+      // Alice has 0, Bob has 100
+      votes = await governance.getProjectVotes(projectId);
+      expect(votes).to.equal(toUSDC("100") * SHARE_SCALAR);
+    });
+
+    it("allows removing vote", async () => {
+      const { governance, vault, asset, alice } = await loadFixture(fixture);
+      await depositShares(vault, asset, alice, toUSDC("100"));
+      const projectId = await submitProject(governance, alice, alice.address, toUSDC("10"), "Test");
+      await startVoting(governance);
+      
+      await governance.connect(alice).vote(projectId);
+      expect(await governance.getProjectVotes(projectId)).to.equal(toUSDC("100") * SHARE_SCALAR);
+      expect(await governance.hasVoted(projectId, alice.address)).to.equal(true);
+
+      await governance.connect(alice).removeVote(projectId);
+      expect(await governance.getProjectVotes(projectId)).to.equal(0n);
+      expect(await governance.hasVoted(projectId, alice.address)).to.equal(false);
+    });
+
+    it("reverts removeVote if not voted", async () => {
+      const { governance, vault, asset, alice } = await loadFixture(fixture);
+      await depositShares(vault, asset, alice, toUSDC("100"));
+      const projectId = await submitProject(governance, alice, alice.address, toUSDC("10"), "Test");
+      await startVoting(governance);
+      
+      await expect(governance.connect(alice).removeVote(projectId)).to.be.revertedWithCustomError(
+        governance,
+        "NotVoted"
+      );
+    });
+  });
+});

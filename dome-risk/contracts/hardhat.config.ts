@@ -2,6 +2,7 @@ import path from "path";
 import dotenv from "dotenv";
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
+import "@nomicfoundation/hardhat-ledger";
 import { HYPER_EVM_NETWORKS, HyperEVMNetwork } from "./config/hyperevm";
 
 dotenv.config({ path: path.join(__dirname, ".env") });
@@ -25,6 +26,7 @@ const hyperevmRpcUrl = optionalEnv("HYPER_EVM_RPC") ?? networkDefaults.rpcUrl;
 const chainIdOverride = optionalEnv("HYPER_EVM_CHAIN_ID");
 const hyperevmChainId = chainIdOverride !== undefined ? Number(chainIdOverride) : networkDefaults.chainId;
 const hyperevmKey = optionalEnv("HYPER_EVM_PRIVATE_KEY");
+const ledgerAddress = optionalEnv("HYPER_EVM_LEDGER_ADDRESS");
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -38,7 +40,12 @@ const config: HardhatUserConfig = {
     hyperevm: {
       url: hyperevmRpcUrl,
       chainId: hyperevmChainId,
-      accounts: hyperevmKey ? [hyperevmKey] : [],
+      // Use Ledger if address provided, otherwise use private key
+      ...(ledgerAddress
+        ? { ledgerAccounts: [ledgerAddress] }
+        : hyperevmKey
+        ? { accounts: [hyperevmKey] }
+        : {}),
     },
   },
   paths: {

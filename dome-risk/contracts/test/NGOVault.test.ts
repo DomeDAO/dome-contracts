@@ -1,14 +1,14 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
+import { loadFixture, time } from "@nomicfoundation/hardhat-network-helpers";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  NGOGovernance,
-  NGOGovernanceBuffer,
-  NGOVault,
-  NGOShare,
+  Governance,
+  GovernanceBuffer,
+  Vault,
+  Share,
   MockStrategyVault,
   MockUSDC,
 } from "../typechain-types";
@@ -18,7 +18,7 @@ const toUSDC = (value: string) => ethers.parseUnits(value, 6);
 const toWad = (value: string) => ethers.parseUnits(value, 18);
 
 async function deposit(
-  vault: NGOVault,
+  vault: Vault,
   asset: MockUSDC,
   user: SignerWithAddress,
   amount: bigint,
@@ -40,14 +40,27 @@ async function syncStrategyHoldings(asset: MockUSDC, strategy: MockStrategyVault
   }
 }
 
-async function forceSetDonationBps(vault: NGOVault, newBps: number) {
-  const slotKey = ethers.toBeHex(2, 32);
+async function forceSetDonationBps(vault: Vault, newBps: number) {
+  // Storage layout (Solidity packs smaller types):
+  // Slot 0: Ownable._owner (20 bytes)
+  // Slot 1: ReentrancyGuard._status (32 bytes)
+  // Slot 2: governance (20 bytes)
+  // Slot 3: governanceBuffer (20 bytes) + donationBps (2 bytes) - PACKED!
+  // 
+  // In slot 3: [12 bytes padding][donationBps: 2 bytes][governanceBuffer: 20 bytes]
+  // donationBps is at bytes 20-21 (after the address)
+  const slotKey = ethers.toBeHex(3, 32);
   const currentSlot = await ethers.provider.getStorage(await vault.getAddress(), slotKey);
-  const governanceMask = (1n << 160n) - 1n;
   const currentValue = BigInt(currentSlot);
-  const governanceBits = currentValue & governanceMask;
+  
+  // governanceBuffer is in the lower 160 bits (20 bytes)
+  const addressMask = (1n << 160n) - 1n;
+  const governanceBufferBits = currentValue & addressMask;
+  
+  // donationBps goes in bits 160-175 (2 bytes = 16 bits after the address)
   const donationBits = BigInt(newBps) << 160n;
-  const newSlotValue = ethers.zeroPadValue(ethers.toBeHex(donationBits | governanceBits), 32);
+  
+  const newSlotValue = ethers.zeroPadValue(ethers.toBeHex(donationBits | governanceBufferBits), 32);
   await ethers.provider.send("hardhat_setStorageAt", [await vault.getAddress(), slotKey, newSlotValue]);
 }
 
@@ -101,6 +114,8 @@ describe("NGOVault", () => {
   });
 
   describe("withdrawal queue", () => {
+    const TWENTY_FOUR_HOURS = 24 * 60 * 60;
+
     it("blocks deposits for receivers with pending withdrawals", async () => {
       const { vault, asset, share, strategy, alice } = await loadFixture(fixture);
       await deposit(vault, asset, alice, toUSDC("25"));
@@ -113,7 +128,7 @@ describe("NGOVault", () => {
       );
     });
 
-    it("queues withdrawals when strategy is locked and processes later", async () => {
+    it("queues withdrawals when strategy is locked and processes after 24h", async () => {
       const { vault, asset, share, strategy, governanceBuffer, alice } = await loadFixture(fixture);
       await deposit(vault, asset, alice, toUSDC("50"));
       await strategy.setWithdrawalsEnabled(false);
@@ -126,7 +141,18 @@ describe("NGOVault", () => {
 
       await expect(vault.connect(alice).redeem(1n, alice.address)).to.be.revertedWith("Withdrawal pending");
 
+      // Enable strategy withdrawals but still within 24h window
       await strategy.setWithdrawalsEnabled(true);
+      
+      // Should fail - 24h delay not met
+      await expect(vault.processQueuedWithdrawal(alice.address)).to.be.revertedWith(
+        "Withdrawal delay not met"
+      );
+
+      // Advance time past 24h
+      await time.increase(TWENTY_FOUR_HOURS);
+
+      // Now it should work
       const processTx = await vault.processQueuedWithdrawal(alice.address);
       await expect(processTx)
         .to.emit(vault, "WithdrawalProcessed")
@@ -137,9 +163,200 @@ describe("NGOVault", () => {
       const cleared = await vault.queuedWithdrawals(alice.address);
       expect(cleared.shares).to.equal(0n);
     });
+
+    it("enforces 24h minimum wait time even when strategy is ready", async () => {
+      const { vault, asset, share, strategy, alice } = await loadFixture(fixture);
+      await deposit(vault, asset, alice, toUSDC("100"));
+      await strategy.setWithdrawalsEnabled(false);
+      const shares = await share.balanceOf(alice.address);
+      await vault.connect(alice).redeem(shares, alice.address);
+
+      // Strategy is immediately ready
+      await strategy.setWithdrawalsEnabled(true);
+
+      // But 24h hasn't passed
+      await expect(vault.processQueuedWithdrawal(alice.address)).to.be.revertedWith(
+        "Withdrawal delay not met"
+      );
+
+      // Advance 12 hours - still not enough
+      await time.increase(12 * 60 * 60);
+      await expect(vault.processQueuedWithdrawal(alice.address)).to.be.revertedWith(
+        "Withdrawal delay not met"
+      );
+
+      // Advance another 12 hours (total 24h)
+      await time.increase(12 * 60 * 60);
+      
+      // Now it works
+      await vault.processQueuedWithdrawal(alice.address);
+      const cleared = await vault.queuedWithdrawals(alice.address);
+      expect(cleared.shares).to.equal(0n);
+    });
+
+    it("requires both 24h delay AND strategy availability", async () => {
+      const { vault, asset, share, strategy, alice } = await loadFixture(fixture);
+      await deposit(vault, asset, alice, toUSDC("100"));
+      await strategy.setWithdrawalsEnabled(false);
+      const shares = await share.balanceOf(alice.address);
+      await vault.connect(alice).redeem(shares, alice.address);
+
+      // Advance 24h but strategy still locked
+      await time.increase(TWENTY_FOUR_HOURS);
+      await expect(vault.processQueuedWithdrawal(alice.address)).to.be.revertedWith(
+        "Withdrawal locked"
+      );
+
+      // Enable strategy - now both conditions met
+      await strategy.setWithdrawalsEnabled(true);
+      await vault.processQueuedWithdrawal(alice.address);
+      expect((await vault.queuedWithdrawals(alice.address)).shares).to.equal(0n);
+    });
+
+    it("returns correct withdrawalUnlockTime", async () => {
+      const { vault, asset, share, strategy, alice, bob } = await loadFixture(fixture);
+      
+      // No queued withdrawal - returns 0
+      expect(await vault.withdrawalUnlockTime(alice.address)).to.equal(0n);
+
+      await deposit(vault, asset, alice, toUSDC("100"));
+      await strategy.setWithdrawalsEnabled(false);
+      const shares = await share.balanceOf(alice.address);
+      
+      const txReceipt = await (await vault.connect(alice).redeem(shares, alice.address)).wait();
+      const block = await ethers.provider.getBlock(txReceipt!.blockNumber);
+      const queuedTimestamp = block!.timestamp;
+
+      const unlockTime = await vault.withdrawalUnlockTime(alice.address);
+      expect(unlockTime).to.equal(queuedTimestamp + TWENTY_FOUR_HOURS);
+
+      // Bob has no withdrawal queued
+      expect(await vault.withdrawalUnlockTime(bob.address)).to.equal(0n);
+    });
+
+    it("returns correct canProcessWithdrawal status", async () => {
+      const { vault, asset, share, strategy, alice, bob } = await loadFixture(fixture);
+      
+      // No queued withdrawal - returns false
+      expect(await vault.canProcessWithdrawal(alice.address)).to.equal(false);
+
+      await deposit(vault, asset, alice, toUSDC("100"));
+      await strategy.setWithdrawalsEnabled(false);
+      const shares = await share.balanceOf(alice.address);
+      await vault.connect(alice).redeem(shares, alice.address);
+
+      // Just queued - can't process yet
+      expect(await vault.canProcessWithdrawal(alice.address)).to.equal(false);
+
+      // Advance 12h - still can't process
+      await time.increase(12 * 60 * 60);
+      expect(await vault.canProcessWithdrawal(alice.address)).to.equal(false);
+
+      // Advance to exactly 24h
+      await time.increase(12 * 60 * 60);
+      expect(await vault.canProcessWithdrawal(alice.address)).to.equal(true);
+
+      // Bob still has no withdrawal
+      expect(await vault.canProcessWithdrawal(bob.address)).to.equal(false);
+    });
+
+    it("processes withdrawal at exactly 24h mark", async () => {
+      const { vault, asset, share, strategy, alice } = await loadFixture(fixture);
+      await deposit(vault, asset, alice, toUSDC("100"));
+      await strategy.setWithdrawalsEnabled(false);
+      const shares = await share.balanceOf(alice.address);
+      await vault.connect(alice).redeem(shares, alice.address);
+
+      await strategy.setWithdrawalsEnabled(true);
+
+      // Get the queued timestamp
+      const request = await vault.queuedWithdrawals(alice.address);
+      const unlockTime = request.timestamp + BigInt(TWENTY_FOUR_HOURS);
+
+      // Set time to just before unlock
+      await time.setNextBlockTimestamp(unlockTime - 1n);
+      await expect(vault.processQueuedWithdrawal(alice.address)).to.be.revertedWith(
+        "Withdrawal delay not met"
+      );
+
+      // Set time to exactly at unlock
+      await time.setNextBlockTimestamp(unlockTime);
+      await vault.processQueuedWithdrawal(alice.address);
+      expect((await vault.queuedWithdrawals(alice.address)).shares).to.equal(0n);
+    });
   });
 
-  describe("withdrawal queue", () => {
+  describe("withdrawal queue with profit/loss scenarios", () => {
+    const TWENTY_FOUR_HOURS = 24 * 60 * 60;
+
+    it("processes queued withdrawal with profit (positive performance)", async () => {
+      const { vault, asset, share, strategy, governanceBuffer, alice } = await loadFixture(fixture);
+      await deposit(vault, asset, alice, toUSDC("100"));
+      
+      // 50% profit
+      await strategy.setSharePrice(toWad("1.5"));
+      await syncStrategyHoldings(asset, strategy);
+      
+      await strategy.setWithdrawalsEnabled(false);
+      const shares = await share.balanceOf(alice.address);
+      await vault.connect(alice).redeem(shares, alice.address);
+
+      await strategy.setWithdrawalsEnabled(true);
+      await time.increase(TWENTY_FOUR_HOURS);
+
+      const aliceBalanceBefore = await asset.balanceOf(alice.address);
+      await vault.processQueuedWithdrawal(alice.address);
+      const aliceBalanceAfter = await asset.balanceOf(alice.address);
+
+      // Should receive ~$145 (150 - 10% of 50 profit = 150 - 5 = 145)
+      expect(aliceBalanceAfter - aliceBalanceBefore).to.equal(toUSDC("145"));
+      expect(await asset.balanceOf(await governanceBuffer.getAddress())).to.equal(toUSDC("5"));
+    });
+
+    it("processes queued withdrawal with loss (negative performance)", async () => {
+      const { vault, asset, share, strategy, governanceBuffer, alice } = await loadFixture(fixture);
+      await deposit(vault, asset, alice, toUSDC("100"));
+      
+      // 50% loss
+      await strategy.setSharePrice(toWad("0.5"));
+      await syncStrategyHoldings(asset, strategy);
+      
+      await strategy.setWithdrawalsEnabled(false);
+      const shares = await share.balanceOf(alice.address);
+      await vault.connect(alice).redeem(shares, alice.address);
+
+      await strategy.setWithdrawalsEnabled(true);
+      await time.increase(TWENTY_FOUR_HOURS);
+
+      const aliceBalanceBefore = await asset.balanceOf(alice.address);
+      await vault.processQueuedWithdrawal(alice.address);
+      const aliceBalanceAfter = await asset.balanceOf(alice.address);
+
+      // Should receive $50 (no donation on loss)
+      expect(aliceBalanceAfter - aliceBalanceBefore).to.equal(toUSDC("50"));
+      expect(await asset.balanceOf(await governanceBuffer.getAddress())).to.equal(0n);
+    });
+
+    it("processes queued withdrawal with break-even (no change)", async () => {
+      const { vault, asset, share, strategy, governanceBuffer, alice } = await loadFixture(fixture);
+      await deposit(vault, asset, alice, toUSDC("100"));
+      
+      // No price change (break-even)
+      await strategy.setWithdrawalsEnabled(false);
+      const shares = await share.balanceOf(alice.address);
+      await vault.connect(alice).redeem(shares, alice.address);
+
+      await strategy.setWithdrawalsEnabled(true);
+      await time.increase(TWENTY_FOUR_HOURS);
+
+      const aliceBalanceBefore = await asset.balanceOf(alice.address);
+      await vault.processQueuedWithdrawal(alice.address);
+      const aliceBalanceAfter = await asset.balanceOf(alice.address);
+
+      // Should receive $100 (no profit, no donation)
+      expect(aliceBalanceAfter - aliceBalanceBefore).to.equal(toUSDC("100"));
+      expect(await asset.balanceOf(await governanceBuffer.getAddress())).to.equal(0n);
+    });
   });
 
   describe("redeem", () => {
@@ -329,12 +546,13 @@ describe("NGOVault", () => {
     });
 
     it("allows owner to update governance target", async () => {
-      const { vault, governance, alice, asset, share } = await loadFixture(fixture);
-      const NGOGovernanceFactory = await ethers.getContractFactory("NGOGovernance");
-      const newGovernance = (await NGOGovernanceFactory.deploy(
+      const { vault, governance, governanceBuffer, alice, asset, share } = await loadFixture(fixture);
+      const GovernanceFactory = await ethers.getContractFactory("Governance");
+      const newGovernance = (await GovernanceFactory.deploy(
         await asset.getAddress(),
-        await share.getAddress()
-      )) as NGOGovernance;
+        await share.getAddress(),
+        await governanceBuffer.getAddress()
+      )) as Governance;
       await newGovernance.waitForDeployment();
 
       await expect(vault.setGovernance(await newGovernance.getAddress()))

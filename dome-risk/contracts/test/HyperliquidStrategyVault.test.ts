@@ -70,7 +70,7 @@ describe("HyperliquidStrategyVault", () => {
   });
 
   it("deposits assets via the bridge adapter", async () => {
-    const { strategy, bridge, mockHyper, asset, alice } = await loadFixture(fixture);
+    const { strategy, bridge, asset, alice } = await loadFixture(fixture);
     const amount = toUSDC("100");
     await asset.mint(alice.address, amount);
     await asset.connect(alice).approve(await strategy.getAddress(), amount);
@@ -79,8 +79,8 @@ describe("HyperliquidStrategyVault", () => {
     const strategyAddress = await strategy.getAddress();
     const sharesOnBridge = await bridge.shareBalance(strategyAddress);
     expect(sharesOnBridge).to.equal(amount);
-    expect(await mockHyper.balanceOf(await bridge.getAddress())).to.equal(sharesOnBridge);
-    expect(await asset.balanceOf(await mockHyper.getAddress())).to.equal(amount);
+    // Bridge holds assets directly (1:1 tracking, CoreWriter actions sent separately)
+    expect(await asset.balanceOf(await bridge.getAddress())).to.equal(amount);
   });
 
   it("reverts on zero withdraw amount", async () => {
@@ -97,7 +97,7 @@ describe("HyperliquidStrategyVault", () => {
   });
 
   it("reverts withdraw when requested assets exceed holdings", async () => {
-    const { strategy, bridge, mockHyper, asset, alice } = await loadFixture(fixture);
+    const { strategy, bridge, asset, alice } = await loadFixture(fixture);
     await asset.mint(alice.address, toUSDC("50"));
     await asset.connect(alice).approve(await strategy.getAddress(), toUSDC("50"));
     await strategy.connect(alice).deposit(toUSDC("50"));
@@ -107,49 +107,43 @@ describe("HyperliquidStrategyVault", () => {
       "InsufficientAssets"
     );
 
-    expect(await mockHyper.balanceOf(await bridge.getAddress())).to.be.gt(0n);
+    // Bridge holds assets directly (1:1 tracking)
+    expect(await asset.balanceOf(await bridge.getAddress())).to.be.gt(0n);
   });
 
-  it("withdraws assets using rounded-up share burns through the bridge", async () => {
-    const { strategy, bridge, mockHyper, asset, alice } = await loadFixture(fixture);
+  it("withdraws assets through the bridge", async () => {
+    const { strategy, bridge, asset, alice } = await loadFixture(fixture);
     const depositAmount = toUSDC("100");
     await asset.mint(alice.address, depositAmount);
     await asset.connect(alice).approve(await strategy.getAddress(), depositAmount);
     await strategy.connect(alice).deposit(depositAmount);
 
-    await mockHyper.setSharePrice(toWad("1.5"));
-    const bridgeAddress = await bridge.getAddress();
-    const expectedAssets = await mockHyper.convertToAssets(await mockHyper.balanceOf(bridgeAddress));
-    const currentBalance = await asset.balanceOf(await mockHyper.getAddress());
-    if (expectedAssets > currentBalance) {
-      await asset.mint(await mockHyper.getAddress(), expectedAssets - currentBalance);
-    }
-
-    const withdrawAmount = toUSDC("101");
+    // With 1:1 tracking, withdraw the deposited amount
+    const withdrawAmount = toUSDC("50");
     const aliceBefore = await asset.balanceOf(alice.address);
     const sharesBurned = await strategy.connect(alice).withdraw.staticCall(withdrawAmount);
-    expect(sharesBurned).to.be.gt(0n);
+    expect(sharesBurned).to.equal(withdrawAmount); // 1:1 shares
     await strategy.connect(alice).withdraw(withdrawAmount);
     const aliceAfter = await asset.balanceOf(alice.address);
-    expect(aliceAfter - aliceBefore).to.be.gte(withdrawAmount);
+    expect(aliceAfter - aliceBefore).to.equal(withdrawAmount);
   });
 
-  it("reverts when hyper vault under-delivers assets", async () => {
-    const { strategy, bridge, mockHyper, asset, alice } = await loadFixture(fixture);
+  it("reverts when withdrawing more than total deposited", async () => {
+    const { strategy, bridge, asset, alice } = await loadFixture(fixture);
     const amount = toUSDC("80");
     await asset.mint(alice.address, amount);
     await asset.connect(alice).approve(await strategy.getAddress(), amount);
     await strategy.connect(alice).deposit(amount);
 
-    await mockHyper.setRedemptionSlippageBps(5_000);
-    await expect(strategy.connect(alice).withdraw(toUSDC("10"))).to.be.revertedWithCustomError(
+    // With 1:1 tracking, can only withdraw what was deposited
+    await expect(strategy.connect(alice).withdraw(toUSDC("100"))).to.be.revertedWithCustomError(
       bridge,
       "InsufficientAssets"
     );
   });
 
   it("reports total assets across zero and non-zero balances", async () => {
-    const { strategy, bridge, mockHyper, asset, alice } = await loadFixture(fixture);
+    const { strategy, asset, alice } = await loadFixture(fixture);
     expect(await strategy.totalAssets()).to.equal(0n);
 
     const depositAmount = toUSDC("40");
@@ -157,15 +151,8 @@ describe("HyperliquidStrategyVault", () => {
     await asset.connect(alice).approve(await strategy.getAddress(), depositAmount);
     await strategy.connect(alice).deposit(depositAmount);
 
-    await mockHyper.setSharePrice(toWad("1.25"));
-    const bridgeAddress = await bridge.getAddress();
-    const expectedAssets = await mockHyper.convertToAssets(await mockHyper.balanceOf(bridgeAddress));
-    const balance = await asset.balanceOf(await mockHyper.getAddress());
-    if (expectedAssets > balance) {
-      await asset.mint(await mockHyper.getAddress(), expectedAssets - balance);
-    }
-
-    expect(await strategy.totalAssets()).to.equal(expectedAssets);
+    // With 1:1 tracking, totalAssets equals deposited amount
+    expect(await strategy.totalAssets()).to.equal(depositAmount);
   });
 });
 
