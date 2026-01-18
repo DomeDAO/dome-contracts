@@ -12,6 +12,7 @@ import {
 } from "../typechain-types";
 
 const toUSDC = (value: string) => ethers.parseUnits(value, 6);
+const NEW_CORE_ACCOUNT_FEE = toUSDC("1"); // 1 USDC fee on first deposit
 
 describe("HyperliquidStrategyVault", () => {
   async function fixture() {
@@ -79,15 +80,17 @@ describe("HyperliquidStrategyVault", () => {
   it("deposits assets via the bridge adapter", async () => {
     const { strategy, bridge, asset, alice, coreDepositWallet } = await loadFixture(fixture);
     const amount = toUSDC("100");
+    const effectiveAssets = amount - NEW_CORE_ACCOUNT_FEE; // First deposit has 1 USDC fee
     await asset.mint(alice.address, amount);
     await asset.connect(alice).approve(await strategy.getAddress(), amount);
     await strategy.connect(alice).deposit(amount);
 
     const strategyAddress = await strategy.getAddress();
     const sharesOnBridge = await bridge.shareBalance(strategyAddress);
-    expect(sharesOnBridge).to.equal(amount);
+    // Shares are based on effective assets (after fee)
+    expect(sharesOnBridge).to.equal(effectiveAssets);
     
-    // USDC goes to CoreDepositWallet (bridged to HyperCore)
+    // Full USDC goes to CoreDepositWallet (fee deducted by Hyperliquid during bridge)
     expect(await asset.balanceOf(await coreDepositWallet.getAddress())).to.equal(amount);
   });
 
@@ -158,11 +161,12 @@ describe("HyperliquidStrategyVault", () => {
     expect(await strategy.totalAssets()).to.equal(0n);
 
     const depositAmount = toUSDC("40");
+    const effectiveAssets = depositAmount - NEW_CORE_ACCOUNT_FEE; // First deposit has fee
     await asset.mint(alice.address, depositAmount);
     await asset.connect(alice).approve(await strategy.getAddress(), depositAmount);
     await strategy.connect(alice).deposit(depositAmount);
 
-    // With fallback tracking, totalAssets equals deposited amount
-    expect(await strategy.totalAssets()).to.equal(depositAmount);
+    // With fallback tracking, totalAssets equals effective amount (after fee)
+    expect(await strategy.totalAssets()).to.equal(effectiveAssets);
   });
 });
