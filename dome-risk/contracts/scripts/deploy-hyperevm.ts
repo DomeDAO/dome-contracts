@@ -24,6 +24,7 @@ type DeploymentConfig = {
   usdc: string;
   hyperliquidVault: string;
   coreWriter: string;
+  coreDepositWallet: string;
   donationBps: number;
   shareName: string;
   shareSymbol: string;
@@ -40,6 +41,7 @@ const HYPERLIQUID_DOC_REFERENCES = {
 // Source: Hyperliquid documentation (Hyperevm vaults section). Keep in sync with upstream docs.
 const DEFAULT_HYPERLIQUID_NATIVE_VAULT = "0x93ad52177d0795de8c67c92b1a72035293cb7aac";
 const DEFAULT_CORE_WRITER = "0x3333333333333333333333333333333333333333";
+const DEFAULT_CORE_DEPOSIT_WALLET = "0x6b9e773128f453f5c2c60935ee2de2cbc5390a24";
 
 function loadConfig(): DeploymentConfig {
   const envDonation = Number(process.env.HYPER_EVM_DONATION_BPS ?? "1000");
@@ -51,6 +53,7 @@ function loadConfig(): DeploymentConfig {
     usdc: optionalEnv("HYPER_EVM_USDC") ?? "",
     hyperliquidVault: optionalEnv("HYPER_EVM_HYPER_VAULT") ?? DEFAULT_HYPERLIQUID_NATIVE_VAULT,
     coreWriter: optionalEnv("HYPER_EVM_CORE_WRITER") ?? DEFAULT_CORE_WRITER,
+    coreDepositWallet: optionalEnv("HYPER_EVM_CORE_DEPOSIT_WALLET") ?? DEFAULT_CORE_DEPOSIT_WALLET,
     donationBps: envDonation,
     shareName: optionalEnv("HYPER_EVM_SHARE_NAME") ?? "NGO Hyper Share",
     shareSymbol: optionalEnv("HYPER_EVM_SHARE_SYMBOL") ?? "NGO-H",
@@ -82,6 +85,16 @@ function loadConfig(): DeploymentConfig {
       [
         "Missing Hyperliquid CoreWriter system contract address.",
         "Set HYPER_EVM_CORE_WRITER env var if a non-default address is required. Refer to:",
+        HYPERLIQUID_DOC_REFERENCES.hyperevmDocs,
+      ].join("\n")
+    );
+  }
+
+  if (!ethers.isAddress(config.coreDepositWallet)) {
+    throw new Error(
+      [
+        "Missing Hyperliquid CoreDepositWallet address.",
+        "Set HYPER_EVM_CORE_DEPOSIT_WALLET env var if a non-default address is required. Refer to:",
         HYPERLIQUID_DOC_REFERENCES.hyperevmDocs,
       ].join("\n")
     );
@@ -149,7 +162,12 @@ async function main() {
 
   // Pass deployer signer explicitly to contract factories to avoid eth_accounts RPC calls
   const BridgeFactory = await ethers.getContractFactory("HyperliquidBridgeAdapter", deployer);
-  const bridge = await BridgeFactory.deploy(config.usdc, config.hyperliquidVault, config.coreWriter);
+  const bridge = await BridgeFactory.deploy(
+    config.usdc,
+    config.hyperliquidVault,
+    config.coreWriter,
+    config.coreDepositWallet
+  );
   await bridge.waitForDeployment();
   console.log(`HyperliquidBridgeAdapter deployed at ${await bridge.getAddress()}`);
 
@@ -203,6 +221,7 @@ async function main() {
       usdc: config.usdc,
       hyperliquidVault: config.hyperliquidVault,
       coreWriter: config.coreWriter,
+      coreDepositWallet: config.coreDepositWallet,
       bridge: await bridge.getAddress(),
       strategy: await strategy.getAddress(),
       share: await share.getAddress(),
