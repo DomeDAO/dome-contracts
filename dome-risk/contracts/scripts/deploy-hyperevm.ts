@@ -125,7 +125,7 @@ async function main() {
   }
 
   const config = loadConfig();
-  
+
   // Get deployer - use Ledger address directly if configured (avoids eth_accounts RPC call
   // which HyperEVM doesn't support), otherwise fall back to getSigners() for private key mode
   const ledgerAddress = optionalEnv("HYPER_EVM_LEDGER_ADDRESS");
