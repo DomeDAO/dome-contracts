@@ -26,7 +26,7 @@ async function main() {
   // 1. HyperliquidBridgeAdapter
   await verify(
     contracts.bridge,
-    [contracts.usdc, contracts.hyperliquidVault, contracts.coreWriter],
+    [contracts.usdc, contracts.hyperliquidVault, contracts.coreWriter, contracts.coreDepositWallet],
     "HyperliquidBridgeAdapter"
   );
 

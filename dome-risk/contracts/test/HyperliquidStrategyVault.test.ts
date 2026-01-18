@@ -6,12 +6,12 @@ import {
   HyperliquidBridgeAdapter,
   HyperliquidStrategyVault,
   MockCoreWriter,
+  MockCoreDepositWallet,
   MockHyperliquidVault,
   MockUSDC,
 } from "../typechain-types";
 
 const toUSDC = (value: string) => ethers.parseUnits(value, 6);
-const toWad = (value: string) => ethers.parseUnits(value, 18);
 
 describe("HyperliquidStrategyVault", () => {
   async function fixture() {
@@ -31,11 +31,18 @@ describe("HyperliquidStrategyVault", () => {
     const coreWriter = (await MockCoreWriterFactory.deploy()) as MockCoreWriter;
     await coreWriter.waitForDeployment();
 
+    const MockCoreDepositWalletFactory = await ethers.getContractFactory("MockCoreDepositWallet");
+    const coreDepositWallet = (await MockCoreDepositWalletFactory.deploy(
+      await asset.getAddress()
+    )) as MockCoreDepositWallet;
+    await coreDepositWallet.waitForDeployment();
+
     const BridgeFactory = await ethers.getContractFactory("HyperliquidBridgeAdapter");
     const bridge = (await BridgeFactory.deploy(
       await asset.getAddress(),
       await mockHyper.getAddress(),
-      await coreWriter.getAddress()
+      await coreWriter.getAddress(),
+      await coreDepositWallet.getAddress()
     )) as HyperliquidBridgeAdapter;
     await bridge.waitForDeployment();
 
@@ -48,7 +55,7 @@ describe("HyperliquidStrategyVault", () => {
 
     await bridge.setAuthorizedStrategy(await strategy.getAddress(), true);
 
-    return { deployer, alice, asset, mockHyper, bridge, strategy };
+    return { deployer, alice, asset, mockHyper, bridge, strategy, coreDepositWallet };
   }
 
   it("reverts constructor when addresses are zero", async () => {
@@ -60,7 +67,7 @@ describe("HyperliquidStrategyVault", () => {
     ).to.be.revertedWithCustomError(StrategyFactory, "ZeroAddress");
 
     await expect(
-      BridgeFactory.deploy(ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress)
+      BridgeFactory.deploy(ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress)
     ).to.be.revertedWithCustomError(BridgeFactory, "ZeroAddress");
   });
 
@@ -70,7 +77,7 @@ describe("HyperliquidStrategyVault", () => {
   });
 
   it("deposits assets via the bridge adapter", async () => {
-    const { strategy, bridge, asset, alice } = await loadFixture(fixture);
+    const { strategy, bridge, asset, alice, coreDepositWallet } = await loadFixture(fixture);
     const amount = toUSDC("100");
     await asset.mint(alice.address, amount);
     await asset.connect(alice).approve(await strategy.getAddress(), amount);
@@ -79,8 +86,9 @@ describe("HyperliquidStrategyVault", () => {
     const strategyAddress = await strategy.getAddress();
     const sharesOnBridge = await bridge.shareBalance(strategyAddress);
     expect(sharesOnBridge).to.equal(amount);
-    // Bridge holds assets directly (1:1 tracking, CoreWriter actions sent separately)
-    expect(await asset.balanceOf(await bridge.getAddress())).to.equal(amount);
+    
+    // USDC goes to CoreDepositWallet (bridged to HyperCore)
+    expect(await asset.balanceOf(await coreDepositWallet.getAddress())).to.equal(amount);
   });
 
   it("reverts on zero withdraw amount", async () => {
@@ -92,23 +100,23 @@ describe("HyperliquidStrategyVault", () => {
     const { strategy, bridge, alice } = await loadFixture(fixture);
     await expect(strategy.connect(alice).withdraw(1n)).to.be.revertedWithCustomError(
       bridge,
-      "InsufficientAssets"
+      "InsufficientShares"
     );
   });
 
   it("reverts withdraw when requested assets exceed holdings", async () => {
-    const { strategy, bridge, asset, alice } = await loadFixture(fixture);
+    const { strategy, bridge, asset, alice, coreDepositWallet } = await loadFixture(fixture);
     await asset.mint(alice.address, toUSDC("50"));
     await asset.connect(alice).approve(await strategy.getAddress(), toUSDC("50"));
     await strategy.connect(alice).deposit(toUSDC("50"));
 
     await expect(strategy.connect(alice).withdraw(toUSDC("60"))).to.be.revertedWithCustomError(
       bridge,
-      "InsufficientAssets"
+      "InsufficientShares"
     );
 
-    // Bridge holds assets directly (1:1 tracking)
-    expect(await asset.balanceOf(await bridge.getAddress())).to.be.gt(0n);
+    // USDC is held by CoreDepositWallet
+    expect(await asset.balanceOf(await coreDepositWallet.getAddress())).to.be.gt(0n);
   });
 
   it("withdraws assets through the bridge", async () => {
@@ -118,11 +126,14 @@ describe("HyperliquidStrategyVault", () => {
     await asset.connect(alice).approve(await strategy.getAddress(), depositAmount);
     await strategy.connect(alice).deposit(depositAmount);
 
-    // With 1:1 tracking, withdraw the deposited amount
+    // Simulate USDC returning from HyperCore (mint to bridge)
+    await asset.mint(await bridge.getAddress(), depositAmount);
+
+    // With fallback tracking, withdraw the deposited amount
     const withdrawAmount = toUSDC("50");
     const aliceBefore = await asset.balanceOf(alice.address);
     const sharesBurned = await strategy.connect(alice).withdraw.staticCall(withdrawAmount);
-    expect(sharesBurned).to.equal(withdrawAmount); // 1:1 shares
+    expect(sharesBurned).to.equal(withdrawAmount); // 1:1 shares in test env
     await strategy.connect(alice).withdraw(withdrawAmount);
     const aliceAfter = await asset.balanceOf(alice.address);
     expect(aliceAfter - aliceBefore).to.equal(withdrawAmount);
@@ -135,10 +146,10 @@ describe("HyperliquidStrategyVault", () => {
     await asset.connect(alice).approve(await strategy.getAddress(), amount);
     await strategy.connect(alice).deposit(amount);
 
-    // With 1:1 tracking, can only withdraw what was deposited
+    // With fallback tracking, can only withdraw what was deposited
     await expect(strategy.connect(alice).withdraw(toUSDC("100"))).to.be.revertedWithCustomError(
       bridge,
-      "InsufficientAssets"
+      "InsufficientShares"
     );
   });
 
@@ -151,9 +162,7 @@ describe("HyperliquidStrategyVault", () => {
     await asset.connect(alice).approve(await strategy.getAddress(), depositAmount);
     await strategy.connect(alice).deposit(depositAmount);
 
-    // With 1:1 tracking, totalAssets equals deposited amount
+    // With fallback tracking, totalAssets equals deposited amount
     expect(await strategy.totalAssets()).to.equal(depositAmount);
   });
 });
-
-
