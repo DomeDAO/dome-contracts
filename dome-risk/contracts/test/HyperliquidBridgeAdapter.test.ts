@@ -71,6 +71,91 @@ describe("HyperliquidBridgeAdapter", () => {
     return { deployer, strategy, stranger, asset, mockHyper, bridge, coreWriter, coreDepositWallet };
   }
 
+  describe("Constructor", () => {
+    it("reverts when asset is zero address", async () => {
+      const [deployer] = await ethers.getSigners();
+      const MockCoreWriterFactory = await ethers.getContractFactory("MockCoreWriter");
+      const coreWriter = await MockCoreWriterFactory.deploy();
+      const MockCoreDepositWalletFactory = await ethers.getContractFactory("MockCoreDepositWallet");
+      const MockUSDCFactory = await ethers.getContractFactory("MockUSDC");
+      const asset = await MockUSDCFactory.deploy();
+      const coreDepositWallet = await MockCoreDepositWalletFactory.deploy(await asset.getAddress());
+
+      const BridgeFactory = await ethers.getContractFactory("HyperliquidBridgeAdapter");
+      await expect(
+        BridgeFactory.deploy(
+          ethers.ZeroAddress,
+          deployer.address,
+          await coreWriter.getAddress(),
+          await coreDepositWallet.getAddress()
+        )
+      ).to.be.revertedWithCustomError(BridgeFactory, "ZeroAddress");
+    });
+
+    it("reverts when hyperVault is zero address", async () => {
+      const MockCoreWriterFactory = await ethers.getContractFactory("MockCoreWriter");
+      const coreWriter = await MockCoreWriterFactory.deploy();
+      const MockCoreDepositWalletFactory = await ethers.getContractFactory("MockCoreDepositWallet");
+      const MockUSDCFactory = await ethers.getContractFactory("MockUSDC");
+      const asset = await MockUSDCFactory.deploy();
+      const coreDepositWallet = await MockCoreDepositWalletFactory.deploy(await asset.getAddress());
+
+      const BridgeFactory = await ethers.getContractFactory("HyperliquidBridgeAdapter");
+      await expect(
+        BridgeFactory.deploy(
+          await asset.getAddress(),
+          ethers.ZeroAddress,
+          await coreWriter.getAddress(),
+          await coreDepositWallet.getAddress()
+        )
+      ).to.be.revertedWithCustomError(BridgeFactory, "ZeroAddress");
+    });
+
+    it("reverts when coreWriter is zero address", async () => {
+      const [deployer] = await ethers.getSigners();
+      const MockCoreDepositWalletFactory = await ethers.getContractFactory("MockCoreDepositWallet");
+      const MockUSDCFactory = await ethers.getContractFactory("MockUSDC");
+      const asset = await MockUSDCFactory.deploy();
+      const coreDepositWallet = await MockCoreDepositWalletFactory.deploy(await asset.getAddress());
+
+      const BridgeFactory = await ethers.getContractFactory("HyperliquidBridgeAdapter");
+      await expect(
+        BridgeFactory.deploy(
+          await asset.getAddress(),
+          deployer.address,
+          ethers.ZeroAddress,
+          await coreDepositWallet.getAddress()
+        )
+      ).to.be.revertedWithCustomError(BridgeFactory, "ZeroAddress");
+    });
+
+    it("reverts when coreDepositWallet is zero address", async () => {
+      const [deployer] = await ethers.getSigners();
+      const MockCoreWriterFactory = await ethers.getContractFactory("MockCoreWriter");
+      const coreWriter = await MockCoreWriterFactory.deploy();
+      const MockUSDCFactory = await ethers.getContractFactory("MockUSDC");
+      const asset = await MockUSDCFactory.deploy();
+
+      const BridgeFactory = await ethers.getContractFactory("HyperliquidBridgeAdapter");
+      await expect(
+        BridgeFactory.deploy(
+          await asset.getAddress(),
+          deployer.address,
+          await coreWriter.getAddress(),
+          ethers.ZeroAddress
+        )
+      ).to.be.revertedWithCustomError(BridgeFactory, "ZeroAddress");
+    });
+
+    it("sets immutable variables correctly", async () => {
+      const { bridge, asset, mockHyper, coreWriter, coreDepositWallet } = await loadFixture(fixture);
+      expect(await bridge.asset()).to.equal(await asset.getAddress());
+      expect(await bridge.hyperVault()).to.equal(await mockHyper.getAddress());
+      expect(await bridge.coreWriter()).to.equal(await coreWriter.getAddress());
+      expect(await bridge.coreDepositWallet()).to.equal(await coreDepositWallet.getAddress());
+    });
+  });
+
   describe("Authorization", () => {
     it("allows the owner to authorize strategies", async () => {
       const { bridge, strategy, stranger } = await loadFixture(fixture);
@@ -93,6 +178,31 @@ describe("HyperliquidBridgeAdapter", () => {
     it("reverts stake calls from unauthorized accounts", async () => {
       const { bridge, stranger } = await loadFixture(fixture);
       await expect(bridge.connect(stranger).stake(1n)).to.be.revertedWithCustomError(bridge, "NotAuthorized");
+    });
+
+    it("reverts unstake calls from unauthorized accounts", async () => {
+      const { bridge, stranger } = await loadFixture(fixture);
+      await expect(bridge.connect(stranger)["unstake(uint256)"](1n)).to.be.revertedWithCustomError(bridge, "NotAuthorized");
+    });
+
+    it("emits StrategyAuthorizationUpdated event", async () => {
+      const { bridge, strategy } = await loadFixture(fixture);
+      await expect(bridge.setAuthorizedStrategy(strategy.address, true))
+        .to.emit(bridge, "StrategyAuthorizationUpdated")
+        .withArgs(strategy.address, true);
+
+      await expect(bridge.setAuthorizedStrategy(strategy.address, false))
+        .to.emit(bridge, "StrategyAuthorizationUpdated")
+        .withArgs(strategy.address, false);
+    });
+
+    it("allows deauthorizing a strategy", async () => {
+      const { bridge, strategy } = await loadFixture(fixture);
+      await bridge.setAuthorizedStrategy(strategy.address, true);
+      expect(await bridge.authorizedStrategy(strategy.address)).to.equal(true);
+
+      await bridge.setAuthorizedStrategy(strategy.address, false);
+      expect(await bridge.authorizedStrategy(strategy.address)).to.equal(false);
     });
   });
 
@@ -345,6 +455,41 @@ describe("HyperliquidBridgeAdapter", () => {
       expect(await bridge.shareBalance(stranger.address)).to.equal(secondDeposit);
       expect(await bridge.totalShares()).to.equal(firstEffective + secondDeposit);
     });
+
+    it("emits Staked event with correct values", async () => {
+      const { bridge, strategy, asset } = await loadFixture(fixture);
+      await bridge.setAuthorizedStrategy(strategy.address, true);
+
+      const depositAmount = toUSDC("10");
+      const effectiveAssets = depositAmount - NEW_CORE_ACCOUNT_FEE;
+      await asset.mint(strategy.address, depositAmount);
+      await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
+
+      await expect(bridge.connect(strategy).stake(depositAmount))
+        .to.emit(bridge, "Staked")
+        .withArgs(strategy.address, effectiveAssets, effectiveAssets);
+    });
+
+    it("emits Staked event on subsequent deposits", async () => {
+      const { bridge, strategy, asset } = await loadFixture(fixture);
+      await bridge.setAuthorizedStrategy(strategy.address, true);
+
+      // First deposit + activation
+      const firstDeposit = toUSDC("10");
+      await asset.mint(strategy.address, firstDeposit);
+      await asset.connect(strategy).approve(await bridge.getAddress(), firstDeposit);
+      await bridge.connect(strategy).stake(firstDeposit);
+      await bridge.completeActivation();
+
+      // Second deposit
+      const secondDeposit = toUSDC("20");
+      await asset.mint(strategy.address, secondDeposit);
+      await asset.connect(strategy).approve(await bridge.getAddress(), secondDeposit);
+
+      await expect(bridge.connect(strategy).stake(secondDeposit))
+        .to.emit(bridge, "Staked")
+        .withArgs(strategy.address, secondDeposit, secondDeposit);
+    });
   });
 
   describe("Activation", () => {
@@ -535,6 +680,74 @@ describe("HyperliquidBridgeAdapter", () => {
       const after = await asset.balanceOf(strategy.address);
       expect(after - before).to.equal(effectiveAssets);
     });
+
+    it("does not transfer when contract balance is insufficient", async () => {
+      const { bridge, strategy, asset, coreWriter, mockHyper } = await loadFixture(fixture);
+      await bridge.setAuthorizedStrategy(strategy.address, true);
+
+      const depositAmount = toUSDC("50");
+      const effectiveAssets = depositAmount - NEW_CORE_ACCOUNT_FEE;
+      await asset.mint(strategy.address, depositAmount);
+      await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
+      await bridge.connect(strategy).stake(depositAmount);
+      await bridge.completeActivation();
+
+      // Do NOT mint USDC to bridge (simulate funds still in HyperCore)
+      const withdrawAmount = toUSDC("20");
+      const before = await asset.balanceOf(strategy.address);
+      await bridge.connect(strategy)["unstake(uint256)"](withdrawAmount);
+      const after = await asset.balanceOf(strategy.address);
+
+      // No transfer should happen
+      expect(after - before).to.equal(0n);
+      
+      // But vault transfer action should still be sent
+      const action = await coreWriter.lastAction();
+      expect(action).to.equal(
+        encodeVaultTransferAction(await mockHyper.getAddress(), false, withdrawAmount)
+      );
+    });
+
+    it("emits Unstaked event with correct values", async () => {
+      const { bridge, strategy, asset } = await loadFixture(fixture);
+      await bridge.setAuthorizedStrategy(strategy.address, true);
+
+      const depositAmount = toUSDC("50");
+      const effectiveAssets = depositAmount - NEW_CORE_ACCOUNT_FEE;
+      await asset.mint(strategy.address, depositAmount);
+      await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
+      await bridge.connect(strategy).stake(depositAmount);
+      await bridge.completeActivation();
+
+      await asset.mint(await bridge.getAddress(), effectiveAssets);
+
+      const withdrawAmount = toUSDC("20");
+      await expect(bridge.connect(strategy)["unstake(uint256)"](withdrawAmount))
+        .to.emit(bridge, "Unstaked")
+        .withArgs(strategy.address, withdrawAmount, withdrawAmount);
+    });
+
+    it("handles totalDepositedFallback underflow gracefully", async () => {
+      const { bridge, strategy, asset } = await loadFixture(fixture);
+      await bridge.setAuthorizedStrategy(strategy.address, true);
+
+      const depositAmount = toUSDC("10");
+      const effectiveAssets = depositAmount - NEW_CORE_ACCOUNT_FEE;
+      await asset.mint(strategy.address, depositAmount);
+      await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
+      await bridge.connect(strategy).stake(depositAmount);
+      await bridge.completeActivation();
+
+      // Simulate USDC in bridge
+      await asset.mint(await bridge.getAddress(), effectiveAssets);
+
+      // Unstake the full effective amount - this should set totalDepositedFallback to 0
+      await bridge.connect(strategy)["unstake(uint256)"](effectiveAssets);
+      
+      // getTotalEquity should return 0
+      expect(await bridge.getTotalEquity()).to.equal(0n);
+      expect(await bridge.totalShares()).to.equal(0n);
+    });
   });
 
   describe("View Functions", () => {
@@ -601,6 +814,49 @@ describe("HyperliquidBridgeAdapter", () => {
       await bridge.completeActivation();
       expect(await bridge.isHyperCoreActivated()).to.equal(true);
       expect(await bridge.pendingVaultDeposit()).to.equal(0n);
+    });
+
+    it("returns zero shareBalance for address with no shares", async () => {
+      const { bridge, stranger } = await loadFixture(fixture);
+      expect(await bridge.shareBalance(stranger.address)).to.equal(0n);
+    });
+
+    it("returns zero totalAssets for strategy with no shares", async () => {
+      const { bridge, strategy, stranger, asset } = await loadFixture(fixture);
+      await bridge.setAuthorizedStrategy(strategy.address, true);
+
+      // Strategy deposits
+      const depositAmount = toUSDC("100");
+      await asset.mint(strategy.address, depositAmount);
+      await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
+      await bridge.connect(strategy).stake(depositAmount);
+      await bridge.completeActivation();
+
+      // Stranger has no shares
+      expect(await bridge.totalAssets(stranger.address)).to.equal(0n);
+    });
+
+    it("returns correct constants", async () => {
+      const { bridge } = await loadFixture(fixture);
+      expect(await bridge.NEW_CORE_ACCOUNT_FEE()).to.equal(NEW_CORE_ACCOUNT_FEE);
+      expect(await bridge.MIN_VAULT_DEPOSIT()).to.equal(MIN_VAULT_DEPOSIT);
+      expect(await bridge.MIN_FIRST_DEPOSIT()).to.equal(MIN_FIRST_DEPOSIT);
+      expect(await bridge.VAULT_EQUITY_PRECOMPILE()).to.equal("0x0000000000000000000000000000000000000802");
+    });
+
+    it("returns totalShares correctly", async () => {
+      const { bridge, strategy, asset } = await loadFixture(fixture);
+      await bridge.setAuthorizedStrategy(strategy.address, true);
+
+      expect(await bridge.totalShares()).to.equal(0n);
+
+      const depositAmount = toUSDC("100");
+      const effectiveAssets = depositAmount - NEW_CORE_ACCOUNT_FEE;
+      await asset.mint(strategy.address, depositAmount);
+      await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
+      await bridge.connect(strategy).stake(depositAmount);
+
+      expect(await bridge.totalShares()).to.equal(effectiveAssets);
     });
   });
 });
