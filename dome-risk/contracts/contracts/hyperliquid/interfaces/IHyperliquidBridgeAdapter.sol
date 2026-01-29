@@ -6,9 +6,15 @@ interface IHyperliquidBridgeAdapter {
 
     function unstake(uint256 assets) external returns (uint256 sharesBurned, uint256 assetsReturned);
 
+    function completeActivation() external;
+
     function shareBalance(address strategy) external view returns (uint256);
 
     function totalAssets(address strategy) external view returns (uint256);
+
+    function isHyperCoreActivated() external view returns (bool);
+
+    function pendingVaultDeposit() external view returns (uint256);
 }
 
 

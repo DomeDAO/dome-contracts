@@ -20,14 +20,19 @@ const MIN_VAULT_DEPOSIT = toUSDC("5"); // 5 USDC minimum for vault deposits
 const MIN_FIRST_DEPOSIT = toUSDC("6"); // 6 USDC minimum for first deposit (5 + 1 fee)
 
 const encodeVaultTransferAction = (vault: string, isDeposit: boolean, amount: bigint) => {
-  // Hyperliquid expects raw bytes: version (1) + actionId (3) + vault (20) + isDeposit (1) + usd (8)
+  // Hyperliquid expects: version (1) + actionId (3) + ABI-encoded(vault, isDeposit, usd)
+  // Per https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm/interacting-with-hypercore
+  // Vault transfer usd parameter uses 6 decimals (perp format, not wei)
   const versionByte = ethers.toBeHex(ACTION_VERSION, 1);
   const actionIdBytes = ethers.toBeHex(VAULT_TRANSFER_ACTION_ID, 3);
-  const vaultBytes = vault.toLowerCase(); // address is 20 bytes
-  const isDepositByte = isDeposit ? "0x01" : "0x00";
-  const amountBytes = ethers.toBeHex(amount, 8); // uint64 is 8 bytes
   
-  return ethers.concat([versionByte, actionIdBytes, vaultBytes, isDepositByte, amountBytes]);
+  // ABI encode the action data (each value padded to 32 bytes)
+  const actionData = ethers.AbiCoder.defaultAbiCoder().encode(
+    ["address", "bool", "uint64"],
+    [vault, isDeposit, amount]
+  );
+  
+  return ethers.concat([versionByte, actionIdBytes, actionData]);
 };
 
 describe("HyperliquidBridgeAdapter", () => {
@@ -132,23 +137,74 @@ describe("HyperliquidBridgeAdapter", () => {
       expect(deposit.destination).to.equal(DESTINATION_PERPS);
     });
 
-    it("sends a CoreWriter vault transfer action on stake", async () => {
-      const { bridge, strategy, asset, mockHyper, coreWriter } = await loadFixture(fixture);
+    it("first stake does NOT send vault transfer (needs activation)", async () => {
+      const { bridge, strategy, asset, coreWriter } = await loadFixture(fixture);
       await bridge.setAuthorizedStrategy(strategy.address, true);
 
       const depositAmount = toUSDC("42"); // Above 6 USDC minimum
-      const effectiveAssets = depositAmount - NEW_CORE_ACCOUNT_FEE; // First deposit has 1 USDC fee
+      const effectiveAssets = depositAmount - NEW_CORE_ACCOUNT_FEE;
       await asset.mint(strategy.address, depositAmount);
       await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
 
       await bridge.connect(strategy).stake(depositAmount);
 
-      // CoreWriter action should use effective assets (after fee)
+      // First stake should NOT send vault transfer (account not yet activated)
+      expect(await coreWriter.actionCount()).to.equal(0n);
+      
+      // Should have pending deposit
+      expect(await bridge.pendingVaultDeposit()).to.equal(effectiveAssets);
+      expect(await bridge.isHyperCoreActivated()).to.equal(false);
+    });
+
+    it("sends vault transfer on completeActivation", async () => {
+      const { bridge, strategy, asset, mockHyper, coreWriter } = await loadFixture(fixture);
+      await bridge.setAuthorizedStrategy(strategy.address, true);
+
+      const depositAmount = toUSDC("42");
+      const effectiveAssets = depositAmount - NEW_CORE_ACCOUNT_FEE;
+      await asset.mint(strategy.address, depositAmount);
+      await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
+
+      await bridge.connect(strategy).stake(depositAmount);
+      
+      // Complete activation
+      await bridge.completeActivation();
+
+      // Now CoreWriter should have the action
       const action = await coreWriter.lastAction();
       expect(action).to.equal(
         encodeVaultTransferAction(await mockHyper.getAddress(), true, effectiveAssets)
       );
       expect(await coreWriter.actionCount()).to.equal(1n);
+      
+      // Pending should be cleared
+      expect(await bridge.pendingVaultDeposit()).to.equal(0n);
+      expect(await bridge.isHyperCoreActivated()).to.equal(true);
+    });
+
+    it("subsequent stakes send vault transfer immediately (after activation)", async () => {
+      const { bridge, strategy, asset, mockHyper, coreWriter } = await loadFixture(fixture);
+      await bridge.setAuthorizedStrategy(strategy.address, true);
+
+      // First stake + activation
+      const firstDeposit = toUSDC("10");
+      await asset.mint(strategy.address, firstDeposit);
+      await asset.connect(strategy).approve(await bridge.getAddress(), firstDeposit);
+      await bridge.connect(strategy).stake(firstDeposit);
+      await bridge.completeActivation();
+
+      // Second stake
+      const secondDeposit = toUSDC("20");
+      await asset.mint(strategy.address, secondDeposit);
+      await asset.connect(strategy).approve(await bridge.getAddress(), secondDeposit);
+      await bridge.connect(strategy).stake(secondDeposit);
+
+      // Should have sent vault transfer immediately
+      expect(await coreWriter.actionCount()).to.equal(2n);
+      const action = await coreWriter.lastAction();
+      expect(action).to.equal(
+        encodeVaultTransferAction(await mockHyper.getAddress(), true, secondDeposit)
+      );
     });
 
     it("reverts stake calls with zero assets", async () => {
@@ -170,7 +226,7 @@ describe("HyperliquidBridgeAdapter", () => {
         .withArgs(belowMinimum, MIN_FIRST_DEPOSIT, true);
     });
 
-    it("reverts subsequent deposit below 5 USDC minimum", async () => {
+    it("reverts subsequent deposit if not activated", async () => {
       const { bridge, strategy, asset } = await loadFixture(fixture);
       await bridge.setAuthorizedStrategy(strategy.address, true);
 
@@ -179,6 +235,26 @@ describe("HyperliquidBridgeAdapter", () => {
       await asset.mint(strategy.address, firstDeposit);
       await asset.connect(strategy).approve(await bridge.getAddress(), firstDeposit);
       await bridge.connect(strategy).stake(firstDeposit);
+
+      // Don't call completeActivation - try second deposit
+      const secondDeposit = toUSDC("10");
+      await asset.mint(strategy.address, secondDeposit);
+      await asset.connect(strategy).approve(await bridge.getAddress(), secondDeposit);
+
+      await expect(bridge.connect(strategy).stake(secondDeposit))
+        .to.be.revertedWithCustomError(bridge, "NotActivated");
+    });
+
+    it("reverts subsequent deposit below 5 USDC minimum", async () => {
+      const { bridge, strategy, asset } = await loadFixture(fixture);
+      await bridge.setAuthorizedStrategy(strategy.address, true);
+
+      // First deposit + activation
+      const firstDeposit = toUSDC("10");
+      await asset.mint(strategy.address, firstDeposit);
+      await asset.connect(strategy).approve(await bridge.getAddress(), firstDeposit);
+      await bridge.connect(strategy).stake(firstDeposit);
+      await bridge.completeActivation();
 
       // Second deposit below minimum
       const belowMinimum = toUSDC("4"); // 4 USDC, but needs 5
@@ -207,11 +283,12 @@ describe("HyperliquidBridgeAdapter", () => {
       const { bridge, strategy, asset } = await loadFixture(fixture);
       await bridge.setAuthorizedStrategy(strategy.address, true);
 
-      // First deposit
+      // First deposit + activation
       const firstDeposit = toUSDC("10");
       await asset.mint(strategy.address, firstDeposit);
       await asset.connect(strategy).approve(await bridge.getAddress(), firstDeposit);
       await bridge.connect(strategy).stake(firstDeposit);
+      await bridge.completeActivation();
 
       const firstShares = firstDeposit - NEW_CORE_ACCOUNT_FEE;
 
@@ -228,13 +305,14 @@ describe("HyperliquidBridgeAdapter", () => {
       const { bridge, strategy, asset } = await loadFixture(fixture);
       await bridge.setAuthorizedStrategy(strategy.address, true);
 
-      // First make a small deposit to set hasDeposited = true (pay the fee)
+      // First make a small deposit + activation
       const initialDeposit = toUSDC("10");
       await asset.mint(strategy.address, initialDeposit);
       await asset.connect(strategy).approve(await bridge.getAddress(), initialDeposit);
       await bridge.connect(strategy).stake(initialDeposit);
+      await bridge.completeActivation();
 
-      // Now try to deposit more than uint64 max
+      // Amount that exceeds uint64
       const tooLarge = UINT64_MAX + 1n;
       await asset.mint(strategy.address, tooLarge);
       await asset.connect(strategy).approve(await bridge.getAddress(), tooLarge);
@@ -253,6 +331,7 @@ describe("HyperliquidBridgeAdapter", () => {
       await asset.mint(strategy.address, firstDeposit);
       await asset.connect(strategy).approve(await bridge.getAddress(), firstDeposit);
       await bridge.connect(strategy).stake(firstDeposit);
+      await bridge.completeActivation();
 
       expect(await bridge.shareBalance(strategy.address)).to.equal(firstEffective);
       expect(await bridge.totalShares()).to.equal(firstEffective);
@@ -268,6 +347,72 @@ describe("HyperliquidBridgeAdapter", () => {
     });
   });
 
+  describe("Activation", () => {
+    it("reverts completeActivation when no pending deposit", async () => {
+      const { bridge } = await loadFixture(fixture);
+      await expect(bridge.completeActivation())
+        .to.be.revertedWithCustomError(bridge, "NoPendingDeposit");
+    });
+
+    it("reverts completeActivation when already activated", async () => {
+      const { bridge, strategy, asset } = await loadFixture(fixture);
+      await bridge.setAuthorizedStrategy(strategy.address, true);
+
+      const depositAmount = toUSDC("10");
+      await asset.mint(strategy.address, depositAmount);
+      await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
+      await bridge.connect(strategy).stake(depositAmount);
+      await bridge.completeActivation();
+
+      // Try to activate again
+      await expect(bridge.completeActivation())
+        .to.be.revertedWithCustomError(bridge, "NoPendingDeposit");
+    });
+
+    it("allows anyone to call completeActivation", async () => {
+      const { bridge, strategy, stranger, asset } = await loadFixture(fixture);
+      await bridge.setAuthorizedStrategy(strategy.address, true);
+
+      const depositAmount = toUSDC("10");
+      await asset.mint(strategy.address, depositAmount);
+      await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
+      await bridge.connect(strategy).stake(depositAmount);
+
+      // Stranger can complete activation
+      await bridge.connect(stranger).completeActivation();
+      expect(await bridge.isHyperCoreActivated()).to.equal(true);
+    });
+
+    it("emits HyperCoreActivated on first stake", async () => {
+      const { bridge, strategy, asset } = await loadFixture(fixture);
+      await bridge.setAuthorizedStrategy(strategy.address, true);
+
+      const depositAmount = toUSDC("10");
+      const effectiveAssets = depositAmount - NEW_CORE_ACCOUNT_FEE;
+      await asset.mint(strategy.address, depositAmount);
+      await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
+
+      await expect(bridge.connect(strategy).stake(depositAmount))
+        .to.emit(bridge, "HyperCoreActivated")
+        .withArgs(effectiveAssets);
+    });
+
+    it("emits PendingVaultDepositCompleted on completeActivation", async () => {
+      const { bridge, strategy, asset } = await loadFixture(fixture);
+      await bridge.setAuthorizedStrategy(strategy.address, true);
+
+      const depositAmount = toUSDC("10");
+      const effectiveAssets = depositAmount - NEW_CORE_ACCOUNT_FEE;
+      await asset.mint(strategy.address, depositAmount);
+      await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
+      await bridge.connect(strategy).stake(depositAmount);
+
+      await expect(bridge.completeActivation())
+        .to.emit(bridge, "PendingVaultDepositCompleted")
+        .withArgs(effectiveAssets);
+    });
+  });
+
   describe("Unstaking", () => {
     it("unstakes assets and returns funds to strategy", async () => {
       const { bridge, strategy, asset, coreDepositWallet } = await loadFixture(fixture);
@@ -277,6 +422,7 @@ describe("HyperliquidBridgeAdapter", () => {
       await asset.mint(strategy.address, depositAmount);
       await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
       await bridge.connect(strategy).stake(depositAmount);
+      await bridge.completeActivation();
 
       // Simulate USDC returning from HyperCore (in real scenario, bridge would receive it)
       // For test, mint to bridge since CoreDepositWallet holds the bridged funds
@@ -298,6 +444,7 @@ describe("HyperliquidBridgeAdapter", () => {
       await asset.mint(strategy.address, depositAmount);
       await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
       await bridge.connect(strategy).stake(depositAmount);
+      await bridge.completeActivation();
 
       // Simulate USDC returning from HyperCore
       await asset.mint(await bridge.getAddress(), depositAmount);
@@ -318,6 +465,7 @@ describe("HyperliquidBridgeAdapter", () => {
       await asset.mint(strategy.address, toUSDC("10"));
       await asset.connect(strategy).approve(await bridge.getAddress(), toUSDC("10"));
       await bridge.connect(strategy).stake(toUSDC("10"));
+      await bridge.completeActivation();
       await expect(bridge.connect(strategy)["unstake(uint256)"](0n)).to.be.revertedWithCustomError(bridge, "ZeroAssets");
     });
 
@@ -335,6 +483,7 @@ describe("HyperliquidBridgeAdapter", () => {
       await asset.mint(strategy.address, depositAmount);
       await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
       await bridge.connect(strategy).stake(depositAmount);
+      await bridge.completeActivation();
 
       // Requesting more than staked should revert
       await expect(bridge.connect(strategy)["unstake(uint256)"](toUSDC("60"))).to.be.revertedWithCustomError(
@@ -352,6 +501,7 @@ describe("HyperliquidBridgeAdapter", () => {
       await asset.mint(strategy.address, depositAmount);
       await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
       await bridge.connect(strategy).stake(depositAmount);
+      await bridge.completeActivation();
 
       // Simulate USDC returning from HyperCore (only effective amount available)
       await asset.mint(await bridge.getAddress(), effectiveAssets);
@@ -374,6 +524,7 @@ describe("HyperliquidBridgeAdapter", () => {
       await asset.mint(strategy.address, depositAmount);
       await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
       await bridge.connect(strategy).stake(depositAmount);
+      await bridge.completeActivation();
 
       // Simulate USDC returning from HyperCore (only effective amount)
       await asset.mint(await bridge.getAddress(), effectiveAssets);
@@ -398,6 +549,7 @@ describe("HyperliquidBridgeAdapter", () => {
       await asset.mint(strategy.address, depositAmount);
       await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
       await bridge.connect(strategy).stake(depositAmount);
+      await bridge.completeActivation();
 
       // totalAssets reflects effective amount (after fee)
       expect(await bridge.totalAssets(strategy.address)).to.equal(effectiveAssets);
@@ -414,6 +566,7 @@ describe("HyperliquidBridgeAdapter", () => {
       await asset.mint(strategy.address, depositAmount);
       await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
       await bridge.connect(strategy).stake(depositAmount);
+      await bridge.completeActivation();
 
       // In test env, uses fallback tracking (effective amount after fee)
       expect(await bridge.getTotalEquity()).to.equal(effectiveAssets);
@@ -424,6 +577,30 @@ describe("HyperliquidBridgeAdapter", () => {
       const [equity, lockedUntil] = await bridge.getVaultEquity();
       expect(equity).to.equal(0n);
       expect(lockedUntil).to.equal(0n);
+    });
+
+    it("returns correct isHyperCoreActivated and pendingVaultDeposit", async () => {
+      const { bridge, strategy, asset } = await loadFixture(fixture);
+      await bridge.setAuthorizedStrategy(strategy.address, true);
+
+      // Before first deposit
+      expect(await bridge.isHyperCoreActivated()).to.equal(false);
+      expect(await bridge.pendingVaultDeposit()).to.equal(0n);
+
+      // After first deposit
+      const depositAmount = toUSDC("10");
+      const effectiveAssets = depositAmount - NEW_CORE_ACCOUNT_FEE;
+      await asset.mint(strategy.address, depositAmount);
+      await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
+      await bridge.connect(strategy).stake(depositAmount);
+
+      expect(await bridge.isHyperCoreActivated()).to.equal(false);
+      expect(await bridge.pendingVaultDeposit()).to.equal(effectiveAssets);
+
+      // After activation
+      await bridge.completeActivation();
+      expect(await bridge.isHyperCoreActivated()).to.equal(true);
+      expect(await bridge.pendingVaultDeposit()).to.equal(0n);
     });
   });
 });

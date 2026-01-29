@@ -50,8 +50,11 @@ contract HyperliquidBridgeAdapter is IHyperliquidBridgeAdapter, Ownable, Reentra
     /// @notice Fallback tracking of total deposited assets (used when precompile unavailable)
     uint256 private totalDepositedFallback;
     
-    /// @notice Tracks if first deposit has been made (new core account fee applies on first deposit)
-    bool public hasDeposited;
+    /// @notice Tracks if HyperCore account is activated (activation happens on first bridge)
+    bool public isHyperCoreActivated;
+    
+    /// @notice Amount waiting to be deposited to vault after activation (first deposit flow)
+    uint256 public pendingVaultDeposit;
     
     /// @notice New core account fee charged by Hyperliquid on first deposit (1 USDC = 1_000_000 in 6 decimals)
     uint256 public constant NEW_CORE_ACCOUNT_FEE = 1_000_000;
@@ -70,10 +73,15 @@ contract HyperliquidBridgeAdapter is IHyperliquidBridgeAdapter, Ownable, Reentra
     error PrecompileFailed();
     error WithdrawalLocked(uint256 lockedUntil);
     error DepositBelowMinimum(uint256 amount, uint256 minimum, bool isFirstDeposit);
+    error NotActivated();
+    error NoPendingDeposit();
+    error AlreadyActivated();
 
     event StrategyAuthorizationUpdated(address indexed strategy, bool allowed);
     event Staked(address indexed strategy, uint256 assets, uint256 shares);
     event Unstaked(address indexed strategy, uint256 shares, uint256 assets);
+    event HyperCoreActivated(uint256 pendingAmount);
+    event PendingVaultDepositCompleted(uint256 amount);
 
     constructor(
         IERC20 _asset,
@@ -114,7 +122,8 @@ contract HyperliquidBridgeAdapter is IHyperliquidBridgeAdapter, Ownable, Reentra
     /// @param assets Amount of USDC to deposit (6 decimals)
     /// @return shares Number of shares minted
     /// @dev First deposit requires 6 USDC minimum (5 USDC vault min + 1 USDC core account fee)
-    /// @dev Subsequent deposits require 5 USDC minimum
+    /// @dev First deposit only bridges (activates HyperCore), call completeActivation() after
+    /// @dev Subsequent deposits require 5 USDC minimum and account to be activated
     function stake(uint256 assets) external nonReentrant onlyStrategy returns (uint256 shares) {
         if (assets == 0) {
             revert ZeroAssets();
@@ -123,14 +132,19 @@ contract HyperliquidBridgeAdapter is IHyperliquidBridgeAdapter, Ownable, Reentra
         // Calculate the actual amount that will reach HyperCore after fees
         // On first deposit, Hyperliquid charges a 1 USDC new core account fee
         uint256 effectiveAssets = assets;
-        if (!hasDeposited) {
+        bool isFirstDeposit = !isHyperCoreActivated && pendingVaultDeposit == 0;
+        
+        if (isFirstDeposit) {
             // First deposit: need MIN_VAULT_DEPOSIT (5 USDC) + NEW_CORE_ACCOUNT_FEE (1 USDC) = 6 USDC
             if (assets < MIN_FIRST_DEPOSIT) {
                 revert DepositBelowMinimum(assets, MIN_FIRST_DEPOSIT, true);
             }
             effectiveAssets = assets - NEW_CORE_ACCOUNT_FEE;
-            hasDeposited = true;
         } else {
+            // Subsequent deposits require activation to be complete
+            if (!isHyperCoreActivated) {
+                revert NotActivated();
+            }
             // Subsequent deposits: need MIN_VAULT_DEPOSIT (5 USDC)
             if (assets < MIN_VAULT_DEPOSIT) {
                 revert DepositBelowMinimum(assets, MIN_VAULT_DEPOSIT, false);
@@ -160,11 +174,39 @@ contract HyperliquidBridgeAdapter is IHyperliquidBridgeAdapter, Ownable, Reentra
         asset.forceApprove(address(coreDepositWallet), assets);
         coreDepositWallet.deposit(assets, DESTINATION_PERPS);
 
-        // Send vault transfer action to deposit into the Hyperliquid vault
-        // Use effectiveAssets (after fee) since that's what actually arrived in HyperCore
-        _sendVaultTransferAction(true, effectiveAssets);
+        if (isFirstDeposit) {
+            // First deposit: only bridge, don't send vault transfer yet
+            // The account is now activated but we need a separate tx to send vault transfer
+            // because "unactivated accounts cannot send CoreWriter actions"
+            pendingVaultDeposit = effectiveAssets;
+            emit HyperCoreActivated(effectiveAssets);
+        } else {
+            // Subsequent deposits: send vault transfer immediately
+            _sendVaultTransferAction(true, effectiveAssets);
+        }
 
         emit Staked(msg.sender, effectiveAssets, shares);
+    }
+
+    /// @notice Complete the activation by sending pending deposit to vault
+    /// @dev Must be called in a separate transaction after first stake()
+    /// @dev Can be called by anyone (owner, strategy, or keeper)
+    function completeActivation() external nonReentrant {
+        if (pendingVaultDeposit == 0) {
+            revert NoPendingDeposit();
+        }
+        if (isHyperCoreActivated) {
+            revert AlreadyActivated();
+        }
+
+        uint256 amount = pendingVaultDeposit;
+        pendingVaultDeposit = 0;
+        isHyperCoreActivated = true;
+
+        // Now that account is activated, send the vault transfer
+        _sendVaultTransferAction(true, amount);
+
+        emit PendingVaultDepositCompleted(amount);
     }
 
     /// @notice Unstake by specifying asset amount (converts to shares internally)
@@ -269,15 +311,19 @@ contract HyperliquidBridgeAdapter is IHyperliquidBridgeAdapter, Ownable, Reentra
     }
 
     function _sendVaultTransferAction(bool isDeposit, uint256 amount) internal {
+        // Vault transfer usd parameter appears to expect 6 decimals (perp format)
+        // based on HLConversions.weiToPerp dividing by 100
         uint64 usdAmount = _toUint64(amount);
-        // Hyperliquid expects raw bytes: vault (20) + isDeposit (1) + usd (8 big-endian)
-        // Use abi.encodePacked for raw encoding without 32-byte padding
+        
+        // Action data must be ABI encoded (32-byte padded) per Hyperliquid docs:
+        // https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm/interacting-with-hypercore
+        bytes memory actionData = abi.encode(hyperVault, isDeposit, usdAmount);
+        
+        // Combine version (1 byte) + action ID (3 bytes) + ABI-encoded action data
         bytes memory payload = abi.encodePacked(
             ACTION_VERSION,                    // 1 byte: version
             bytes3(VAULT_TRANSFER_ACTION_ID),  // 3 bytes: action ID
-            hyperVault,                        // 20 bytes: vault address
-            isDeposit,                         // 1 byte: boolean
-            usdAmount                          // 8 bytes: uint64
+            actionData                         // 96 bytes: abi.encode(address, bool, uint64)
         );
         coreWriter.sendRawAction(payload);
     }
