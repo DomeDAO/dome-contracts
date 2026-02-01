@@ -82,6 +82,19 @@ contract HyperliquidBridgeAdapter is IHyperliquidBridgeAdapter, Ownable, Reentra
     event Unstaked(address indexed strategy, uint256 shares, uint256 assets);
     event HyperCoreActivated(uint256 pendingAmount);
     event PendingVaultDepositCompleted(uint256 amount);
+    event EmergencyWithdrawal(address indexed to, uint256 amount);
+    
+    /// @notice Emitted when USDC is bridged from HyperEVM to HyperCore
+    /// @param amount Amount of USDC bridged (6 decimals)
+    /// @param destination 0 for Perps, type(uint32).max for Spot
+    event BridgedToHyperCore(uint256 amount, uint32 destination);
+    
+    /// @notice Emitted when a vault transfer action is sent to CoreWriter
+    /// @param vault Target Hyperliquid vault address
+    /// @param isDeposit True for deposit, false for withdrawal
+    /// @param usdAmount Amount in USD (6 decimals)
+    /// @param payload Full payload sent to CoreWriter (for debugging)
+    event VaultTransferActionSent(address indexed vault, bool isDeposit, uint64 usdAmount, bytes payload);
 
     constructor(
         IERC20 _asset,
@@ -173,6 +186,7 @@ contract HyperliquidBridgeAdapter is IHyperliquidBridgeAdapter, Ownable, Reentra
         // Note: The fee is deducted by Hyperliquid during this bridge
         asset.forceApprove(address(coreDepositWallet), assets);
         coreDepositWallet.deposit(assets, DESTINATION_PERPS);
+        emit BridgedToHyperCore(assets, DESTINATION_PERPS);
 
         if (isFirstDeposit) {
             // First deposit: only bridge, don't send vault transfer yet
@@ -207,6 +221,31 @@ contract HyperliquidBridgeAdapter is IHyperliquidBridgeAdapter, Ownable, Reentra
         _sendVaultTransferAction(true, amount);
 
         emit PendingVaultDepositCompleted(amount);
+    }
+
+    /// @notice Emergency function to recover funds stuck in perp account
+    /// @dev Bypasses the vault lock check - only use when funds are in perp, not vault
+    /// @param amount Amount to withdraw from HyperCore perp account
+    /// @param to Address to send recovered USDC to
+    function emergencyWithdrawFromPerp(uint256 amount, address to) external onlyOwner nonReentrant {
+        if (amount == 0) {
+            revert ZeroAssets();
+        }
+        if (to == address(0)) {
+            revert ZeroAddress();
+        }
+
+        // Send vault withdrawal action (this pulls from perp if no vault position)
+        _sendVaultTransferAction(false, amount);
+
+        // Transfer any USDC that arrives in the contract
+        uint256 balance = asset.balanceOf(address(this));
+        if (balance > 0) {
+            uint256 transferAmount = balance > amount ? amount : balance;
+            asset.safeTransfer(to, transferAmount);
+        }
+
+        emit EmergencyWithdrawal(to, amount);
     }
 
     /// @notice Unstake by specifying asset amount (converts to shares internally)
@@ -311,8 +350,8 @@ contract HyperliquidBridgeAdapter is IHyperliquidBridgeAdapter, Ownable, Reentra
     }
 
     function _sendVaultTransferAction(bool isDeposit, uint256 amount) internal {
-        // Vault transfer usd parameter appears to expect 6 decimals (perp format)
-        // based on HLConversions.weiToPerp dividing by 100
+        // Vault transfer usd parameter expects 6 decimals (same as USDC ERC20)
+        // per Hyperliquid API docs: "usd": number (6 decimals)
         uint64 usdAmount = _toUint64(amount);
         
         // Action data must be ABI encoded (32-byte padded) per Hyperliquid docs:
@@ -325,6 +364,10 @@ contract HyperliquidBridgeAdapter is IHyperliquidBridgeAdapter, Ownable, Reentra
             bytes3(VAULT_TRANSFER_ACTION_ID),  // 3 bytes: action ID
             actionData                         // 96 bytes: abi.encode(address, bool, uint64)
         );
+        
+        // Emit detailed event for debugging before sending
+        emit VaultTransferActionSent(hyperVault, isDeposit, usdAmount, payload);
+        
         coreWriter.sendRawAction(payload);
     }
 

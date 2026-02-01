@@ -3,10 +3,10 @@ import { ethers } from "ethers";
 // Latest deployment
 const deployments = {
   contracts: {
-    vault: "0xd34DE947Da5eBfB855255E6Ba17D290763D48803",
-    share: "0x43137336F0B5373c7C4F482E21eD7f3791384134",
-    strategy: "0xf1D0892A1aF071647f16CC6bFcA380D2dB35bA48",
-    bridge: "0xeB8A96078eB7D3B99f9a503FCB5181ec6B0FEab9",
+    vault: "0x794b935ac2c548728C5E37d21a628C76bd683a49",
+    share: "0x26CcB888ae9116Cc1e8E8a879C33584c97f39552",
+    strategy: "0x2Eb725Ad45338aCD8F37d556B8B5Cc3212086301",
+    bridge: "0x3031a4741f490951B44D2FbE835669Ed1A403D0c",
     usdc: "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
     hyperliquidVault: "0x93ad52177d0795de8c67c92b1a72035293cb7aac",
   }
@@ -24,6 +24,10 @@ const BRIDGE_ABI = [
   "function totalShares() view returns (uint256)",
   "function getTotalEquity() view returns (uint256)",
   "function getVaultEquity() view returns (uint64, uint64)",
+  "function isHyperCoreActivated() view returns (bool)",
+  "function pendingVaultDeposit() view returns (uint256)",
+  "function shareBalance(address) view returns (uint256)",
+  "function totalAssets(address) view returns (uint256)",
 ];
 
 async function main() {
@@ -68,14 +72,47 @@ async function main() {
   const bridgeEquity = await bridge.getTotalEquity();
   console.log("Bridge Total Equity (from precompile or fallback):", ethers.formatUnits(bridgeEquity, 6));
 
+  // Activation status
+  try {
+    const isActivated = await bridge.isHyperCoreActivated();
+    console.log("HyperCore Activated:", isActivated);
+    
+    const pendingDeposit = await bridge.pendingVaultDeposit();
+    console.log("Pending Vault Deposit:", ethers.formatUnits(pendingDeposit, 6), "USDC");
+  } catch (e) {
+    console.log("Activation status: Unable to query (old contract version)");
+  }
+
+  // Strategy's position in bridge
+  try {
+    const strategyShares = await bridge.shareBalance(deployments.contracts.strategy);
+    console.log("Strategy Share Balance in Bridge:", ethers.formatUnits(strategyShares, 6));
+    
+    const strategyAssetsInBridge = await bridge.totalAssets(deployments.contracts.strategy);
+    console.log("Strategy Assets in Bridge:", ethers.formatUnits(strategyAssetsInBridge, 6), "USDC");
+  } catch (e) {
+    console.log("Strategy position: Unable to query");
+  }
+
+  // Vault equity from precompile
   try {
     const [equity, lockedUntil] = await bridge.getVaultEquity();
+    console.log("\n--- HyperCore Precompile Status ---");
     console.log("Vault Equity (precompile):", ethers.formatUnits(equity, 6), "USDC");
     if (lockedUntil > 0) {
       const lockDate = new Date(Number(lockedUntil) * 1000);
+      const now = new Date();
+      const isLocked = lockDate > now;
       console.log("Locked Until:", lockDate.toISOString());
+      console.log("Currently Locked:", isLocked);
+      if (isLocked) {
+        const remaining = lockDate.getTime() - now.getTime();
+        const hours = Math.floor(remaining / (1000 * 60 * 60));
+        const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+        console.log("Time Remaining:", `${hours}h ${minutes}m`);
+      }
     } else {
-      console.log("Locked Until: Not locked");
+      console.log("Lock Status: Not locked");
     }
   } catch (e) {
     console.log("Vault Equity (precompile): Unable to query");

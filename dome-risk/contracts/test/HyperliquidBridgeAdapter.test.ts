@@ -490,6 +490,66 @@ describe("HyperliquidBridgeAdapter", () => {
         .to.emit(bridge, "Staked")
         .withArgs(strategy.address, secondDeposit, secondDeposit);
     });
+
+    it("emits BridgedToHyperCore event on stake", async () => {
+      const { bridge, strategy, asset } = await loadFixture(fixture);
+      await bridge.setAuthorizedStrategy(strategy.address, true);
+
+      const depositAmount = toUSDC("10");
+      await asset.mint(strategy.address, depositAmount);
+      await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
+
+      await expect(bridge.connect(strategy).stake(depositAmount))
+        .to.emit(bridge, "BridgedToHyperCore")
+        .withArgs(depositAmount, DESTINATION_PERPS);
+    });
+
+    it("emits VaultTransferActionSent on completeActivation", async () => {
+      const { bridge, strategy, asset, mockHyper } = await loadFixture(fixture);
+      await bridge.setAuthorizedStrategy(strategy.address, true);
+
+      const depositAmount = toUSDC("10");
+      const effectiveAssets = depositAmount - NEW_CORE_ACCOUNT_FEE;
+      await asset.mint(strategy.address, depositAmount);
+      await asset.connect(strategy).approve(await bridge.getAddress(), depositAmount);
+      await bridge.connect(strategy).stake(depositAmount);
+
+      // Check event is emitted with correct vault and isDeposit=true
+      await expect(bridge.completeActivation())
+        .to.emit(bridge, "VaultTransferActionSent")
+        .withArgs(
+          await mockHyper.getAddress(),
+          true, // isDeposit
+          effectiveAssets,
+          encodeVaultTransferAction(await mockHyper.getAddress(), true, effectiveAssets)
+        );
+    });
+
+    it("emits VaultTransferActionSent on subsequent stakes", async () => {
+      const { bridge, strategy, asset, mockHyper } = await loadFixture(fixture);
+      await bridge.setAuthorizedStrategy(strategy.address, true);
+
+      // First deposit + activation
+      const firstDeposit = toUSDC("10");
+      await asset.mint(strategy.address, firstDeposit);
+      await asset.connect(strategy).approve(await bridge.getAddress(), firstDeposit);
+      await bridge.connect(strategy).stake(firstDeposit);
+      await bridge.completeActivation();
+
+      // Second deposit should emit VaultTransferActionSent
+      const secondDeposit = toUSDC("20");
+      await asset.mint(strategy.address, secondDeposit);
+      await asset.connect(strategy).approve(await bridge.getAddress(), secondDeposit);
+
+      await expect(bridge.connect(strategy).stake(secondDeposit))
+        .to.emit(bridge, "VaultTransferActionSent")
+        .withArgs(
+          await mockHyper.getAddress(),
+          true,
+          secondDeposit,
+          encodeVaultTransferAction(await mockHyper.getAddress(), true, secondDeposit)
+        );
+    });
   });
 
   describe("Activation", () => {
@@ -747,6 +807,86 @@ describe("HyperliquidBridgeAdapter", () => {
       // getTotalEquity should return 0
       expect(await bridge.getTotalEquity()).to.equal(0n);
       expect(await bridge.totalShares()).to.equal(0n);
+    });
+  });
+
+  describe("Emergency Withdrawal", () => {
+    it("allows owner to emergency withdraw from perp", async () => {
+      const { bridge, deployer, asset, coreWriter, mockHyper } = await loadFixture(fixture);
+
+      // Simulate USDC arriving in bridge from HyperCore
+      await asset.mint(await bridge.getAddress(), toUSDC("100"));
+
+      const withdrawAmount = toUSDC("50");
+      const before = await asset.balanceOf(deployer.address);
+      await bridge.emergencyWithdrawFromPerp(withdrawAmount, deployer.address);
+      const after = await asset.balanceOf(deployer.address);
+
+      expect(after - before).to.equal(withdrawAmount);
+
+      // Should have sent vault transfer action
+      const action = await coreWriter.lastAction();
+      expect(action).to.equal(
+        encodeVaultTransferAction(await mockHyper.getAddress(), false, withdrawAmount)
+      );
+    });
+
+    it("reverts emergency withdraw from non-owner", async () => {
+      const { bridge, stranger } = await loadFixture(fixture);
+      await expect(
+        bridge.connect(stranger).emergencyWithdrawFromPerp(toUSDC("10"), stranger.address)
+      ).to.be.revertedWithCustomError(bridge, "OwnableUnauthorizedAccount");
+    });
+
+    it("reverts emergency withdraw with zero amount", async () => {
+      const { bridge, deployer } = await loadFixture(fixture);
+      await expect(
+        bridge.emergencyWithdrawFromPerp(0n, deployer.address)
+      ).to.be.revertedWithCustomError(bridge, "ZeroAssets");
+    });
+
+    it("reverts emergency withdraw to zero address", async () => {
+      const { bridge } = await loadFixture(fixture);
+      await expect(
+        bridge.emergencyWithdrawFromPerp(toUSDC("10"), ethers.ZeroAddress)
+      ).to.be.revertedWithCustomError(bridge, "ZeroAddress");
+    });
+
+    it("emits EmergencyWithdrawal event", async () => {
+      const { bridge, deployer, asset } = await loadFixture(fixture);
+      await asset.mint(await bridge.getAddress(), toUSDC("100"));
+
+      const withdrawAmount = toUSDC("50");
+      await expect(bridge.emergencyWithdrawFromPerp(withdrawAmount, deployer.address))
+        .to.emit(bridge, "EmergencyWithdrawal")
+        .withArgs(deployer.address, withdrawAmount);
+    });
+
+    it("transfers available balance even if less than requested", async () => {
+      const { bridge, deployer, asset } = await loadFixture(fixture);
+
+      // Only mint 30 USDC but request 50
+      await asset.mint(await bridge.getAddress(), toUSDC("30"));
+
+      const withdrawAmount = toUSDC("50");
+      const before = await asset.balanceOf(deployer.address);
+      await bridge.emergencyWithdrawFromPerp(withdrawAmount, deployer.address);
+      const after = await asset.balanceOf(deployer.address);
+
+      // Should only transfer available balance (30)
+      expect(after - before).to.equal(toUSDC("30"));
+    });
+
+    it("handles zero balance gracefully", async () => {
+      const { bridge, deployer, asset } = await loadFixture(fixture);
+
+      // No balance in bridge
+      const before = await asset.balanceOf(deployer.address);
+      await bridge.emergencyWithdrawFromPerp(toUSDC("50"), deployer.address);
+      const after = await asset.balanceOf(deployer.address);
+
+      // No transfer should happen
+      expect(after - before).to.equal(0n);
     });
   });
 
