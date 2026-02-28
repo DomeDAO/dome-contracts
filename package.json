@@ -36,17 +36,17 @@
 		"verifyLatestDome": "hardhat run scripts/verifyLatest.js"
 	},
 	"devDependencies": {
-		"@nomicfoundation/hardhat-chai-matchers": "^1.0.0",
-		"@nomicfoundation/hardhat-ledger": "^1.0.3",
-		"@nomicfoundation/hardhat-network-helpers": "^1.0.0",
-		"@nomicfoundation/hardhat-toolbox": "^2.0.2",
+		"@nomicfoundation/hardhat-chai-matchers": "^3.0.0",
+		"@nomicfoundation/hardhat-ledger": "^3.0.3",
+		"@nomicfoundation/hardhat-network-helpers": "^1.0.12",
+		"@nomicfoundation/hardhat-toolbox": "^7.0.0",
 		"@openzeppelin/contracts": "^4.9.3",
-		"@openzeppelin/hardhat-upgrades": "^1.21.0",
+		"@openzeppelin/hardhat-upgrades": "^3.9.1",
 		"dotenv": "^10.0.0",
 		"eslint": "^8.50.0",
 		"eslint-config-prettier": "^9.0.0",
 		"eslint-plugin-prettier": "^5.0.0",
-		"hardhat": "^2.22.16",
+		"hardhat": "^3.1.10",
 		"solhint": "^3.3.7",
 		"solmate": "^6.2.0"
 	}
